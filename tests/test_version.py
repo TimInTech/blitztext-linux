@@ -5,7 +5,7 @@ Prüft, dass ``app.__version__`` definiert und semver-förmig ist.
 Die optische Versionszeile im „Allgemein"-Tab des Einstellungen-Dialogs wird
 nicht automatisiert getestet: ein voller ``SettingsDialog`` unter
 ``QT_QPA_PLATFORM=offscreen`` bricht beim Qt-Teardown (Python 3.14) mit SIGABRT
-ab. Die Anzeige wird daher manuell/visuell verifiziert (siehe Handover).
+ab. Die Anzeige wird daher manuell/visuell verifiziert.
 """
 from __future__ import annotations
 

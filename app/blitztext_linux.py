@@ -508,7 +508,7 @@ class BlitztextApp(QObject):
         self.menu.addAction(self.action_show_window)
         self.menu.addSeparator()
 
-        # Actions for workflows matching handover specs
+        # Actions für die fünf Workflows
         self.action_transcription = QAction("🎙  Blitztext\tMeta+H", self)
         self.action_transcription.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TRANSCRIPTION))
         self.menu.addAction(self.action_transcription)
