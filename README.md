@@ -5,7 +5,7 @@
   <p><strong>Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland</strong></p>
 
   <p>
-    <a href="https://github.com/TimInTech/blitztext-app/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-app/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="BlitztextLinux CI"></a>
+    <a href="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="Blitztext Linux CI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-yellow.svg" alt="Lizenz: MIT"></a>
     <img src="https://img.shields.io/badge/Plattform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Plattform">
   </p>

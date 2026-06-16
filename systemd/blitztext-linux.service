@@ -14,7 +14,7 @@
 
 [Unit]
 Description=Blitztext Linux — Speech-to-Text Tray App
-Documentation=https://github.com/TimInTech/blitztext-app
+Documentation=https://github.com/TimInTech/blitztext-linux
 After=graphical-session.target graphical-session-ready.target
 PartOf=graphical-session.target
 
@@ -23,7 +23,7 @@ Type=simple
 
 # WorkingDirectory: WIRD VON install.sh GESETZT.
 # Der Platzhalter %BLITZTEXT_DIR% wird durch den absoluten Pfad ersetzt,
-# z. B. /home/benutzer/git/blitztext-app/BlitztextLinux
+# z. B. /home/benutzer/git/blitztext-linux
 WorkingDirectory=%BLITZTEXT_DIR%
 
 ExecStart=%BLITZTEXT_DIR%/.venv/bin/python app/blitztext_linux.py
