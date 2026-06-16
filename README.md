@@ -35,6 +35,8 @@
 Der einfachste Weg, um Blitztext auf deinem System bereitzustellen:
 
 ```bash
+git clone https://github.com/TimInTech/blitztext-linux.git
+cd blitztext-linux
 bash scripts/install.sh
 ```
 
@@ -294,7 +296,7 @@ Wir lieben Stabilität! Führe die Tests lokal aus:
 pytest
 ```
 
-Die Suite umfasst aktuell **120 Tests** (9 werden ohne optionale Abhängigkeiten wie Piper TTS übersprungen).
+Die Suite umfasst aktuell **130 Tests** (9 werden ohne optionale Abhängigkeiten wie Piper TTS übersprungen).
 Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich die GUI-Tests des Hauptfensters.
 
 <details>
