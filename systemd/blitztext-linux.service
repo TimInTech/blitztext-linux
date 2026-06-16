@@ -1,0 +1,37 @@
+# blitztext-linux.service — systemd User Service für BlitztextLinux
+#
+# INSTALLATION:
+#   Nicht manuell kopieren — stattdessen 'bash scripts/install.sh' verwenden.
+#   Das Installations-Skript ersetzt den Platzhalter %BLITZTEXT_DIR% automatisch
+#   durch den absoluten Pfad des BlitztextLinux/-Verzeichnisses.
+#
+# Manueller Start (nach install.sh und erfolgreichem Test):
+#   systemctl --user start blitztext-linux
+#
+# Status prüfen:
+#   systemctl --user status blitztext-linux
+#   journalctl --user -u blitztext-linux -f
+
+[Unit]
+Description=Blitztext Linux — Speech-to-Text Tray App
+Documentation=https://github.com/TimInTech/blitztext-app
+After=graphical-session.target graphical-session-ready.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+
+# WorkingDirectory: WIRD VON install.sh GESETZT.
+# Der Platzhalter %BLITZTEXT_DIR% wird durch den absoluten Pfad ersetzt,
+# z. B. /home/benutzer/git/blitztext-app/BlitztextLinux
+WorkingDirectory=%BLITZTEXT_DIR%
+
+ExecStart=%BLITZTEXT_DIR%/.venv/bin/python app/blitztext_linux.py
+
+Restart=on-failure
+RestartSec=5
+
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=graphical-session.target

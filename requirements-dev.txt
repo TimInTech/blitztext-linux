@@ -1,0 +1,7 @@
+# Laufzeit- und Test-Abhaengigkeiten fuer BlitztextLinux (CI + lokale Entwicklung).
+# openai-whisper/faster-whisper werden NICHT benoetigt: Transkription wird in den
+# Tests gemockt. Siehe scripts/install.sh fuer die vollstaendige Laufzeit-Installation.
+PyQt6
+evdev
+openai
+pytest

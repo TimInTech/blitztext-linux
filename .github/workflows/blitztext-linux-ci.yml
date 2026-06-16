@@ -1,0 +1,81 @@
+name: BlitztextLinux CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: blitztext-linux-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret hygiene scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Secret hygiene scan
+        run: |
+          patterns_file=.github/secret-scan-patterns.txt
+          if [ ! -f "$patterns_file" ]; then
+            echo "Missing $patterns_file"
+            exit 1
+          fi
+          pattern="$(grep -vE '^[[:space:]]*(#|$)' "$patterns_file" | paste -sd'|' -)"
+          if [ -z "$pattern" ]; then
+            echo "No patterns loaded from $patterns_file"
+            exit 1
+          fi
+          if grep -RInE \
+              --exclude-dir=.git \
+              --exclude=secret-scan-patterns.txt \
+              "$pattern" .; then
+            echo "Potential secret or private project reference found."
+            exit 1
+          fi
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      # Qt headless: Offscreen-Plattform, damit GUI-Tests ohne Display laufen.
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Qt offscreen system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Compile-check (Syntax)
+        run: python -m compileall app
+
+      - name: Run test suite (inkl. GUI offscreen)
+        env:
+          WHISPER_GUI_TESTS: "1"
+        run: python -m pytest tests/ -v
