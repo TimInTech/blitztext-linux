@@ -125,7 +125,7 @@ systemctl --user enable --now ydotool.service   # nutzt /usr/local/bin/ydotoold
 
 **6. Anwendung starten**
 ```bash
-python app/blitztext_linux.py
+./run.sh
 ```
 </details>
 
@@ -144,7 +144,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 | **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Ergänzt deine Nachricht passend mit Emojis. |
 
 > [!NOTE]
-> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **OpenAI API-Key** voraus. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
+> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **OpenAI API-Key** voraus. Lege ihn am einfachsten in `~/.config/blitztext-linux/secrets.env` ab, zum Beispiel mit dem Eintrag `OPENAI_API_KEY=<dein-openai-key>`. `./run.sh` und der systemd-Service laden diese Datei automatisch. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
 
 ## KI-Workflows
 
@@ -244,7 +244,7 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 
 ## Konfiguration
 
-Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. Diese Datei lässt sich für erweiterte Prompt- und Workflow-Anpassungen direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
+Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. Der OpenAI-Schlüssel wird nicht mehr in dieser Datei abgelegt, sondern aus einer Umgebungsvariable gelesen. Die Konfigurationsdatei lässt sich für erweiterte Prompt- und Workflow-Anpassungen direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
 
 <div align="center">
   <img src="docs/screenshots/linux/settings-allgemein.png" alt="Einstellungen Allgemein" width="480">
@@ -252,7 +252,7 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 </div>
 
 > [!IMPORTANT]
-> Um den OpenAI API-Key zu schützen, wird die Datei automatisch mit restriktiven Dateiberechtigungen (**`0o600` / `chmod 600`**) gespeichert.
+> Die Konfigurationsdatei wird automatisch mit restriktiven Dateiberechtigungen (**`0o600` / `chmod 600`**) gespeichert. Der echte OpenAI-Key liegt stattdessen in `~/.config/blitztext-linux/secrets.env` oder wird als Umgebungsvariable bereitgestellt.
 
 <details>
 <summary><b>Beispiel-Konfiguration & Felderklärung</b></summary>
@@ -263,7 +263,7 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
   "language": "de",
   "backend": "openai-whisper",
   "hotkey_mode": "toggle",
-  "openai_api_key": "DEIN_KEY",
+  "openai_api_key_env": "OPENAI_API_KEY",
   "autopaste": true,
   "audio_device": "@DEFAULT_SOURCE@",
   "workflows": {
@@ -280,7 +280,8 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 - **hotkey_mode**: 
   - `toggle`: Einmal drücken startet, erneutes Drücken beendet.
   - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird.
-- **openai_api_key**: OpenAI API-Key.
+- **openai_api_key_env**: Name der Umgebungsvariable für den OpenAI API-Key. Standard: `OPENAI_API_KEY`.
+- Der eigentliche Key liegt nicht in `config.json`, sondern in `~/.config/blitztext-linux/secrets.env` oder einer bereits gesetzten Umgebungsvariable.
 - **autopaste**: Fügt per `ydotool` ein.
 - **audio_device**: Name der Audioquelle.
 - **workflows**: Feintuning von Tonalität, Emojis und dem Dampf-Prompt.

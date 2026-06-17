@@ -1,13 +1,16 @@
 """Config for BlitztextLinux.
 
 Pfad: ~/.config/blitztext-linux/config.json
-Berechtigungen: 0o600 (API-Key liegt im File).
+Berechtigungen: 0o600. Der eigentliche OpenAI-Key wird nur noch zur Laufzeit
+über eine Umgebungsvariable gelesen.
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +22,7 @@ DEFAULTS: dict[str, Any] = {
     "backend": "openai-whisper",
     "hotkey_mode": "hold",
     "transcription_hotkey": "KEY_LEFTALT",
-    "openai_api_key": "",
+    "openai_api_key_env": "OPENAI_API_KEY",
     "autopaste": True,
     "audio_device": "@DEFAULT_SOURCE@",
     "notes_folder": str(Path.home() / "Blitztext-Notizen"),
@@ -44,6 +47,7 @@ VALID_HOTKEY_KEYS = {
     "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16",
     "KEY_SCROLLLOCK", "KEY_PAUSE", "KEY_INSERT", "KEY_CAPSLOCK",
 }
+ENV_VAR_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
 class ConfigError(Exception):
@@ -59,13 +63,14 @@ class BlitztextConfig:
         else:
             self.config_dir = Path(config_dir)
         self.config_file = self.config_dir / "config.json"
-        
-        # Load data
+        self._legacy_openai_api_key_present = False
+        self._legacy_openai_api_key_value = ""
+
         self._data = self._load()
         self._validate_and_sanitize()
 
     @classmethod
-    def load(cls, path: Path | None = None) -> BlitztextConfig:
+    def load(cls, path: Path | None = None) -> "BlitztextConfig":
         if path is not None:
             config_dir = Path(path).parent
         else:
@@ -81,9 +86,14 @@ class BlitztextConfig:
             data = json.loads(raw)
             if not isinstance(data, dict):
                 return _deep_merge(DEFAULTS, {})
-            return _deep_merge(DEFAULTS, data)
-        except Exception as exc:
-            # Avoid logging any loaded data to prevent leaking API keys
+
+            legacy_api_key = data.get("openai_api_key")
+            self._legacy_openai_api_key_present = "openai_api_key" in data
+            self._legacy_openai_api_key_value = legacy_api_key.strip() if isinstance(legacy_api_key, str) else ""
+            sanitized = dict(data)
+            sanitized.pop("openai_api_key", None)
+            return _deep_merge(DEFAULTS, sanitized)
+        except Exception:
             logger.warning("Config could not be loaded, using defaults")
             return _deep_merge(DEFAULTS, {})
 
@@ -94,21 +104,40 @@ class BlitztextConfig:
             tmp = self.config_file.with_suffix(".json.tmp")
             flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
             fd = os.open(str(tmp), flags, 0o600)
-            with open(fd, "w", encoding="utf-8") as f:
-                json.dump(self._data, f, indent=2, ensure_ascii=False)
+            payload = _deep_copy_without_legacy_key(self._data)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
                 f.write("\n")
             tmp.replace(self.config_file)
             self.config_file.chmod(0o600)
+            self._data = payload
+            self._legacy_openai_api_key_present = False
+            self._legacy_openai_api_key_value = ""
         except OSError as exc:
             raise ConfigError(f"Config konnte nicht gespeichert werden: {exc}") from exc
 
     def has_api_key(self) -> bool:
-        key = self._data.get("openai_api_key", "")
-        return bool(key and key.strip())
+        return bool(self.resolve_openai_api_key())
 
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
+    @property
+    def openai_api_key_env(self) -> str:
+        value = self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])
+        return _normalize_env_var_name(value)
+
+    @openai_api_key_env.setter
+    def openai_api_key_env(self, value: str) -> None:
+        self._data["openai_api_key_env"] = _normalize_env_var_name(value)
+
+    def resolve_openai_api_key(self) -> str:
+        env_name = self.openai_api_key_env
+        env_value = os.environ.get(env_name, "").strip()
+        if env_value:
+            return env_value
+        return self._legacy_openai_api_key_value
+
+    @property
+    def has_legacy_openai_api_key(self) -> bool:
+        return self._legacy_openai_api_key_present
 
     @property
     def model(self) -> str:
@@ -157,14 +186,6 @@ class BlitztextConfig:
         if value not in VALID_HOTKEY_KEYS:
             raise ValueError(f"Ungueltige Hotkey-Taste: {value!r}. Gueltig: {sorted(VALID_HOTKEY_KEYS)}")
         self._data["transcription_hotkey"] = value
-
-    @property
-    def openai_api_key(self) -> str:
-        return self._data["openai_api_key"]
-
-    @openai_api_key.setter
-    def openai_api_key(self, value: str) -> None:
-        self._data["openai_api_key"] = value
 
     @property
     def autopaste(self) -> bool:
@@ -218,7 +239,6 @@ class BlitztextConfig:
     def workflows(self) -> dict[str, Any]:
         return self._data["workflows"]
 
-    # Convenience workflow sub-properties for the GUI
     @property
     def text_improver_tone(self) -> str:
         return self._data["workflows"]["text_improver_tone"]
@@ -256,7 +276,6 @@ class BlitztextConfig:
         self._data["workflows"]["custom_terms"] = _sanitize_terms(value)
 
     def as_dict(self) -> dict[str, Any]:
-        import copy
         return copy.deepcopy(self._data)
 
     def _validate_and_sanitize(self) -> None:
@@ -269,7 +288,6 @@ class BlitztextConfig:
         if self._data.get("transcription_hotkey") not in VALID_HOTKEY_KEYS:
             self._data["transcription_hotkey"] = "KEY_LEFTALT"
 
-        # History/TTS sanitize
         try:
             self._data["history_size"] = max(10, min(100, int(self._data.get("history_size", 50))))
         except (TypeError, ValueError):
@@ -283,13 +301,15 @@ class BlitztextConfig:
         if not isinstance(self._data.get("tts_voice", ""), str):
             self._data["tts_voice"] = ""
 
-        # Ensure workflows dict exists
+        self._data["openai_api_key_env"] = _normalize_env_var_name(
+            self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])
+        )
+        self._data.pop("openai_api_key", None)
+
         if "workflows" not in self._data or not isinstance(self._data["workflows"], dict):
             self._data["workflows"] = {}
-        
+
         wf = self._data["workflows"]
-        
-        # Merge sub-defaults
         for k, v in DEFAULTS["workflows"].items():
             if k not in wf:
                 if isinstance(v, dict):
@@ -306,10 +326,18 @@ class BlitztextConfig:
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
 
 
+def _normalize_env_var_name(value: Any) -> str:
+    if not isinstance(value, str):
+        return DEFAULTS["openai_api_key_env"]
+    candidate = value.strip().upper()
+    if not candidate or not ENV_VAR_NAME_RE.fullmatch(candidate):
+        return DEFAULTS["openai_api_key_env"]
+    return candidate
+
+
 def _sanitize_terms(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
-
     result: list[str] = []
     seen: set[str] = set()
     for value in values:
@@ -323,9 +351,13 @@ def _sanitize_terms(values: Any) -> list[str]:
     return result
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
-    import copy
+def _deep_copy_without_legacy_key(data: dict[str, Any]) -> dict[str, Any]:
+    payload = copy.deepcopy(data)
+    payload.pop("openai_api_key", None)
+    return payload
 
+
+def _deep_merge(base: dict, override: dict) -> dict:
     result = copy.deepcopy(base)
     for key, val in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(val, dict):
@@ -336,4 +368,3 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 Config = BlitztextConfig
-
