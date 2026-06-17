@@ -566,8 +566,11 @@ class BlitztextApp(QObject):
         """Baut den LLMService aus der aktuellen Config.
 
         Einziger Konstruktionsort, damit Init und Settings-Save nicht
-        auseinanderlaufen (z. B. base_url/model vergessen).
+        auseinanderlaufen (z. B. base_url/model vergessen). Der Provider ist
+        autoritativ: bei "openai" wird eine evtl. gespeicherte base_url ignoriert,
+        damit der OpenAI-Standardendpunkt genutzt wird (OpenRouter nur bei Auswahl).
         """
+        base_url = "" if self.config.llm_provider == "openai" else self.config.llm_base_url
         return LLMService(
             api_key=self.config.resolve_openai_api_key(),
             tone=self.config.text_improver_tone,
@@ -576,7 +579,7 @@ class BlitztextApp(QObject):
             custom_terms=self.config.custom_terms,
             api_key_env=self.config.openai_api_key_env,
             writing_preset=self.config.writing_preset,
-            base_url=self.config.llm_base_url,
+            base_url=base_url,
             model=self.config.llm_model,
         )
 

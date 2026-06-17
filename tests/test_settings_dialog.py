@@ -197,6 +197,24 @@ def test_build_llm_service_includes_base_url_and_model(tmp_path):
     assert service.model == "openai/gpt-4o"
 
 
+def test_build_llm_service_ignores_base_url_when_provider_is_openai(tmp_path):
+    # Provider ist autoritativ: bei "openai" darf eine (z. B. manuell in config.json
+    # gesetzte) base_url NICHT verwendet werden -> OpenAI-Standardendpunkt.
+    from app.blitztext_linux import BlitztextApp
+
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    config = BlitztextConfig(config_dir=config_dir)
+    config.llm_provider = "openai"
+    config.llm_base_url = "https://openrouter.ai/api/v1"
+    config.llm_model = "gpt-4o"
+    fake = SimpleNamespace(config=config)
+
+    service = BlitztextApp._build_llm_service(fake)
+
+    assert service.base_url == ""
+    assert service.model == "gpt-4o"
+
+
 def test_provider_change_prefills_openrouter_base_url():
     fake = SimpleNamespace(
         combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
