@@ -134,6 +134,71 @@ class TestWritingPreset:
         assert loaded.writing_preset == "standard"
 
 
+class TestLLMProvider:
+    def test_defaults(self, config):
+        assert config.llm_provider == "openai"
+        assert config.llm_base_url == ""
+        assert config.llm_model == "gpt-4o-mini"
+
+    def test_valid_provider_is_accepted(self, config):
+        config.llm_provider = "openrouter"
+        assert config.llm_provider == "openrouter"
+
+    def test_invalid_provider_is_rejected(self, config):
+        with pytest.raises(ValueError):
+            config.llm_provider = "gibt-es-nicht"
+
+    def test_unknown_provider_in_file_is_coerced_to_openai(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"llm_provider": "kaputt"}), encoding="utf-8"
+        )
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.llm_provider == "openai"
+
+    def test_base_url_is_stripped(self, config):
+        config.llm_base_url = "  https://openrouter.ai/api/v1  "
+        assert config.llm_base_url == "https://openrouter.ai/api/v1"
+
+    def test_non_http_base_url_is_rejected_to_empty(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"llm_base_url": "ftp://evil/x"}), encoding="utf-8"
+        )
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.llm_base_url == ""
+
+    def test_empty_model_in_file_falls_back_to_default(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"llm_model": "   "}), encoding="utf-8"
+        )
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.llm_model == "gpt-4o-mini"
+
+    def test_roundtrip_persists_provider_fields(self, config, config_dir):
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        config.llm_model = "openai/gpt-4o"
+        config.save()
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.llm_provider == "openrouter"
+        assert loaded.llm_base_url == "https://openrouter.ai/api/v1"
+        assert loaded.llm_model == "openai/gpt-4o"
+
+    def test_save_never_writes_api_key_with_provider_fields(self, config_dir):
+        config = BlitztextConfig(config_dir=config_dir)
+        config.llm_provider = "openrouter"
+        config.openai_api_key_env = "OPENROUTER_API_KEY"
+        config.save()
+
+        saved = json.loads((config_dir / "config.json").read_text(encoding="utf-8"))
+        assert "openai_api_key" not in saved
+        assert saved["openai_api_key_env"] == "OPENROUTER_API_KEY"
+        assert saved["llm_provider"] == "openrouter"
+
+
 class TestTranscriptionHotkey:
     def test_valid_hotkey_is_accepted(self, config):
         config.transcription_hotkey = "KEY_F13"

@@ -107,12 +107,19 @@ class _Combo:
 class _Edit:
     def __init__(self, text=""):
         self._text = text
+        self.enabled = True
 
     def text(self):
         return self._text
 
     def toPlainText(self):
         return self._text
+
+    def setText(self, value):
+        self._text = value
+
+    def setEnabled(self, value):
+        self.enabled = bool(value)
 
 
 class _Check:
@@ -134,6 +141,9 @@ def _fake_save_self(config_dir, preset_key):
         combo_hotkey_mode=_Combo("hold"),
         combo_transcription_key=_Combo("KEY_LEFTALT"),
         edit_api_key_env=_Edit("OPENAI_API_KEY"),
+        combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
+        edit_base_url=_Edit("https://openrouter.ai/api/v1"),
+        edit_llm_model=_Edit("openai/gpt-4o"),
         combo_tone=_Combo("neutral"),
         combo_writing_preset=_Combo(text="E-Mail – formell", data=preset_key),
         combo_emoji=_Combo("mittel"),
@@ -155,6 +165,82 @@ def test_save_settings_persists_writing_preset(tmp_path):
     assert fake.config.writing_preset == "email_formal"
     reloaded = BlitztextConfig(config_dir=config_dir)
     assert reloaded.writing_preset == "email_formal"
+
+
+def test_save_settings_persists_llm_provider_fields(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+
+    SettingsDialog.save_settings(fake)
+
+    reloaded = BlitztextConfig(config_dir=config_dir)
+    assert reloaded.llm_provider == "openrouter"
+    assert reloaded.llm_base_url == "https://openrouter.ai/api/v1"
+    assert reloaded.llm_model == "openai/gpt-4o"
+
+
+def test_build_llm_service_includes_base_url_and_model(tmp_path):
+    # Regression: beide Konstruktionsorte (Init + Settings-Save) gehen ueber
+    # _build_llm_service, damit base_url/model nicht an einer Stelle fehlen.
+    from app.blitztext_linux import BlitztextApp
+
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    config = BlitztextConfig(config_dir=config_dir)
+    config.llm_provider = "openrouter"
+    config.llm_base_url = "https://openrouter.ai/api/v1"
+    config.llm_model = "openai/gpt-4o"
+    fake = SimpleNamespace(config=config)
+
+    service = BlitztextApp._build_llm_service(fake)
+
+    assert service.base_url == "https://openrouter.ai/api/v1"
+    assert service.model == "openai/gpt-4o"
+
+
+def test_build_llm_service_ignores_base_url_when_provider_is_openai(tmp_path):
+    # Provider ist autoritativ: bei "openai" darf eine (z. B. manuell in config.json
+    # gesetzte) base_url NICHT verwendet werden -> OpenAI-Standardendpunkt.
+    from app.blitztext_linux import BlitztextApp
+
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    config = BlitztextConfig(config_dir=config_dir)
+    config.llm_provider = "openai"
+    config.llm_base_url = "https://openrouter.ai/api/v1"
+    config.llm_model = "gpt-4o"
+    fake = SimpleNamespace(config=config)
+
+    service = BlitztextApp._build_llm_service(fake)
+
+    assert service.base_url == ""
+    assert service.model == "gpt-4o"
+
+
+def test_provider_change_prefills_openrouter_base_url():
+    fake = SimpleNamespace(
+        combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
+        edit_base_url=_Edit(""),
+    )
+    SettingsDialog._on_llm_provider_changed(fake)
+    assert fake.edit_base_url.text() == "https://openrouter.ai/api/v1"
+
+
+def test_provider_change_to_openai_clears_and_disables_base_url():
+    fake = SimpleNamespace(
+        combo_llm_provider=_Combo(text="OpenAI", data="openai"),
+        edit_base_url=_Edit("https://openrouter.ai/api/v1"),
+    )
+    SettingsDialog._on_llm_provider_changed(fake)
+    assert fake.edit_base_url.text() == ""
+    assert fake.edit_base_url.enabled is False
+
+
+def test_provider_change_does_not_overwrite_existing_base_url():
+    fake = SimpleNamespace(
+        combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
+        edit_base_url=_Edit("https://my-proxy/api/v1"),
+    )
+    SettingsDialog._on_llm_provider_changed(fake)
+    assert fake.edit_base_url.text() == "https://my-proxy/api/v1"
 
 
 def test_save_settings_keeps_standard_preset(tmp_path):
