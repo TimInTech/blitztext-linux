@@ -66,14 +66,23 @@ class LLMService:
         else:
             try:
                 import openai
-
-                self.client = openai.OpenAI(api_key=self.api_key)
             except ImportError:
                 self._openai_installed = False
                 self._client_is_fallback_mock = True
                 from unittest.mock import MagicMock
 
                 self.client = MagicMock()
+            else:
+                if self.api_key and self.api_key.strip():
+                    self.client = openai.OpenAI(api_key=self.api_key)
+                else:
+                    # Ohne API-Key keinen echten Client bauen: Neuere openai-Versionen
+                    # werfen bereits im Konstruktor bei leerem Key. Der eigentliche
+                    # Fehler wird zur Aufrufzeit über _check_openai() klar gemeldet,
+                    # damit die App auch ohne gesetzten Key startet.
+                    from unittest.mock import MagicMock
+
+                    self.client = MagicMock()
 
     def is_available(self) -> bool:
         return bool(self.api_key and self.api_key.strip())
