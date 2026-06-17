@@ -244,7 +244,7 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 
 ## Konfiguration
 
-Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. 
+Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. Diese Datei lässt sich für erweiterte Prompt- und Workflow-Anpassungen direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
 
 <div align="center">
   <img src="docs/screenshots/linux/settings-allgemein.png" alt="Einstellungen Allgemein" width="480">

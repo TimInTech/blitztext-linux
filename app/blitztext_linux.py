@@ -14,8 +14,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import (
+    QAction, QBrush, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap,
+)
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QFormLayout, QComboBox, QLineEdit, QCheckBox, QPlainTextEdit,
@@ -276,6 +278,13 @@ class SettingsDialog(QDialog):
         form_general.addRow("Verlauf-Größe:", self.spin_history_size)
         form_general.addRow("", create_help_label("Maximale Anzahl der im Verlauf gespeicherten Einträge."))
 
+        self.btn_open_config = QPushButton("📄  Konfigurationsdatei öffnen")
+        self.btn_open_config.clicked.connect(self._open_config_file)
+        form_general.addRow(self.btn_open_config)
+        form_general.addRow("", create_help_label(
+            "Öffnet config.json im Standard-Editor – für erweiterte Prompt- und "
+            "Workflow-Anpassungen, die über die Felder oben hinausgehen."))
+
         # Dezente Versionsanzeige ganz unten auf der letzten Einstellungsseite
         version_label = QLabel(f"Version {APP_VERSION}")
         version_label.setStyleSheet("color: gray; font-size: 9px;")
@@ -299,6 +308,31 @@ class SettingsDialog(QDialog):
         else:
             self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Password)
             self.btn_show_key.setText("Anzeigen")
+
+    def _open_config_file(self) -> None:
+        """Open the config.json in the desktop's default editor.
+
+        Falls die Datei noch nie gespeichert wurde, wird sie zuvor über die
+        bestehende, atomare ``config.save()``-Logik (0o600) angelegt, damit es
+        immer eine gültige JSON-Datei zum Bearbeiten gibt.
+        """
+        try:
+            if not self.config.config_file.is_file():
+                self.config.save()
+            opened = QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(self.config.config_file)))
+            if not opened:
+                QMessageBox.warning(
+                    self,
+                    "Öffnen fehlgeschlagen",
+                    f"Konfigurationsdatei konnte nicht geöffnet werden:\n{self.config.config_file}",
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Fehler",
+                f"Konfigurationsdatei konnte nicht geöffnet werden: {e}",
+            )
 
     def _collect_custom_terms(self) -> list[str]:
         terms: list[str] = []
