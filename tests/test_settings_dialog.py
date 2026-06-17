@@ -92,6 +92,80 @@ def test_open_config_handles_open_failure(tmp_path):
     m_box.critical.assert_not_called()
 
 
+class _Combo:
+    def __init__(self, text="", data=None):
+        self._text = text
+        self._data = data
+
+    def currentText(self):
+        return self._text
+
+    def currentData(self):
+        return self._data
+
+
+class _Edit:
+    def __init__(self, text=""):
+        self._text = text
+
+    def text(self):
+        return self._text
+
+    def toPlainText(self):
+        return self._text
+
+
+class _Check:
+    def __init__(self, checked=True):
+        self._checked = checked
+
+    def isChecked(self):
+        return self._checked
+
+
+def _fake_save_self(config_dir, preset_key):
+    config = BlitztextConfig(config_dir=config_dir)
+    return SimpleNamespace(
+        config=config,
+        combo_model=_Combo("base"),
+        combo_backend=_Combo("openai-whisper"),
+        edit_language=_Edit("de"),
+        edit_audio_device=_Edit("@DEFAULT_SOURCE@"),
+        combo_hotkey_mode=_Combo("hold"),
+        combo_transcription_key=_Combo("KEY_LEFTALT"),
+        edit_api_key_env=_Edit("OPENAI_API_KEY"),
+        combo_tone=_Combo("neutral"),
+        combo_writing_preset=_Combo(text="E-Mail – formell", data=preset_key),
+        combo_emoji=_Combo("mittel"),
+        edit_dampf_prompt=_Edit(""),
+        _collect_custom_terms=lambda: [],
+        check_autopaste=_Check(True),
+        edit_notes_folder=_Edit(""),
+        spin_history_size=_Combo("50"),
+        accept=lambda: None,
+    )
+
+
+def test_save_settings_persists_writing_preset(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "email_formal")
+
+    SettingsDialog.save_settings(fake)
+
+    assert fake.config.writing_preset == "email_formal"
+    reloaded = BlitztextConfig(config_dir=config_dir)
+    assert reloaded.writing_preset == "email_formal"
+
+
+def test_save_settings_keeps_standard_preset(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+
+    SettingsDialog.save_settings(fake)
+
+    assert fake.config.writing_preset == "standard"
+
+
 def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
     secret_value = "dummy-openai-key"
     monkeypatch.setenv("CUSTOM_OPENAI_KEY", secret_value)
