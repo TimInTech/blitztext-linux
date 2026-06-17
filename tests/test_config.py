@@ -120,6 +120,19 @@ class TestWritingPreset:
         assert loaded.writing_preset == "standard"
         assert loaded.text_improver_tone == "formal"
 
+    @pytest.mark.parametrize("bad_value", [[], {}, ["email_formal"], 42, None, True])
+    def test_non_string_preset_value_is_coerced_without_crash(self, config_dir, bad_value):
+        # Manuell editierte config.json mit unhashbarem/falschem Typ darf den
+        # Start nicht mit TypeError abbrechen, sondern auf "standard" zurückfallen.
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"workflows": {"writing_preset": bad_value}}),
+            encoding="utf-8",
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.writing_preset == "standard"
+
 
 class TestTranscriptionHotkey:
     def test_valid_hotkey_is_accepted(self, config):

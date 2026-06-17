@@ -337,7 +337,8 @@ class BlitztextConfig:
             wf["text_improver_tone"] = "neutral"
         if wf.get("emoji_density") not in VALID_EMOJI_DENSITIES:
             wf["emoji_density"] = "mittel"
-        if wf.get("writing_preset") not in VALID_WRITING_PRESETS:
+        preset_value = wf.get("writing_preset")
+        if not isinstance(preset_value, str) or preset_value not in VALID_WRITING_PRESETS:
             wf["writing_preset"] = DEFAULT_PRESET_KEY
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
 
