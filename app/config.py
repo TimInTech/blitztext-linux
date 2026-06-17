@@ -25,6 +25,9 @@ DEFAULTS: dict[str, Any] = {
     "hotkey_mode": "hold",
     "transcription_hotkey": "KEY_LEFTALT",
     "openai_api_key_env": "OPENAI_API_KEY",
+    "llm_provider": "openai",
+    "llm_base_url": "",
+    "llm_model": "gpt-4o-mini",
     "autopaste": True,
     "audio_device": "@DEFAULT_SOURCE@",
     "notes_folder": str(Path.home() / "Blitztext-Notizen"),
@@ -46,6 +49,8 @@ VALID_HOTKEY_MODES = {"toggle", "hold"}
 VALID_TONES = {"formal", "neutral", "locker"}
 VALID_EMOJI_DENSITIES = {"wenig", "mittel", "viel"}
 VALID_WRITING_PRESETS = set(WRITING_PRESET_KEYS)
+VALID_LLM_PROVIDERS = {"openai", "openrouter", "custom"}
+BASE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 VALID_HOTKEY_KEYS = {
     "KEY_LEFTALT", "KEY_RIGHTALT", "KEY_RIGHTCTRL", "KEY_LEFTCTRL",
     "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16",
@@ -142,6 +147,33 @@ class BlitztextConfig:
     @property
     def has_legacy_openai_api_key(self) -> bool:
         return self._legacy_openai_api_key_present
+
+    @property
+    def llm_provider(self) -> str:
+        value = self._data.get("llm_provider", DEFAULTS["llm_provider"])
+        return value if value in VALID_LLM_PROVIDERS else DEFAULTS["llm_provider"]
+
+    @llm_provider.setter
+    def llm_provider(self, value: str) -> None:
+        if value not in VALID_LLM_PROVIDERS:
+            raise ValueError(f"Ungueltiger LLM-Anbieter: {value!r}. Gueltig: {sorted(VALID_LLM_PROVIDERS)}")
+        self._data["llm_provider"] = value
+
+    @property
+    def llm_base_url(self) -> str:
+        return _normalize_base_url(self._data.get("llm_base_url", ""))
+
+    @llm_base_url.setter
+    def llm_base_url(self, value: str) -> None:
+        self._data["llm_base_url"] = _normalize_base_url(value)
+
+    @property
+    def llm_model(self) -> str:
+        return _normalize_model(self._data.get("llm_model", DEFAULTS["llm_model"]))
+
+    @llm_model.setter
+    def llm_model(self, value: str) -> None:
+        self._data["llm_model"] = _normalize_model(value)
 
     @property
     def model(self) -> str:
@@ -320,6 +352,11 @@ class BlitztextConfig:
         )
         self._data.pop("openai_api_key", None)
 
+        if self._data.get("llm_provider") not in VALID_LLM_PROVIDERS:
+            self._data["llm_provider"] = DEFAULTS["llm_provider"]
+        self._data["llm_base_url"] = _normalize_base_url(self._data.get("llm_base_url", ""))
+        self._data["llm_model"] = _normalize_model(self._data.get("llm_model", DEFAULTS["llm_model"]))
+
         if "workflows" not in self._data or not isinstance(self._data["workflows"], dict):
             self._data["workflows"] = {}
 
@@ -350,6 +387,22 @@ def _normalize_env_var_name(value: Any) -> str:
     if not candidate or not ENV_VAR_NAME_RE.fullmatch(candidate):
         return DEFAULTS["openai_api_key_env"]
     return candidate
+
+
+def _normalize_base_url(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    candidate = value.strip()
+    if not candidate or not BASE_URL_RE.match(candidate):
+        return ""
+    return candidate
+
+
+def _normalize_model(value: Any) -> str:
+    if not isinstance(value, str):
+        return DEFAULTS["llm_model"]
+    candidate = value.strip()
+    return candidate or DEFAULTS["llm_model"]
 
 
 def _sanitize_terms(values: Any) -> list[str]:

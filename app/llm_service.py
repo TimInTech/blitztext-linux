@@ -53,9 +53,13 @@ class LLMService:
         custom_terms: Optional[list[str]] = None,
         api_key_env: str = "OPENAI_API_KEY",
         writing_preset: str = DEFAULT_PRESET_KEY,
+        base_url: str = "",
+        model: str = "",
     ) -> None:
         self.api_key = api_key or ""
         self.api_key_env = api_key_env or "OPENAI_API_KEY"
+        self.base_url = (base_url or "").strip()
+        self.model = (model or "").strip() or MODEL
         self.tone = tone
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt
@@ -77,7 +81,7 @@ class LLMService:
                 self.client = MagicMock()
             else:
                 if self.api_key and self.api_key.strip():
-                    self.client = openai.OpenAI(api_key=self.api_key)
+                    self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url or None)
                 else:
                     # Ohne API-Key keinen echten Client bauen: Neuere openai-Versionen
                     # werfen bereits im Konstruktor bei leerem Key. Der eigentliche
@@ -135,7 +139,7 @@ class LLMService:
         system = (custom_system_prompt.strip() or self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
 
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": transcript.strip()},
@@ -157,7 +161,7 @@ class LLMService:
         system = (custom_prompt.strip() or _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(tone=tone)) + self._custom_terms_instruction()
 
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": transcript.strip()},
@@ -179,7 +183,7 @@ class LLMService:
         system = _EMOJI_SYSTEM_TEMPLATE.format(density=density) + self._custom_terms_instruction()
 
         response = self.client.chat.completions.create(
-            model=MODEL,
+            model=self.model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": transcript.strip()},

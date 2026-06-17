@@ -220,6 +220,23 @@ class SettingsDialog(QDialog):
 
         self._refresh_api_key_status()
 
+        self.combo_llm_provider = QComboBox()
+        self.combo_llm_provider.addItem("OpenAI", "openai")
+        self.combo_llm_provider.addItem("OpenRouter", "openrouter")
+        self.combo_llm_provider.addItem("Eigener Endpunkt", "custom")
+        provider_index = self.combo_llm_provider.findData(self.config.llm_provider)
+        self.combo_llm_provider.setCurrentIndex(provider_index if provider_index >= 0 else 0)
+        self.combo_llm_provider.currentIndexChanged.connect(lambda *_: self._on_llm_provider_changed())
+
+        self.edit_base_url = QLineEdit()
+        self.edit_base_url.setText(self.config.llm_base_url)
+        self.edit_base_url.setPlaceholderText("https://openrouter.ai/api/v1")
+        self.edit_base_url.setEnabled(self.config.llm_provider != "openai")
+
+        self.edit_llm_model = QLineEdit()
+        self.edit_llm_model.setText(self.config.llm_model)
+        self.edit_llm_model.setPlaceholderText("gpt-4o-mini")
+
         self.combo_tone = QComboBox()
         self.combo_tone.addItems(["formal", "neutral", "locker"])
         self.combo_tone.setCurrentText(self.config.text_improver_tone)
@@ -260,8 +277,15 @@ class SettingsDialog(QDialog):
         custom_terms_widget = QWidget()
         custom_terms_widget.setLayout(custom_terms_layout)
 
-        form_llm.addRow("OpenAI API-Key-Umgebung:", api_key_layout)
-        form_llm.addRow("", create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen."))
+        form_llm.addRow("API-Key-Umgebung:", api_key_layout)
+        form_llm.addRow("", create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY."))
+
+        form_llm.addRow("LLM-Anbieter:", self.combo_llm_provider)
+        form_llm.addRow("", create_help_label("OpenAI = Standard. OpenRouter und 'Eigener Endpunkt' nutzen das OpenAI-kompatible API über eine eigene Basis-URL und ein eigenes Modell."))
+        form_llm.addRow("Basis-URL (base_url):", self.edit_base_url)
+        form_llm.addRow("", create_help_label("Leer = OpenAI-Standard. Für OpenRouter: https://openrouter.ai/api/v1. Muss mit http:// oder https:// beginnen."))
+        form_llm.addRow("LLM-Modell:", self.edit_llm_model)
+        form_llm.addRow("", create_help_label("Modellname beim Anbieter, z. B. 'gpt-4o-mini' (OpenAI) oder 'openai/gpt-4o' (OpenRouter)."))
 
         form_llm.addRow("Text-Verbesserer Tonfall:", self.combo_tone)
         form_llm.addRow("Schreibstil-Vorlage:", self.combo_writing_preset)
@@ -325,6 +349,18 @@ class SettingsDialog(QDialog):
         env_value = os.environ.get(env_name, "").strip()
         status = "gesetzt" if env_value else "nicht gesetzt"
         self.lbl_api_key_status.setText(f"Status: {status} ({env_name})")
+
+    def _on_llm_provider_changed(self) -> None:
+        provider = self.combo_llm_provider.currentData()
+        if provider == "openrouter":
+            if not self.edit_base_url.text().strip():
+                self.edit_base_url.setText("https://openrouter.ai/api/v1")
+            self.edit_base_url.setEnabled(True)
+        elif provider == "openai":
+            self.edit_base_url.setText("")
+            self.edit_base_url.setEnabled(False)
+        else:  # custom / eigener Endpunkt
+            self.edit_base_url.setEnabled(True)
 
     def _open_config_file(self) -> None:
         """Open the config.json in the desktop's default editor.
@@ -390,6 +426,9 @@ class SettingsDialog(QDialog):
             self.config.transcription_hotkey = self.combo_transcription_key.currentText()
 
             self.config.openai_api_key_env = self.edit_api_key_env.text().strip()
+            self.config.llm_provider = self.combo_llm_provider.currentData()
+            self.config.llm_base_url = self.edit_base_url.text().strip()
+            self.config.llm_model = self.edit_llm_model.text().strip()
             self.config.text_improver_tone = self.combo_tone.currentText()
             self.config.writing_preset = self.combo_writing_preset.currentData()
             self.config.emoji_density = self.combo_emoji.currentText()
@@ -499,15 +538,7 @@ class BlitztextApp(QObject):
         self.app = app
         self.config = Config.load()
 
-        self.llm_service = LLMService(
-            api_key=self.config.resolve_openai_api_key(),
-            tone=self.config.text_improver_tone,
-            emoji_density=self.config.emoji_density,
-            dampf_system_prompt=self.config.dampf_system_prompt,
-            custom_terms=self.config.custom_terms,
-            api_key_env=self.config.openai_api_key_env,
-            writing_preset=self.config.writing_preset,
-        )
+        self.llm_service = self._build_llm_service()
         self.audio_recorder = AudioRecorder()
         self.paste_service = PasteService(autopaste=self.config.autopaste)
 
@@ -530,6 +561,24 @@ class BlitztextApp(QObject):
         self.hotkey_worker: Optional[HotkeyWorker] = None
         self.hotkey_thread: Optional[QThread] = None
         self.start_hotkey_worker()
+
+    def _build_llm_service(self) -> LLMService:
+        """Baut den LLMService aus der aktuellen Config.
+
+        Einziger Konstruktionsort, damit Init und Settings-Save nicht
+        auseinanderlaufen (z. B. base_url/model vergessen).
+        """
+        return LLMService(
+            api_key=self.config.resolve_openai_api_key(),
+            tone=self.config.text_improver_tone,
+            emoji_density=self.config.emoji_density,
+            dampf_system_prompt=self.config.dampf_system_prompt,
+            custom_terms=self.config.custom_terms,
+            api_key_env=self.config.openai_api_key_env,
+            writing_preset=self.config.writing_preset,
+            base_url=self.config.llm_base_url,
+            model=self.config.llm_model,
+        )
 
     def setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
@@ -675,15 +724,7 @@ class BlitztextApp(QObject):
         dialog = SettingsDialog(self.config)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Update LLM Service parameters from saved configuration
-            self.llm_service = LLMService(
-                api_key=self.config.resolve_openai_api_key(),
-                tone=self.config.text_improver_tone,
-                emoji_density=self.config.emoji_density,
-                dampf_system_prompt=self.config.dampf_system_prompt,
-                custom_terms=self.config.custom_terms,
-                api_key_env=self.config.openai_api_key_env,
-                writing_preset=self.config.writing_preset,
-            )
+            self.llm_service = self._build_llm_service()
             self.update_menu_availability()
 
             # Restart hotkey listener if mode or key changed

@@ -50,6 +50,41 @@ class TestLLMServiceInit:
         assert service.custom_terms == CUSTOM_TERMS
 
 
+class TestProviderConfig:
+    def test_default_model_is_gpt_4o_mini(self, service):
+        assert service.model == "gpt-4o-mini"
+
+    def test_custom_model_is_used_in_requests(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, model="openai/gpt-4o")
+        service.text_improver("text")
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert kwargs["model"] == "openai/gpt-4o"
+
+    def test_empty_model_falls_back_to_default(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, model="")
+        assert service.model == "gpt-4o-mini"
+
+    def test_base_url_stored_on_service(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, base_url="https://openrouter.ai/api/v1")
+        assert service.base_url == "https://openrouter.ai/api/v1"
+
+    def test_base_url_passed_to_openai_client(self):
+        # openai wird in LLMService.__init__ lazy importiert; via sys.modules
+        # injizieren wir einen Fake, damit der Test ohne echtes openai-Paket laeuft.
+        fake_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": fake_openai}):
+            LLMService(api_key=DUMMY_API_KEY, base_url="https://openrouter.ai/api/v1")
+        fake_openai.OpenAI.assert_called_once_with(
+            api_key=DUMMY_API_KEY, base_url="https://openrouter.ai/api/v1"
+        )
+
+    def test_empty_base_url_uses_sdk_default(self):
+        fake_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": fake_openai}):
+            LLMService(api_key=DUMMY_API_KEY, base_url="")
+        fake_openai.OpenAI.assert_called_once_with(api_key=DUMMY_API_KEY, base_url=None)
+
+
 class TestDampfAblassen:
     def test_returns_string(self, service):
         result = service.dampf_ablassen(RAW_TRANSCRIPT)
