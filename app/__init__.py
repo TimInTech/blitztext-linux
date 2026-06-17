@@ -1,4 +1,4 @@
 """BlitztextLinux app package."""
 
 # Single source of truth for the application version.
-__version__ = "0.2.24"
+__version__ = "0.2.25"
