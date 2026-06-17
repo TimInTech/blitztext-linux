@@ -155,6 +155,23 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
   <br><br>
 </div>
 
+### Schreibstil-Vorlagen
+
+Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schreibstil-Vorlagen, die du unter **Einstellungen → KI-Workflows → „Schreibstil-Vorlage"** auswählst:
+
+| Vorlage | Wirkung |
+| --- | --- |
+| **Standard (Text verbessern)** | Bisheriges Verhalten – sauber formatierter Text, der gewählte **Tonfall** greift. |
+| **E-Mail – formell** | Höfliche E-Mail in der Sie-Form mit klarer Struktur. |
+| **E-Mail – locker** | Freundliche E-Mail in der Du-Form. |
+| **Stichpunkte** | Gliedert den Inhalt in prägnante Stichpunkte. |
+| **Zusammenfassung** | Knappe, sachliche Zusammenfassung der Kernaussagen. |
+| **Persönlich (Du-Form)** | Klarer Text in der persönlichen Du-Form. |
+| **Höflich (Sie-Form)** | Klarer Text in der höflichen Sie-Form. |
+| **Kurz & präzise** | Maximal knapp, ohne Füllwörter und Wiederholungen. |
+
+> Bei **Standard** wird zusätzlich der eingestellte **Tonfall** angewendet. Jede andere Vorlage bringt ihren eigenen Schreibstil mit und ersetzt den Tonfall. Eigennamen/Begriffe bleiben in allen Vorlagen erhalten.
+
 ---
 
 ## Tray-Symbol: Statusfarben
@@ -284,7 +301,7 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 - Der eigentliche Key liegt nicht in `config.json`, sondern in `~/.config/blitztext-linux/secrets.env` oder einer bereits gesetzten Umgebungsvariable.
 - **autopaste**: Fügt per `ydotool` ein.
 - **audio_device**: Name der Audioquelle.
-- **workflows**: Feintuning von Tonalität, Emojis und dem Dampf-Prompt.
+- **workflows**: Feintuning von Tonalität (`text_improver_tone`), Schreibstil-Vorlage (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
 </details>
 
 ---

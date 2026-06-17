@@ -5,6 +5,7 @@ import logging
 from typing import Any, Optional
 
 from app.workflows import WorkflowType
+from app.writing_presets import DEFAULT_PRESET_KEY, get_preset
 
 logger = logging.getLogger("blitztext.llm_service")
 
@@ -51,6 +52,7 @@ class LLMService:
         dampf_system_prompt: str = "",
         custom_terms: Optional[list[str]] = None,
         api_key_env: str = "OPENAI_API_KEY",
+        writing_preset: str = DEFAULT_PRESET_KEY,
     ) -> None:
         self.api_key = api_key or ""
         self.api_key_env = api_key_env or "OPENAI_API_KEY"
@@ -58,6 +60,7 @@ class LLMService:
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt
         self.custom_terms = self._sanitize_terms(custom_terms)
+        self.writing_preset = writing_preset or DEFAULT_PRESET_KEY
 
         self._openai_installed = True
         self._client_is_fallback_mock = False
@@ -202,7 +205,8 @@ class LLMService:
             if workflow == WorkflowType.DAMPF_ABLASSEN:
                 return self.dampf_ablassen(transcript, custom_system_prompt=self.dampf_system_prompt)
             if workflow == WorkflowType.TEXT_IMPROVER:
-                return self.text_improver(transcript, tone=self.tone)
+                preset = get_preset(self.writing_preset)
+                return self.text_improver(transcript, tone=self.tone, custom_prompt=preset.system_prompt)
             if workflow == WorkflowType.EMOJI_TEXT:
                 return self.emoji_text(transcript, density=self.emoji_density)
             raise LLMServiceError(f"Unsupported workflow: {workflow}")

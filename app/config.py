@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.writing_presets import DEFAULT_PRESET_KEY, WRITING_PRESET_KEYS
+
 logger = logging.getLogger("blitztext.config")
 
 DEFAULTS: dict[str, Any] = {
@@ -34,6 +36,7 @@ DEFAULTS: dict[str, Any] = {
         "emoji_density": "mittel",
         "dampf_system_prompt": "",
         "custom_terms": [],
+        "writing_preset": DEFAULT_PRESET_KEY,
     },
 }
 
@@ -42,6 +45,7 @@ VALID_BACKENDS = {"openai-whisper", "faster-whisper"}
 VALID_HOTKEY_MODES = {"toggle", "hold"}
 VALID_TONES = {"formal", "neutral", "locker"}
 VALID_EMOJI_DENSITIES = {"wenig", "mittel", "viel"}
+VALID_WRITING_PRESETS = set(WRITING_PRESET_KEYS)
 VALID_HOTKEY_KEYS = {
     "KEY_LEFTALT", "KEY_RIGHTALT", "KEY_RIGHTCTRL", "KEY_LEFTCTRL",
     "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16",
@@ -268,6 +272,16 @@ class BlitztextConfig:
         self._data["workflows"]["dampf_system_prompt"] = value
 
     @property
+    def writing_preset(self) -> str:
+        return self._data["workflows"].get("writing_preset", DEFAULT_PRESET_KEY)
+
+    @writing_preset.setter
+    def writing_preset(self, value: str) -> None:
+        if value not in VALID_WRITING_PRESETS:
+            raise ValueError(f"Ungueltiges Schreib-Preset: {value!r}. Gueltig: {sorted(VALID_WRITING_PRESETS)}")
+        self._data["workflows"]["writing_preset"] = value
+
+    @property
     def custom_terms(self) -> list[str]:
         return list(self._data["workflows"].get("custom_terms", []))
 
@@ -323,6 +337,8 @@ class BlitztextConfig:
             wf["text_improver_tone"] = "neutral"
         if wf.get("emoji_density") not in VALID_EMOJI_DENSITIES:
             wf["emoji_density"] = "mittel"
+        if wf.get("writing_preset") not in VALID_WRITING_PRESETS:
+            wf["writing_preset"] = DEFAULT_PRESET_KEY
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
 
 

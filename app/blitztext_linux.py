@@ -32,6 +32,7 @@ if PROJECT_DIR not in sys.path:
 
 from app.config import Config, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, LLMServiceError
+from app.writing_presets import WRITING_PRESETS, WRITING_PRESET_KEYS, preset_index
 from app.hotkey_service import HotkeyWorker
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
@@ -223,6 +224,11 @@ class SettingsDialog(QDialog):
         self.combo_tone.addItems(["formal", "neutral", "locker"])
         self.combo_tone.setCurrentText(self.config.text_improver_tone)
 
+        self.combo_writing_preset = QComboBox()
+        for key in WRITING_PRESET_KEYS:
+            self.combo_writing_preset.addItem(WRITING_PRESETS[key].display_name, key)
+        self.combo_writing_preset.setCurrentIndex(preset_index(self.config.writing_preset))
+
         self.combo_emoji = QComboBox()
         self.combo_emoji.addItems(["wenig", "mittel", "viel"])
         self.combo_emoji.setCurrentText(self.config.emoji_density)
@@ -258,6 +264,8 @@ class SettingsDialog(QDialog):
         form_llm.addRow("", create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen."))
 
         form_llm.addRow("Text-Verbesserer Tonfall:", self.combo_tone)
+        form_llm.addRow("Schreibstil-Vorlage:", self.combo_writing_preset)
+        form_llm.addRow("", create_help_label("Vorlage für den Text-Verbesserer (z. B. E-Mail formell, Stichpunkte). Bei 'Standard' greift der Tonfall oben; jede andere Vorlage bestimmt den Schreibstil selbst und ersetzt den Tonfall."))
         form_llm.addRow("Emoji-Dichte:", self.combo_emoji)
 
         form_llm.addRow("Dampf-Umschreiber Prompt:", self.edit_dampf_prompt)
@@ -383,6 +391,7 @@ class SettingsDialog(QDialog):
 
             self.config.openai_api_key_env = self.edit_api_key_env.text().strip()
             self.config.text_improver_tone = self.combo_tone.currentText()
+            self.config.writing_preset = self.combo_writing_preset.currentData()
             self.config.emoji_density = self.combo_emoji.currentText()
             self.config.dampf_system_prompt = self.edit_dampf_prompt.toPlainText().strip()
             self.config.custom_terms = self._collect_custom_terms()
@@ -497,6 +506,7 @@ class BlitztextApp(QObject):
             dampf_system_prompt=self.config.dampf_system_prompt,
             custom_terms=self.config.custom_terms,
             api_key_env=self.config.openai_api_key_env,
+            writing_preset=self.config.writing_preset,
         )
         self.audio_recorder = AudioRecorder()
         self.paste_service = PasteService(autopaste=self.config.autopaste)
@@ -672,6 +682,7 @@ class BlitztextApp(QObject):
                 dampf_system_prompt=self.config.dampf_system_prompt,
                 custom_terms=self.config.custom_terms,
                 api_key_env=self.config.openai_api_key_env,
+                writing_preset=self.config.writing_preset,
             )
             self.update_menu_availability()
 

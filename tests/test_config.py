@@ -83,6 +83,44 @@ class TestWorkflowConfig:
         assert config.custom_terms == ["Blitztext", "OpenRouter"]
 
 
+class TestWritingPreset:
+    def test_default_writing_preset_is_standard(self, config):
+        assert config.writing_preset == "standard"
+
+    def test_valid_preset_is_accepted_and_persists(self, config, config_dir):
+        config.writing_preset = "email_formal"
+        assert config.writing_preset == "email_formal"
+        config.save()
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.writing_preset == "email_formal"
+
+    def test_invalid_preset_is_rejected(self, config):
+        with pytest.raises(ValueError):
+            config.writing_preset = "gibt-es-nicht"
+
+    def test_unknown_preset_in_file_is_coerced_to_standard(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"workflows": {"writing_preset": "kaputt"}}),
+            encoding="utf-8",
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.writing_preset == "standard"
+
+    def test_missing_preset_key_defaults_to_standard(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"workflows": {"text_improver_tone": "formal"}}),
+            encoding="utf-8",
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.writing_preset == "standard"
+        assert loaded.text_improver_tone == "formal"
+
+
 class TestTranscriptionHotkey:
     def test_valid_hotkey_is_accepted(self, config):
         config.transcription_hotkey = "KEY_F13"
