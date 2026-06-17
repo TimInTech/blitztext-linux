@@ -5,6 +5,10 @@
 #   Das Installations-Skript ersetzt den Platzhalter %BLITZTEXT_DIR% automatisch
 #   durch den absoluten Pfad des BlitztextLinux/-Verzeichnisses.
 #
+# Manuelle Laufzeit-Konfiguration:
+#   Optionale Secrets liegen in ~/.config/blitztext-linux/secrets.env.
+#   Datei mit chmod 600 schützen; sie wird per EnvironmentFile geladen.
+#
 # Manueller Start (nach install.sh und erfolgreichem Test):
 #   systemctl --user start blitztext-linux
 #
@@ -26,6 +30,7 @@ Type=simple
 # z. B. /home/benutzer/git/blitztext-linux
 WorkingDirectory=%BLITZTEXT_DIR%
 
+EnvironmentFile=-%h/.config/blitztext-linux/secrets.env
 ExecStart=%BLITZTEXT_DIR%/.venv/bin/python app/blitztext_linux.py
 
 Restart=on-failure

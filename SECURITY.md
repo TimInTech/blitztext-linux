@@ -28,7 +28,7 @@ Include:
 ## Security Notes
 
 - The app sends audio and text directly to OpenAI when you use the remote workflows.
-- Your OpenAI API key is stored in `~/.config/blitztext-linux/config.json`, written with restrictive `0o600` permissions.
+- Your OpenAI API key is read from the environment. Put it in `~/.config/blitztext-linux/secrets.env` (chmod `600`) or export the configured environment variable before launch.
 - Temporary audio files may exist briefly during processing.
 - Auto-paste uses `ydotool` to inject `Ctrl+V` into the focused application.
 - Global hotkeys read input from `/dev/input/event*` via `evdev`, which requires membership in the `input` group. On a shared session this means other processes of the same user could read input as well — a deliberate trade-off under Wayland without XDG GlobalShortcuts. Run Blitztext only in environments you trust. Replacing this path with a desktop-native XDG GlobalShortcuts integration is on the roadmap.

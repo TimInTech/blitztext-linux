@@ -14,8 +14,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QBrush, QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import (
+    QAction, QBrush, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap,
+)
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QFormLayout, QComboBox, QLineEdit, QCheckBox, QPlainTextEdit,
@@ -194,17 +196,28 @@ class SettingsDialog(QDialog):
         form_llm = QFormLayout(tab_llm)
         form_llm.setSpacing(10)
 
-        self.edit_api_key = QLineEdit()
-        self.edit_api_key.setText(self.config.openai_api_key)
-        self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.edit_api_key.setPlaceholderText("sk-...")
+        self.edit_api_key_env = QLineEdit()
+        self.edit_api_key_env.setText(self.config.openai_api_key_env)
+        self.edit_api_key_env.setPlaceholderText("OPENAI_API_KEY")
+        self.edit_api_key_env.textChanged.connect(lambda *_: self._refresh_api_key_status())
 
-        api_key_layout = QHBoxLayout()
-        api_key_layout.addWidget(self.edit_api_key)
-        self.btn_show_key = QPushButton("Anzeigen")
-        self.btn_show_key.setCheckable(True)
-        self.btn_show_key.clicked.connect(self._toggle_api_key_visibility)
-        api_key_layout.addWidget(self.btn_show_key)
+        self.lbl_api_key_status = QLabel()
+        self.lbl_api_key_status.setWordWrap(True)
+
+        api_key_layout = QVBoxLayout()
+        api_key_layout.addWidget(self.edit_api_key_env)
+        api_key_layout.addWidget(self.lbl_api_key_status)
+        if self.config.has_legacy_openai_api_key:
+            self.lbl_legacy_api_key_notice = QLabel(
+                "Legacy openai_api_key gefunden. Er wird beim nächsten Speichern entfernt."
+            )
+            self.lbl_legacy_api_key_notice.setWordWrap(True)
+            self.lbl_legacy_api_key_notice.setStyleSheet("color: #b26a00; font-size: 10px;")
+            api_key_layout.addWidget(self.lbl_legacy_api_key_notice)
+        else:
+            self.lbl_legacy_api_key_notice = None
+
+        self._refresh_api_key_status()
 
         self.combo_tone = QComboBox()
         self.combo_tone.addItems(["formal", "neutral", "locker"])
@@ -241,8 +254,8 @@ class SettingsDialog(QDialog):
         custom_terms_widget = QWidget()
         custom_terms_widget.setLayout(custom_terms_layout)
 
-        form_llm.addRow("OpenAI API-Key:", api_key_layout)
-        form_llm.addRow("", create_help_label("Erforderlich für alle KI/LLM-Features (Blitztext+, Dampf ablassen, Emojis)."))
+        form_llm.addRow("OpenAI API-Key-Umgebung:", api_key_layout)
+        form_llm.addRow("", create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen."))
 
         form_llm.addRow("Text-Verbesserer Tonfall:", self.combo_tone)
         form_llm.addRow("Emoji-Dichte:", self.combo_emoji)
@@ -276,6 +289,13 @@ class SettingsDialog(QDialog):
         form_general.addRow("Verlauf-Größe:", self.spin_history_size)
         form_general.addRow("", create_help_label("Maximale Anzahl der im Verlauf gespeicherten Einträge."))
 
+        self.btn_open_config = QPushButton("📄  Konfigurationsdatei öffnen")
+        self.btn_open_config.clicked.connect(self._open_config_file)
+        form_general.addRow(self.btn_open_config)
+        form_general.addRow("", create_help_label(
+            "Öffnet config.json im Standard-Editor – für erweiterte Prompt- und "
+            "Workflow-Anpassungen, die über die Felder oben hinausgehen."))
+
         # Dezente Versionsanzeige ganz unten auf der letzten Einstellungsseite
         version_label = QLabel(f"Version {APP_VERSION}")
         version_label.setStyleSheet("color: gray; font-size: 9px;")
@@ -292,13 +312,36 @@ class SettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-    def _toggle_api_key_visibility(self) -> None:
-        if self.btn_show_key.isChecked():
-            self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Normal)
-            self.btn_show_key.setText("Verbergen")
-        else:
-            self.edit_api_key.setEchoMode(QLineEdit.EchoMode.Password)
-            self.btn_show_key.setText("Anzeigen")
+    def _refresh_api_key_status(self) -> None:
+        env_name = self.edit_api_key_env.text().strip() or self.config.openai_api_key_env
+        env_value = os.environ.get(env_name, "").strip()
+        status = "gesetzt" if env_value else "nicht gesetzt"
+        self.lbl_api_key_status.setText(f"Status: {status} ({env_name})")
+
+    def _open_config_file(self) -> None:
+        """Open the config.json in the desktop's default editor.
+
+        Falls die Datei noch nie gespeichert wurde oder noch ein Legacy-API-Key
+        im Speicher hängt, wird sie zuvor über die bestehende, atomare
+        ``config.save()``-Logik (0o600) angelegt bzw. bereinigt.
+        """
+        try:
+            if (not self.config.config_file.is_file()) or self.config.has_legacy_openai_api_key:
+                self.config.save()
+            opened = QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(self.config.config_file)))
+            if not opened:
+                QMessageBox.warning(
+                    self,
+                    "Öffnen fehlgeschlagen",
+                    f"Konfigurationsdatei konnte nicht geöffnet werden:\n{self.config.config_file}",
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Fehler",
+                f"Konfigurationsdatei konnte nicht geöffnet werden: {e}",
+            )
 
     def _collect_custom_terms(self) -> list[str]:
         terms: list[str] = []
@@ -338,7 +381,7 @@ class SettingsDialog(QDialog):
             self.config.hotkey_mode = self.combo_hotkey_mode.currentText()
             self.config.transcription_hotkey = self.combo_transcription_key.currentText()
 
-            self.config.openai_api_key = self.edit_api_key.text().strip()
+            self.config.openai_api_key_env = self.edit_api_key_env.text().strip()
             self.config.text_improver_tone = self.combo_tone.currentText()
             self.config.emoji_density = self.combo_emoji.currentText()
             self.config.dampf_system_prompt = self.edit_dampf_prompt.toPlainText().strip()
@@ -414,7 +457,7 @@ class _TranscribeWorker(QRunnable):
                 self._emit("status_changed", "rewriting")
                 if not self.llm_service.is_available():
                     raise LLMServiceError(
-                        "OpenAI API-Key nicht konfiguriert. Bitte in den Einstellungen eintragen."
+                        f"OpenAI API-Key nicht gesetzt. Bitte {self.config.openai_api_key_env} in ~/.config/blitztext-linux/secrets.env setzen."
                     )
                 result_text = self.llm_service.rewrite(self.workflow, transcript)
             else:
@@ -448,11 +491,12 @@ class BlitztextApp(QObject):
         self.config = Config.load()
 
         self.llm_service = LLMService(
-            api_key=self.config.openai_api_key or "placeholder",
+            api_key=self.config.resolve_openai_api_key(),
             tone=self.config.text_improver_tone,
             emoji_density=self.config.emoji_density,
             dampf_system_prompt=self.config.dampf_system_prompt,
             custom_terms=self.config.custom_terms,
+            api_key_env=self.config.openai_api_key_env,
         )
         self.audio_recorder = AudioRecorder()
         self.paste_service = PasteService(autopaste=self.config.autopaste)
@@ -622,11 +666,12 @@ class BlitztextApp(QObject):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Update LLM Service parameters from saved configuration
             self.llm_service = LLMService(
-                api_key=self.config.openai_api_key or "placeholder",
+                api_key=self.config.resolve_openai_api_key(),
                 tone=self.config.text_improver_tone,
                 emoji_density=self.config.emoji_density,
                 dampf_system_prompt=self.config.dampf_system_prompt,
                 custom_terms=self.config.custom_terms,
+                api_key_env=self.config.openai_api_key_env,
             )
             self.update_menu_availability()
 

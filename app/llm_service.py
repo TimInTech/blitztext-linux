@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Optional
+
 from app.workflows import WorkflowType
 
 logger = logging.getLogger("blitztext.llm_service")
@@ -10,7 +11,6 @@ logger = logging.getLogger("blitztext.llm_service")
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
 MODEL = "gpt-4o-mini"
 
-# --- System prompts ---
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
     "Ziel, Anliegen und den wahren Frust der Person. Formuliere daraus eine klare, "
@@ -50,42 +50,53 @@ class LLMService:
         emoji_density: str = "mittel",
         dampf_system_prompt: str = "",
         custom_terms: Optional[list[str]] = None,
+        api_key_env: str = "OPENAI_API_KEY",
     ) -> None:
-        """
-        Args:
-            api_key: OpenAI API key. Raises ValueError if empty/falsy.
-            client:  Pre-built client (for testing/mocking).
-            tone:    Text-improver tone: 'formal' | 'neutral' | 'locker'.
-            emoji_density: 'wenig' | 'mittel' | 'viel'.
-            dampf_system_prompt: Override for dampf_ablassen system prompt.
-            custom_terms: Globale Liste von Eigennamen/Fachbegriffen.
-        """
-        if not api_key:
-            raise ValueError("api_key must not be empty")
-
-        self.api_key = api_key
+        self.api_key = api_key or ""
+        self.api_key_env = api_key_env or "OPENAI_API_KEY"
         self.tone = tone
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt
         self.custom_terms = self._sanitize_terms(custom_terms)
 
         self._openai_installed = True
+        self._client_is_fallback_mock = False
         if client is not None:
             self.client = client
         else:
             try:
                 import openai
-                self.client = openai.OpenAI(api_key=api_key)
             except ImportError:
                 self._openai_installed = False
+                self._client_is_fallback_mock = True
                 from unittest.mock import MagicMock
+
                 self.client = MagicMock()
+            else:
+                if self.api_key and self.api_key.strip():
+                    self.client = openai.OpenAI(api_key=self.api_key)
+                else:
+                    # Ohne API-Key keinen echten Client bauen: Neuere openai-Versionen
+                    # werfen bereits im Konstruktor bei leerem Key. Der eigentliche
+                    # Fehler wird zur Aufrufzeit über _check_openai() klar gemeldet,
+                    # damit die App auch ohne gesetzten Key startet.
+                    from unittest.mock import MagicMock
+
+                    self.client = MagicMock()
 
     def is_available(self) -> bool:
         return bool(self.api_key and self.api_key.strip())
 
+    def _missing_key_message(self) -> str:
+        return (
+            f"OpenAI API-Key nicht gesetzt. Bitte die Umgebungsvariable "
+            f"{self.api_key_env} in ~/.config/blitztext-linux/secrets.env setzen."
+        )
+
     def _check_openai(self) -> None:
-        if not self._openai_installed and type(self.client).__name__ != 'MagicMock':
+        if not self.is_available():
+            raise LLMServiceError(self._missing_key_message())
+        if not self._openai_installed and self._client_is_fallback_mock:
             raise LLMServiceError("openai-Paket nicht installiert. Bitte: pip install openai")
 
     @staticmethod
@@ -117,9 +128,9 @@ class LLMService:
         self._check_openai()
         if not transcript or not transcript.strip():
             raise ValueError("transcript must not be empty")
-        
+
         system = (custom_system_prompt.strip() or self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
-        
+
         response = self.client.chat.completions.create(
             model=MODEL,
             messages=[
@@ -183,18 +194,18 @@ class LLMService:
         Raises:
             LLMServiceError: If key is missing, package missing, or API error.
         """
+        self._check_openai()
         if workflow not in LLM_WORKFLOWS:
             raise LLMServiceError(f"rewrite() only allowed for LLM workflows, got {workflow!r}")
 
         try:
             if workflow == WorkflowType.DAMPF_ABLASSEN:
                 return self.dampf_ablassen(transcript, custom_system_prompt=self.dampf_system_prompt)
-            elif workflow == WorkflowType.TEXT_IMPROVER:
+            if workflow == WorkflowType.TEXT_IMPROVER:
                 return self.text_improver(transcript, tone=self.tone)
-            elif workflow == WorkflowType.EMOJI_TEXT:
+            if workflow == WorkflowType.EMOJI_TEXT:
                 return self.emoji_text(transcript, density=self.emoji_density)
-            else:
-                raise LLMServiceError(f"Unsupported workflow: {workflow}")
+            raise LLMServiceError(f"Unsupported workflow: {workflow}")
         except Exception as exc:
             if isinstance(exc, LLMServiceError):
                 raise

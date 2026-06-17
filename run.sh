@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python"
 LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/blitztext_linux.pid"
+SECRETS_FILE="${HOME}/.config/blitztext-linux/secrets.env"
 
 # --- Single-Instance-Guard ---
 if [[ -f "${LOCKFILE}" ]]; then
@@ -19,6 +20,14 @@ if [[ -f "${LOCKFILE}" ]]; then
 fi
 echo $$ > "${LOCKFILE}"
 trap 'rm -f "${LOCKFILE}"' EXIT INT TERM
+
+# --- secrets.env (optional) ---
+if [[ -f "${SECRETS_FILE}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${SECRETS_FILE}"
+    set +a
+fi
 
 # --- venv-Prüfung ---
 if [[ ! -x "${VENV_PYTHON}" ]]; then

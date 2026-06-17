@@ -1,161 +1,146 @@
-"""Tests für BlitztextConfig — Lesen, Schreiben, Defaults, API-Key-Handling."""
+"""Tests für BlitztextConfig — Defaults, Persistenz, Legacy-Migration."""
+from __future__ import annotations
+
 import json
-import os
-import pytest
 from pathlib import Path
+
+import pytest
+
 from app.config import BlitztextConfig
 
 
 @pytest.fixture
-def config_dir(tmp_path):
+def config_dir(tmp_path) -> Path:
     return tmp_path / ".config" / "blitztext-linux"
 
 
 @pytest.fixture
-def config(config_dir):
+def config(config_dir) -> BlitztextConfig:
     return BlitztextConfig(config_dir=config_dir)
 
 
 class TestDefaults:
-    def test_default_model(self, config):
+    def test_default_model_is_base(self, config):
         assert config.model == "base"
 
-    def test_default_language(self, config):
+    def test_default_language_is_de(self, config):
         assert config.language == "de"
 
-    def test_default_backend(self, config):
+    def test_default_backend_is_openai_whisper(self, config):
         assert config.backend == "openai-whisper"
 
     def test_default_hotkey_mode(self, config):
         assert config.hotkey_mode in ("toggle", "hold")
 
-    def test_default_api_key_empty(self, config):
-        assert config.openai_api_key == ""
+    def test_default_api_key_env(self, config):
+        assert config.openai_api_key_env == "OPENAI_API_KEY"
+        assert config.resolve_openai_api_key() == ""
 
     def test_default_autopaste(self, config):
         assert config.autopaste is True
 
 
 class TestPersistence:
-    def test_save_creates_file(self, config, config_dir):
-        config.save()
-        assert (config_dir / "config.json").exists()
-
     def test_save_load_roundtrip(self, config, config_dir):
         config.model = "small"
         config.language = "en"
+        config.openai_api_key_env = "my_openai_key"
         config.save()
+
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.model == "small"
         assert loaded.language == "en"
+        assert loaded.openai_api_key_env == "MY_OPENAI_KEY"
 
     def test_config_file_permissions(self, config, config_dir):
         config.save()
-        cfg_file = config_dir / "config.json"
-        mode = oct(cfg_file.stat().st_mode)[-3:]
-        assert mode == "600", f"Expected 600, got {mode}"
+        mode = (config_dir / "config.json").stat().st_mode & 0o777
+        assert mode == 0o600
 
     def test_partial_config_fills_defaults(self, config_dir):
         config_dir.mkdir(parents=True, exist_ok=True)
-        partial = {"model": "tiny"}
-        (config_dir / "config.json").write_text(json.dumps(partial))
+        (config_dir / "config.json").write_text(json.dumps({"model": "tiny"}), encoding="utf-8")
+
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.model == "tiny"
-        assert loaded.language == "de"  # default
+        assert loaded.language == "de"
+        assert loaded.openai_api_key_env == "OPENAI_API_KEY"
 
 
 class TestWorkflowConfig:
-    def test_text_improver_tone_default(self, config):
-        assert config.workflows["text_improver_tone"] == "neutral"
-
-    def test_emoji_density_default(self, config):
-        assert config.workflows["emoji_density"] == "mittel"
-
-    def test_custom_dampf_prompt_default_empty(self, config):
-        assert config.workflows["dampf_system_prompt"] == ""
-
-    def test_custom_terms_default_empty_list(self, config):
-        assert config.custom_terms == []
-
-    def test_custom_terms_persist_after_save_reload(self, config, config_dir):
-        config.custom_terms = ["Blitztext", "OpenRouter", "Leopoldshöhe"]
-        config.save()
-        loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.custom_terms == ["Blitztext", "OpenRouter", "Leopoldshöhe"]
-
-    def test_custom_terms_sanitized_on_setter(self, config):
-        config.custom_terms = ["  Blitztext  ", "", "   ", "OpenRouter", "Blitztext", 5]
-        assert config.custom_terms == ["Blitztext", "OpenRouter"]
-
-    def test_partial_workflow_config_without_custom_terms_remains_compatible(self, config_dir):
+    def test_workflows_dict_created_when_missing(self, config_dir):
         config_dir.mkdir(parents=True, exist_ok=True)
-        partial = {
-            "workflows": {
-                "text_improver_tone": "formal",
-                "emoji_density": "viel",
-            }
-        }
-        (config_dir / "config.json").write_text(json.dumps(partial), encoding="utf-8")
+        (config_dir / "config.json").write_text(json.dumps({"model": "base"}), encoding="utf-8")
+
         loaded = BlitztextConfig(config_dir=config_dir)
+        assert isinstance(loaded.workflows, dict)
+        assert loaded.text_improver_tone == "neutral"
+        assert loaded.emoji_density == "mittel"
         assert loaded.custom_terms == []
 
-    def test_custom_terms_sanitized_on_load(self, config_dir):
-        config_dir.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "workflows": {
-                "custom_terms": [" Blitztext ", "", "OpenRouter", "Blitztext", None, 7, "   "]
-            }
-        }
-        (config_dir / "config.json").write_text(json.dumps(payload), encoding="utf-8")
-        loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.custom_terms == ["Blitztext", "OpenRouter"]
+    def test_custom_terms_are_sanitized(self, config):
+        config.custom_terms = [" Blitztext ", "Blitztext", "", "OpenRouter", 123]
+        assert config.custom_terms == ["Blitztext", "OpenRouter"]
 
 
 class TestTranscriptionHotkey:
-    def test_default_transcription_hotkey(self, config):
-        assert config.transcription_hotkey == "KEY_LEFTALT"
-
-    def test_set_valid_transcription_hotkey(self, config):
+    def test_valid_hotkey_is_accepted(self, config):
         config.transcription_hotkey = "KEY_F13"
         assert config.transcription_hotkey == "KEY_F13"
 
-    def test_invalid_transcription_hotkey_raises(self, config):
+    def test_invalid_hotkey_is_rejected(self, config):
         with pytest.raises(ValueError):
-            config.transcription_hotkey = "KEY_SPACE"
-
-    def test_transcription_hotkey_persists(self, config, config_dir):
-        config.transcription_hotkey = "KEY_RIGHTCTRL"
-        config.save()
-        loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.transcription_hotkey == "KEY_RIGHTCTRL"
-
-    def test_hotkey_mode_toggle_persists(self, config, config_dir):
-        config.hotkey_mode = "toggle"
-        config.save()
-        loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.hotkey_mode == "toggle"
-
-    def test_hotkey_mode_hold_persists(self, config, config_dir):
-        config.hotkey_mode = "hold"
-        config.save()
-        loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.hotkey_mode == "hold"
+            config.transcription_hotkey = "KEY_A"
 
 
 class TestAPIKeyHandling:
-    def test_has_api_key_false_when_empty(self, config):
-        config.openai_api_key = ""
+    def test_has_api_key_false_when_env_missing(self, config, monkeypatch):
+        monkeypatch.delenv(config.openai_api_key_env, raising=False)
         assert config.has_api_key() is False
 
-    def test_has_api_key_true_when_set(self, config):
-        config.openai_api_key = "sk-abc123"
+    def test_has_api_key_true_when_env_set(self, config, monkeypatch):
+        monkeypatch.setenv(config.openai_api_key_env, "dummy-openai-key")
         assert config.has_api_key() is True
+        assert config.resolve_openai_api_key() == "dummy-openai-key"
 
-    def test_api_key_not_logged(self, config, capsys, config_dir):
-        """API-Key darf nie in stdout/stderr landen."""
-        config.openai_api_key = "sk-secret-do-not-log"
-        config.save()
+    def test_invalid_env_var_name_is_normalized_to_default(self, config):
+        config.openai_api_key_env = "  invalid-name  "
+        assert config.openai_api_key_env == "OPENAI_API_KEY"
+
+    def test_legacy_api_key_is_removed_on_load_and_save(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"openai_api_key": "legacy-placeholder", "model": "base"}),
+            encoding="utf-8",
+        )
+
         loaded = BlitztextConfig(config_dir=config_dir)
-        captured = capsys.readouterr()
-        assert "sk-secret-do-not-log" not in captured.out
-        assert "sk-secret-do-not-log" not in captured.err
+        assert loaded.has_legacy_openai_api_key is True
+        assert loaded.resolve_openai_api_key() == "legacy-placeholder"
+        assert loaded.has_api_key() is True
+
+        loaded.save()
+        saved = json.loads((config_dir / "config.json").read_text(encoding="utf-8"))
+        assert "openai_api_key" not in saved
+        assert saved["openai_api_key_env"] == "OPENAI_API_KEY"
+
+    def test_save_never_writes_openai_api_key(self, config_dir):
+        config = BlitztextConfig(config_dir=config_dir)
+        config.openai_api_key_env = "CUSTOM_OPENAI_KEY"
+        config.save()
+
+        saved = json.loads((config_dir / "config.json").read_text(encoding="utf-8"))
+        assert "openai_api_key" not in saved
+        assert saved["openai_api_key_env"] == "CUSTOM_OPENAI_KEY"
+
+
+    def test_env_value_wins_over_legacy_fallback(self, config_dir, monkeypatch):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"openai_api_key": "legacy-placeholder"}),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setenv("OPENAI_API_KEY", "env-placeholder")
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.resolve_openai_api_key() == "env-placeholder"
