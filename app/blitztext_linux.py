@@ -117,6 +117,27 @@ def _require_display_environment() -> None:
     sys.exit(1)
 
 
+class FormScrollArea(QScrollArea):
+    """Scroll area for settings tabs.
+
+    Mit ``setWidgetResizable(True)`` würde Qt das innere Formular auf jede
+    Höhe zwischen ``minimumSizeHint`` und ``sizeHint`` stauchen. Da die
+    Hilfe-Labels Wortumbruch nutzen, ist ihre Minimalhöhe viel kleiner als
+    die tatsächlich benötigte Höhe – dadurch überlappen die Zeilen, sobald
+    das Fenster knapp zu klein für die volle Höhe ist. Wir erzwingen daher
+    als Mindesthöhe stets die für die aktuelle Breite nötige Höhe, sodass
+    bei Platzmangel sauber gescrollt statt gequetscht wird.
+    """
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        content = self.widget()
+        if content is not None:
+            needed = content.heightForWidth(self.viewport().width())
+            if needed > 0 and content.minimumHeight() != needed:
+                content.setMinimumHeight(needed)
+
+
 def create_help_label(text: str) -> QLabel:
     """Create a styled small help label for config fields."""
     from app import theme
@@ -142,7 +163,7 @@ class SettingsDialog(QDialog):
     @staticmethod
     def _scrollable(content: QWidget) -> QScrollArea:
         """Wrap a tab page so long forms scroll instead of overflowing the dialog."""
-        scroll = QScrollArea()
+        scroll = FormScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
