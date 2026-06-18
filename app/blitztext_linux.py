@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QFormLayout, QComboBox, QLineEdit, QCheckBox, QPlainTextEdit,
     QPushButton, QDialogButtonBox, QLabel, QMessageBox, QMenu, QSystemTrayIcon, QStyle,
-    QListWidget,
+    QListWidget, QScrollArea, QFrame,
 )
 
 # Make project importable when running directly
@@ -117,10 +117,35 @@ def _require_display_environment() -> None:
     sys.exit(1)
 
 
+class FormScrollArea(QScrollArea):
+    """Scroll area for settings tabs.
+
+    Mit ``setWidgetResizable(True)`` würde Qt das innere Formular auf jede
+    Höhe zwischen ``minimumSizeHint`` und ``sizeHint`` stauchen. Da die
+    Hilfe-Labels Wortumbruch nutzen, ist ihre Minimalhöhe viel kleiner als
+    die tatsächlich benötigte Höhe – dadurch überlappen die Zeilen, sobald
+    das Fenster knapp zu klein für die volle Höhe ist. Wir erzwingen daher
+    als Mindesthöhe stets die für die aktuelle Breite nötige Höhe, sodass
+    bei Platzmangel sauber gescrollt statt gequetscht wird.
+    """
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        content = self.widget()
+        if content is not None:
+            needed = content.heightForWidth(self.viewport().width())
+            if needed > 0 and content.minimumHeight() != needed:
+                content.setMinimumHeight(needed)
+
+
 def create_help_label(text: str) -> QLabel:
     """Create a styled small help label for config fields."""
+    from app import theme
+
     label = QLabel(text)
-    label.setStyleSheet("color: gray; font-size: 10px;")
+    label.setStyleSheet(
+        f"color: {theme.APP_TEXT_DIM}; font-size: 11px; padding: 1px 0 8px 2px;"
+    )
     label.setWordWrap(True)
     return label
 
@@ -132,8 +157,18 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle("Blitztext Einstellungen")
-        self.resize(550, 480)
+        self.resize(580, 560)
         self.init_ui()
+
+    @staticmethod
+    def _scrollable(content: QWidget) -> QScrollArea:
+        """Wrap a tab page so long forms scroll instead of overflowing the dialog."""
+        scroll = FormScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+        return scroll
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -147,6 +182,7 @@ class SettingsDialog(QDialog):
         tab_whisper = QWidget()
         form_whisper = QFormLayout(tab_whisper)
         form_whisper.setSpacing(10)
+        form_whisper.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self.combo_model = QComboBox()
         self.combo_model.addItems(["tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"])
@@ -173,29 +209,30 @@ class SettingsDialog(QDialog):
         self.combo_transcription_key.setCurrentText(self.config.transcription_hotkey)
 
         form_whisper.addRow("Whisper-Modell:", self.combo_model)
-        form_whisper.addRow("", create_help_label("Wählen Sie die Modellgröße. Größere Modelle sind genauer, benötigen aber mehr Ressourcen."))
+        form_whisper.addRow(create_help_label("Wählen Sie die Modellgröße. Größere Modelle sind genauer, benötigen aber mehr Ressourcen."))
 
         form_whisper.addRow("Transkription-Backend:", self.combo_backend)
-        form_whisper.addRow("", create_help_label("faster-whisper ist deutlich schneller und ressourcenschonender."))
+        form_whisper.addRow(create_help_label("faster-whisper ist deutlich schneller und ressourcenschonender."))
 
         form_whisper.addRow("Sprache:", self.edit_language)
-        form_whisper.addRow("", create_help_label("Zweistelliger Ländercode (z. B. 'de', 'en') oder 'auto' für automatische Erkennung."))
+        form_whisper.addRow(create_help_label("Zweistelliger Ländercode (z. B. 'de', 'en') oder 'auto' für automatische Erkennung."))
 
         form_whisper.addRow("Audio-Eingabegerät:", self.edit_audio_device)
-        form_whisper.addRow("", create_help_label("'@DEFAULT_SOURCE@' nutzt das Standardmikrofon von PulseAudio/PipeWire."))
+        form_whisper.addRow(create_help_label("'@DEFAULT_SOURCE@' nutzt das Standardmikrofon von PulseAudio/PipeWire."))
 
         form_whisper.addRow("Hotkey-Modus:", self.combo_hotkey_mode)
-        form_whisper.addRow("", create_help_label("toggle: Einmal drücken zum Starten, erneut drücken zum Stoppen.\nhold: Gedrückt halten zum Aufnehmen, Loslassen zum Stoppen."))
+        form_whisper.addRow(create_help_label("toggle: Einmal drücken zum Starten, erneut drücken zum Stoppen.\nhold: Gedrückt halten zum Aufnehmen, Loslassen zum Stoppen."))
 
         form_whisper.addRow("Aufnahme-Taste:", self.combo_transcription_key)
-        form_whisper.addRow("", create_help_label("Einzelne Taste ohne Modifier (z. B. KEY_LEFTALT). Änderung wird sofort übernommen."))
+        form_whisper.addRow(create_help_label("Einzelne Taste ohne Modifier (z. B. KEY_LEFTALT). Änderung wird sofort übernommen."))
 
-        self.tabs.addTab(tab_whisper, "Spracherkennung")
+        self.tabs.addTab(self._scrollable(tab_whisper), "Spracherkennung")
 
         # Tab 2: LLM (KI)
         tab_llm = QWidget()
         form_llm = QFormLayout(tab_llm)
         form_llm.setSpacing(10)
+        form_llm.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self.edit_api_key_env = QLineEdit()
         self.edit_api_key_env.setText(self.config.openai_api_key_env)
@@ -253,6 +290,8 @@ class SettingsDialog(QDialog):
         self.edit_dampf_prompt = QPlainTextEdit()
         self.edit_dampf_prompt.setPlainText(self.config.dampf_system_prompt)
         self.edit_dampf_prompt.setPlaceholderText("Standard-Systemprompt verwenden...")
+        self.edit_dampf_prompt.setMinimumHeight(72)
+        self.edit_dampf_prompt.setMaximumHeight(120)
 
         self.edit_custom_term = QLineEdit()
         self.edit_custom_term.setPlaceholderText("z. B. Blitztext")
@@ -260,6 +299,7 @@ class SettingsDialog(QDialog):
         self.list_custom_terms = QListWidget()
         self.list_custom_terms.addItems(self.config.custom_terms)
         self.list_custom_terms.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.list_custom_terms.setMaximumHeight(120)
         self.btn_add_custom_term = QPushButton("Hinzufügen")
         self.btn_add_custom_term.clicked.connect(self._add_custom_term)
         self.btn_remove_custom_term = QPushButton("Ausgewählte entfernen")
@@ -278,53 +318,54 @@ class SettingsDialog(QDialog):
         custom_terms_widget.setLayout(custom_terms_layout)
 
         form_llm.addRow("API-Key-Umgebung:", api_key_layout)
-        form_llm.addRow("", create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY."))
+        form_llm.addRow(create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY."))
 
         form_llm.addRow("LLM-Anbieter:", self.combo_llm_provider)
-        form_llm.addRow("", create_help_label("OpenAI = Standard. OpenRouter und 'Eigener Endpunkt' nutzen das OpenAI-kompatible API über eine eigene Basis-URL und ein eigenes Modell."))
+        form_llm.addRow(create_help_label("OpenAI = Standard. OpenRouter und 'Eigener Endpunkt' nutzen das OpenAI-kompatible API über eine eigene Basis-URL und ein eigenes Modell."))
         form_llm.addRow("Basis-URL (base_url):", self.edit_base_url)
-        form_llm.addRow("", create_help_label("Leer = OpenAI-Standard. Für OpenRouter: https://openrouter.ai/api/v1. Muss mit http:// oder https:// beginnen."))
+        form_llm.addRow(create_help_label("Leer = OpenAI-Standard. Für OpenRouter: https://openrouter.ai/api/v1. Muss mit http:// oder https:// beginnen."))
         form_llm.addRow("LLM-Modell:", self.edit_llm_model)
-        form_llm.addRow("", create_help_label("Modellname beim Anbieter, z. B. 'gpt-4o-mini' (OpenAI) oder 'openai/gpt-4o' (OpenRouter)."))
+        form_llm.addRow(create_help_label("Modellname beim Anbieter, z. B. 'gpt-4o-mini' (OpenAI) oder 'openai/gpt-4o' (OpenRouter)."))
 
         form_llm.addRow("Text-Verbesserer Tonfall:", self.combo_tone)
         form_llm.addRow("Schreibstil-Vorlage:", self.combo_writing_preset)
-        form_llm.addRow("", create_help_label("Vorlage für den Text-Verbesserer (z. B. E-Mail formell, Stichpunkte). Bei 'Standard' greift der Tonfall oben; jede andere Vorlage bestimmt den Schreibstil selbst und ersetzt den Tonfall."))
+        form_llm.addRow(create_help_label("Vorlage für den Text-Verbesserer (z. B. E-Mail formell, Stichpunkte). Bei 'Standard' greift der Tonfall oben; jede andere Vorlage bestimmt den Schreibstil selbst und ersetzt den Tonfall."))
         form_llm.addRow("Emoji-Dichte:", self.combo_emoji)
 
         form_llm.addRow("Dampf-Umschreiber Prompt:", self.edit_dampf_prompt)
-        form_llm.addRow("", create_help_label("Eigener System-Prompt, um wütende Aussagen in eine professionelle Form umzuschreiben."))
+        form_llm.addRow(create_help_label("Eigener System-Prompt, um wütende Aussagen in eine professionelle Form umzuschreiben."))
         form_llm.addRow("Eigennamen / Begriffe:", custom_terms_widget)
-        form_llm.addRow("", create_help_label("Wörter, Namen und Fachbegriffe, die bei Transkription und KI-Umschreibung exakt beibehalten werden sollen."))
+        form_llm.addRow(create_help_label("Wörter, Namen und Fachbegriffe, die bei Transkription und KI-Umschreibung exakt beibehalten werden sollen."))
 
-        self.tabs.addTab(tab_llm, "KI-Workflows")
+        self.tabs.addTab(self._scrollable(tab_llm), "KI-Workflows")
 
         # Tab 3: Allgemein
         tab_general = QWidget()
         form_general = QFormLayout(tab_general)
         form_general.setSpacing(10)
+        form_general.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self.check_autopaste = QCheckBox("Text automatisch einfügen (Auto-Paste)")
         self.check_autopaste.setChecked(self.config.autopaste)
         form_general.addRow(self.check_autopaste)
-        form_general.addRow("", create_help_label("Simuliert Strg+V nach Abschluss der Aufnahme. Benötigt das Tool 'ydotool'."))
+        form_general.addRow(create_help_label("Simuliert Strg+V nach Abschluss der Aufnahme. Benötigt das Tool 'ydotool'."))
 
         self.edit_notes_folder = QLineEdit()
         self.edit_notes_folder.setText(self.config.notes_folder)
         self.edit_notes_folder.setPlaceholderText(str(Path.home() / "Blitztext-Notizen"))
         form_general.addRow("Diktat-Notizordner:", self.edit_notes_folder)
-        form_general.addRow("", create_help_label("Ordner für Diktat-Notizen (muss innerhalb von ~ liegen). Leer = Speichern deaktiviert."))
+        form_general.addRow(create_help_label("Ordner für Diktat-Notizen (muss innerhalb von ~ liegen). Leer = Speichern deaktiviert."))
 
         self.spin_history_size = QComboBox()
         self.spin_history_size.addItems(["10", "25", "50", "75", "100"])
         self.spin_history_size.setCurrentText(str(self.config.history_size))
         form_general.addRow("Verlauf-Größe:", self.spin_history_size)
-        form_general.addRow("", create_help_label("Maximale Anzahl der im Verlauf gespeicherten Einträge."))
+        form_general.addRow(create_help_label("Maximale Anzahl der im Verlauf gespeicherten Einträge."))
 
         self.btn_open_config = QPushButton("📄  Konfigurationsdatei öffnen")
         self.btn_open_config.clicked.connect(self._open_config_file)
         form_general.addRow(self.btn_open_config)
-        form_general.addRow("", create_help_label(
+        form_general.addRow(create_help_label(
             "Öffnet config.json im Standard-Editor – für erweiterte Prompt- und "
             "Workflow-Anpassungen, die über die Felder oben hinausgehen."))
 
@@ -334,7 +375,7 @@ class SettingsDialog(QDialog):
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         form_general.addRow(version_label)
 
-        self.tabs.addTab(tab_general, "Allgemein")
+        self.tabs.addTab(self._scrollable(tab_general), "Allgemein")
 
         layout.addWidget(self.tabs)
 
