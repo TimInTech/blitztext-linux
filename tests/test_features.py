@@ -276,8 +276,27 @@ class TestTtsAvailability:
         cfg = Config.load(tmp_path / "config.json")
         cfg.tts_provider = "openai"
         service = tts_window.CloudTtsService(cfg)
-        with pytest.raises(tts_window.CloudTtsServiceError):
+        assert service.client is None
+        assert service.is_available() is False
+        with pytest.raises(tts_window.CloudTtsServiceError, match="OpenAI API-Key nicht gesetzt") as exc_info:
             service.synthesize("Hallo Welt", output_path=str(tmp_path / "x.wav"))
+        assert "OPENAI_API_KEY" in str(exc_info.value)
+        assert "openai fehlt" not in str(exc_info.value)
+
+    def test_openai_cloud_service_raises_without_openai_package(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        cfg = Config.load(tmp_path / "config.json")
+        cfg.tts_provider = "openai"
+
+        with patch.dict("sys.modules", {"openai": None}):
+            service = tts_window.CloudTtsService(cfg)
+
+        assert service.client is None
+        assert service.is_available() is False
+        with pytest.raises(tts_window.CloudTtsServiceError, match="Python-Paket openai fehlt") as exc_info:
+            service.synthesize("Hallo Welt", output_path=str(tmp_path / "x.wav"))
+        assert "sk-test" not in str(exc_info.value)
+        assert "API-Key nicht gesetzt" not in str(exc_info.value)
 
     def test_openai_cloud_service_propagates_timeout_error(self, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
@@ -360,6 +379,35 @@ class TestCloudTtsConsentGate:
             tts_window.TtsWindow._start_cloud_tts(fake, "Hallo Welt")
         service.assert_not_called()
         fake._status_label.setText.assert_called_once()
+
+    def test_start_cloud_tts_deletes_thread_on_normal_finish(self, tmp_path):
+        cfg = Config.load(tmp_path / "config.json")
+        cfg.tts_provider = "openai"
+        cfg.tts_openai_consent = True
+        fake = SimpleNamespace(
+            _config=cfg,
+            _status_label=MagicMock(),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _on_cloud_finished=MagicMock(),
+            _on_cloud_error=MagicMock(),
+            _on_cloud_thread_finished=MagicMock(),
+        )
+        service = MagicMock()
+        service.is_available.return_value = True
+        thread = MagicMock()
+        worker = MagicMock()
+
+        with patch.object(tts_window, "CloudTtsService", return_value=service), \
+                patch.object(tts_window, "QThread", return_value=thread), \
+                patch.object(tts_window, "_CloudTtsWorker", return_value=worker):
+            tts_window.TtsWindow._start_cloud_tts(fake, "Hallo Welt")
+
+        thread.finished.connect.assert_any_call(worker.deleteLater)
+        thread.finished.connect.assert_any_call(thread.deleteLater)
+        thread.finished.connect.assert_any_call(fake._on_cloud_thread_finished)
+        thread.start.assert_called_once()
 
 
 class TestDetachCloudThread:

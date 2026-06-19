@@ -112,29 +112,22 @@ class CloudTtsService:
         self.api_key = config.resolve_openai_api_key()
         self.api_key_env = config.openai_api_key_env
         self._openai_installed = True
-        self._client_is_fallback_mock = False
+        self.client = client
         if client is not None:
-            self.client = client
+            return
+        if not self.api_key:
+            self.client = None
+            return
+        try:
+            import openai
+        except ImportError:
+            self._openai_installed = False
+            self.client = None
         else:
-            if not self.api_key:
-                from unittest.mock import MagicMock
-
-                self._client_is_fallback_mock = True
-                self.client = MagicMock()
-            else:
-                try:
-                    import openai
-                except ImportError:
-                    self._openai_installed = False
-                    self._client_is_fallback_mock = True
-                    from unittest.mock import MagicMock
-
-                    self.client = MagicMock()
-                else:
-                    self.client = openai.OpenAI(api_key=self.api_key)
+            self.client = openai.OpenAI(api_key=self.api_key)
 
     def is_available(self) -> bool:
-        return self.config.tts_provider == "openai" and bool(self.api_key)
+        return self.config.tts_provider == "openai" and bool(self.api_key) and self.client is not None
 
     def _missing_key_message(self) -> str:
         return (
@@ -142,13 +135,16 @@ class CloudTtsService:
             f"{self.api_key_env} in ~/.config/blitztext-linux/secrets.env setzen."
         )
 
+    def _missing_openai_package_message(self) -> str:
+        return "Python-Paket openai fehlt. Bitte installieren: pip install openai"
+
     def _check_ready(self) -> None:
         if self.config.tts_provider != "openai":
             raise CloudTtsServiceError("OpenAI Cloud-TTS ist nicht aktiviert.")
         if not self.api_key:
             raise CloudTtsServiceError(self._missing_key_message())
-        if not self._openai_installed and self._client_is_fallback_mock:
-            raise CloudTtsServiceError("openai-Paket nicht installiert. Bitte: pip install openai")
+        if not self._openai_installed or self.client is None:
+            raise CloudTtsServiceError(self._missing_openai_package_message())
 
     def synthesize(self, text: str, output_path: str = TTS_WAV) -> str:
         self._check_ready()
@@ -600,6 +596,7 @@ class TtsWindow(QDialog):
         worker.finished.connect(thread.quit)
         worker.error.connect(thread.quit)
         thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
         thread.finished.connect(self._on_cloud_thread_finished)
         self._cloud_thread = thread
         self._cloud_worker = worker
