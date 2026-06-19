@@ -32,7 +32,11 @@ DEFAULTS: dict[str, Any] = {
     "audio_device": "@DEFAULT_SOURCE@",
     "notes_folder": str(Path.home() / "Blitztext-Notizen"),
     "history_size": 50,
+    "tts_provider": "piper",
     "tts_voice": "",
+    "tts_openai_model": "gpt-4o-mini-tts",
+    "tts_openai_voice": "marin",
+    "tts_openai_consent": False,
     "tts_speed": 1.0,
     "workflows": {
         "text_improver_tone": "neutral",
@@ -50,6 +54,8 @@ VALID_TONES = {"formal", "neutral", "locker"}
 VALID_EMOJI_DENSITIES = {"wenig", "mittel", "viel"}
 VALID_WRITING_PRESETS = set(WRITING_PRESET_KEYS)
 VALID_LLM_PROVIDERS = {"openai", "openrouter", "custom"}
+VALID_TTS_PROVIDERS = {"piper", "openai"}
+VALID_OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"}
 BASE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 VALID_HOTKEY_KEYS = {
     "KEY_LEFTALT", "KEY_RIGHTALT", "KEY_RIGHTCTRL", "KEY_LEFTCTRL",
@@ -256,12 +262,52 @@ class BlitztextConfig:
         self._data["history_size"] = max(10, min(100, int(value)))
 
     @property
+    def tts_provider(self) -> str:
+        value = self._data.get("tts_provider", DEFAULTS["tts_provider"])
+        return value if value in VALID_TTS_PROVIDERS else DEFAULTS["tts_provider"]
+
+    @tts_provider.setter
+    def tts_provider(self, value: str) -> None:
+        if value not in VALID_TTS_PROVIDERS:
+            raise ValueError(f"Ungueltiger TTS-Anbieter: {value!r}. Gueltig: {sorted(VALID_TTS_PROVIDERS)}")
+        self._data["tts_provider"] = value
+
+    @property
     def tts_voice(self) -> str:
         return self._data.get("tts_voice", "")
 
     @tts_voice.setter
     def tts_voice(self, value: str) -> None:
         self._data["tts_voice"] = value
+
+    @property
+    def tts_openai_model(self) -> str:
+        value = self._data.get("tts_openai_model", DEFAULTS["tts_openai_model"])
+        return value if isinstance(value, str) and value.strip() else DEFAULTS["tts_openai_model"]
+
+    @tts_openai_model.setter
+    def tts_openai_model(self, value: str) -> None:
+        self._data["tts_openai_model"] = value.strip() if isinstance(value, str) and value.strip() else DEFAULTS["tts_openai_model"]
+
+    @property
+    def tts_openai_voice(self) -> str:
+        value = self._data.get("tts_openai_voice", DEFAULTS["tts_openai_voice"])
+        return value if value in VALID_OPENAI_TTS_VOICES else DEFAULTS["tts_openai_voice"]
+
+    @tts_openai_voice.setter
+    def tts_openai_voice(self, value: str) -> None:
+        if value not in VALID_OPENAI_TTS_VOICES:
+            raise ValueError(f"Ungueltige OpenAI-TTS-Stimme: {value!r}. Gueltig: {sorted(VALID_OPENAI_TTS_VOICES)}")
+        self._data["tts_openai_voice"] = value
+
+    @property
+    def tts_openai_consent(self) -> bool:
+        """Einmalige Nutzer-Bestaetigung, dass lokale Texte an OpenAI gesendet werden duerfen."""
+        return bool(self._data.get("tts_openai_consent", DEFAULTS["tts_openai_consent"]))
+
+    @tts_openai_consent.setter
+    def tts_openai_consent(self, value: bool) -> None:
+        self._data["tts_openai_consent"] = bool(value)
 
     @property
     def tts_speed(self) -> float:
@@ -344,8 +390,15 @@ class BlitztextConfig:
             self._data["tts_speed"] = 1.0
         if not isinstance(self._data.get("notes_folder", ""), str):
             self._data["notes_folder"] = ""
+        if self._data.get("tts_provider") not in VALID_TTS_PROVIDERS:
+            self._data["tts_provider"] = DEFAULTS["tts_provider"]
         if not isinstance(self._data.get("tts_voice", ""), str):
             self._data["tts_voice"] = ""
+        if not isinstance(self._data.get("tts_openai_model", ""), str):
+            self._data["tts_openai_model"] = DEFAULTS["tts_openai_model"]
+        if self._data.get("tts_openai_voice") not in VALID_OPENAI_TTS_VOICES:
+            self._data["tts_openai_voice"] = DEFAULTS["tts_openai_voice"]
+        self._data["tts_openai_consent"] = bool(self._data.get("tts_openai_consent", False))
 
         self._data["openai_api_key_env"] = _normalize_env_var_name(
             self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])

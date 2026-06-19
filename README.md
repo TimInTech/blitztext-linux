@@ -244,7 +244,7 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 | :--- | :--- |
 | **Diktat-Modus** | Umschalter. Ist er aktiv, werden alle Transkripte als Diktat-Einträge gesammelt und einzeln als Markdown-Datei gespeichert. Im Verlauf erscheint dann eine Schaltfläche **Zusammenführen**, die alle Einträge kombiniert und in die Zwischenablage kopiert. |
 | **Verlauf…** | Öffnet ein Fenster mit den letzten Transkripten. Pro Eintrag: In Zwischenablage kopieren oder löschen. |
-| **Vorlesen…** | Lässt dir beliebigen Text per **Piper TTS** vorlesen (inklusive Stimmen-Auswahl)! |
+| **Vorlesen…** | Lässt dir beliebigen Text vorlesen — lokal per **Piper TTS** (Standard) oder optional über **OpenAI Cloud-TTS** (inklusive Anbieter-, Stimmen- und Modellauswahl)! |
 
 > [!NOTE]
 > **Diktat-Notizen** werden ausschließlich in einen Ordner **innerhalb des Home-Verzeichnisses** geschrieben (Schutz gegen Pfad-Ausbruch), mit Berechtigungen `0o600`.
@@ -256,6 +256,9 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 > # Stimmen (.onnx + .onnx.json) nach ~/.local/share/piper-voices/ legen
 > ```
 > Fehlt Piper oder eine Stimme, zeigt das Vorlese-Fenster einen Installationshinweis; alle übrigen Funktionen bleiben nutzbar. Optionale Desktop-Benachrichtigungen nutzen `notify-send` (Paket `libnotify-bin`).
+
+> [!NOTE]
+> **OpenAI Cloud-TTS** ist eine optionale Alternative zu Piper. Voraussetzung: das `openai`-Paket (`.venv/bin/pip install openai`) und ein gültiger Key in der Umgebungsvariable `OPENAI_API_KEY` (siehe `secrets.env` unten). Beim ersten Umschalten auf den Anbieter „OpenAI Cloud" fragt das Vorlese-Fenster einmalig nach Bestätigung, da der eingegebene Text zur Synthese an die OpenAI-Server gesendet wird. Piper bleibt Standard und arbeitet vollständig lokal.
 
 ---
 
@@ -301,6 +304,9 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 - Der eigentliche Key liegt nicht in `config.json`, sondern in `~/.config/blitztext-linux/secrets.env` oder einer bereits gesetzten Umgebungsvariable.
 - **autopaste**: Fügt per `ydotool` ein.
 - **audio_device**: Name der Audioquelle.
+- **tts_provider**: TTS-Anbieter für „Vorlesen" — `piper` (lokal, Standard) oder `openai` (Cloud).
+- **tts_openai_model** / **tts_openai_voice**: Modell und Stimme für OpenAI Cloud-TTS (Standard: `gpt-4o-mini-tts`, `marin`).
+- **tts_openai_consent**: `true`, sobald die einmalige Datenschutz-Bestätigung für Cloud-TTS erteilt wurde. Standard: `false`.
 - **workflows**: Feintuning von Tonalität (`text_improver_tone`), Schreibstil-Vorlage (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
 </details>
 
