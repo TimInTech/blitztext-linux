@@ -75,6 +75,11 @@ jobs:
       - name: Compile-check (Syntax)
         run: python -m compileall app
 
+      - name: Launch smoke test (App bootet offscreen)
+        env:
+          WHISPER_GUI_TESTS: "1"
+        run: python -m pytest tests/test_smoke_launch.py -v
+
       - name: Run test suite (inkl. GUI offscreen)
         env:
           WHISPER_GUI_TESTS: "1"
