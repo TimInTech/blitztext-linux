@@ -21,7 +21,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.i18n import DEFAULT_LANGUAGE, get_language, set_language
+from app.i18n import DEFAULT_LANGUAGE, get_language, set_language, t
 
 _GUI = os.environ.get("WHISPER_GUI_TESTS") == "1"
 gui_only = pytest.mark.skipif(not _GUI, reason="benötigt WHISPER_GUI_TESTS=1 (Display)")
@@ -56,6 +56,30 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
 
         assert exit_code == 0
         assert get_language() == ui_language
+
+        # Regressionsschutz: Hauptfenster- und Tray-Texte laufen über t() und
+        # spiegeln die aktive Sprache. Fängt vergessene Call-Sites ab, die der
+        # reine Key-Vollständigkeitstest (test_i18n) nicht erkennt. Bewusst im
+        # selben Boot wie der Smoke-Test (kein zweiter BlitztextApp im Prozess,
+        # um QObject-Leaks in Folgetests zu vermeiden).
+        win = app._main_window
+        assert win._btn_discard.text() == t("mainwindow.button.discard")
+        assert win._btn_dictation.text() == t("mainwindow.button.dictation")
+        assert win._btn_history.text() == t("mainwindow.button.history").format(count=0)
+        assert win._btn_tts.toolTip() == t("mainwindow.tooltip.tts")
+        assert win._btn_settings.toolTip() == t("mainwindow.tooltip.settings")
+        assert win._status_label.text() == t("mainwindow.status.ready")
+        assert app.action_dictation.text() == t("tray.dictation_mode")
+        assert app.action_history.text() == t("tray.history")
+        assert app.action_tts.text() == t("tray.tts")
+
+        # Sprachabhängigkeit echt verankern (nicht nur Tautologie über t()).
+        if ui_language == "en":
+            assert "Discard" in win._btn_discard.text()
+            assert "History" in app.action_history.text()
+        else:
+            assert "Verwerfen" in win._btn_discard.text()
+            assert "Verlauf" in app.action_history.text()
     finally:
         # Idempotentes Cleanup, damit kein Thread in Folgetests nachhaengt.
         if app is not None:
