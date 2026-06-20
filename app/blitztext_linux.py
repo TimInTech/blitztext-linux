@@ -720,18 +720,18 @@ class BlitztextApp(QObject):
         self.menu.addSeparator()
 
         # Diktat-Modus (Toggle): sammelt Transkripte als Notizen
-        self.action_dictation = QAction("🎤  Diktat-Modus", self)
+        self.action_dictation = QAction(t("tray.dictation_mode"), self)
         self.action_dictation.setCheckable(True)
         self.action_dictation.toggled.connect(self._on_dictation_toggled)
         self.menu.addAction(self.action_dictation)
 
         # Verlauf anzeigen
-        self.action_history = QAction("📋  Verlauf…", self)
+        self.action_history = QAction(t("tray.history"), self)
         self.action_history.triggered.connect(self.show_history_panel)
         self.menu.addAction(self.action_history)
 
         # Vorlesen (TTS)
-        self.action_tts = QAction("🔊  Vorlesen…", self)
+        self.action_tts = QAction(t("tray.tts"), self)
         self.action_tts.triggered.connect(self.show_tts_window)
         self.menu.addAction(self.action_tts)
 
@@ -918,7 +918,7 @@ class BlitztextApp(QObject):
             self._set_state("RECORDING", f"workflow {workflow.value} started")
         except AudioRecorderError as e:
             logger.error("Failed to start recording: %s", e)
-            self.show_tray_error("Aufnahme-Fehler", f"Aufnahme konnte nicht gestartet werden: {e}")
+            self.show_tray_error(t("error.recording.title"), t("error.recording.start_failed").format(error=e))
             self.current_workflow = None
             self._set_state("IDLE", "recording start failed")
 
@@ -988,7 +988,7 @@ class BlitztextApp(QObject):
 
         except AudioRecorderError as e:
             logger.error("Failed to stop recording: %s", e)
-            self.show_tray_error("Aufnahme-Fehler", f"Aufnahme konnte nicht sauber gestoppt werden: {e}")
+            self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(error=e))
             self.current_workflow = None
             self._set_state("IDLE", "recording stop failed")
 
@@ -1007,8 +1007,8 @@ class BlitztextApp(QObject):
         self._add_to_history(result_text, is_dictation=self._dictation_mode)
         if self._dictation_mode:
             notify_service.notify(
-                "Blitztext Diktat",
-                "Eintrag gespeichert ({} Wörter).".format(len(result_text.split())),
+                t("notify.dictation.title"),
+                t("notify.dictation.entry_saved").format(count=len(result_text.split())),
             )
         self.current_workflow = None
         self._set_state("IDLE", "worker result")
@@ -1016,8 +1016,8 @@ class BlitztextApp(QObject):
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
         logger.error("Worker error: %s", err_msg)
-        self.show_tray_error("Blitztext Fehler", err_msg)
-        notify_service.notify("Blitztext Fehler", err_msg, urgency="critical")
+        self.show_tray_error(t("notify.error.title"), err_msg)
+        notify_service.notify(t("notify.error.title"), err_msg, urgency="critical")
         self.current_workflow = None
         self._set_state("IDLE", "worker error", keep_error=True)
 
@@ -1031,7 +1031,7 @@ class BlitztextApp(QObject):
                 max_entries=self.config.history_size,
                 notes_folder=self.config.notes_folder,
             )
-            panel.setWindowTitle("Blitztext – Verlauf")
+            panel.setWindowTitle(t("history.window_title"))
             panel.resize(320, 440)
             panel.merged.connect(self._on_dictation_merged)
             panel.count_changed.connect(self._on_history_count_changed)
@@ -1075,12 +1075,12 @@ class BlitztextApp(QObject):
             self._ensure_history_panel()
             self.show_history_panel()
             notify_service.notify(
-                "Blitztext Diktat",
-                "Diktat-Modus aktiv. Aufnahmen werden als Notizen gesammelt.",
+                t("notify.dictation.title"),
+                t("notify.dictation.mode_active"),
             )
 
     def _on_dictation_merged(self, path: str) -> None:
-        notify_service.notify("Blitztext Diktat", f"Zusammengeführt und gespeichert:\n{path}")
+        notify_service.notify(t("notify.dictation.title"), t("notify.dictation.merged").format(path=path))
 
     def show_tts_window(self) -> None:
         if self._tts_window is None:
@@ -1156,20 +1156,20 @@ class BlitztextApp(QObject):
     def update_tray_state(self) -> None:
         if self._tray_error_message:
             self.tray_icon.setIcon(self._tray_icons["ERROR"])
-            self.tray_icon.setToolTip(f"Blitztext Fehler: {self._tray_error_message}")
+            self.tray_icon.setToolTip(t("tray.tooltip.error").format(message=self._tray_error_message))
         elif self.state == "IDLE":
             self.tray_icon.setIcon(self._tray_icons["IDLE"])
             self.tray_icon.setToolTip(t("app.name"))
         elif self.state == "RECORDING":
             self.tray_icon.setIcon(self._tray_icons["RECORDING"])
             wf_name = self.current_workflow.value if self.current_workflow else ""
-            self.tray_icon.setToolTip(f"Aufnahme läuft… ({wf_name})")
+            self.tray_icon.setToolTip(t("tray.tooltip.recording").format(workflow=wf_name))
         elif self.state == "TRANSCRIBING":
             self.tray_icon.setIcon(self._tray_icons["TRANSCRIBING"])
-            self.tray_icon.setToolTip("Transkribiere…")
+            self.tray_icon.setToolTip(t("mainwindow.status.transcribing"))
         elif self.state == "LLM_REWRITING":
             self.tray_icon.setIcon(self._tray_icons["LLM_REWRITING"])
-            self.tray_icon.setToolTip("Verarbeite mit KI…")
+            self.tray_icon.setToolTip(t("mainwindow.status.processing"))
 
     @pyqtSlot(str)
     def _on_hotkey_error(self, err_msg: str) -> None:

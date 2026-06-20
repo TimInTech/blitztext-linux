@@ -198,7 +198,7 @@ class MainWindow(QWidget):
         self._rec_indicator = QLabel("●")
         self._rec_indicator.setStyleSheet(f"color: {theme.STATE_IDLE}; font-size: 10px;")
         status_row.addWidget(self._rec_indicator)
-        self._status_label = QLabel("Bereit")
+        self._status_label = QLabel(t("mainwindow.status.ready"))
         self._status_label.setStyleSheet("font-size: 12px; font-weight: 600;")
         status_row.addWidget(self._status_label)
         self._timer_label = QLabel("00:00")
@@ -213,14 +213,14 @@ class MainWindow(QWidget):
         # Sekundaerzeile: Verwerfen + Diktat (Pills)
         sec_row = QHBoxLayout()
         sec_row.setSpacing(6)
-        self._btn_discard = QPushButton("↺  Verwerfen")
+        self._btn_discard = QPushButton(t("mainwindow.button.discard"))
         self._btn_discard.setMinimumHeight(28)
         self._btn_discard.setStyleSheet("border-radius: 14px; font-weight: 600;")
         self._btn_discard.setEnabled(False)
         self._btn_discard.clicked.connect(self._on_discard_clicked)
         sec_row.addWidget(self._btn_discard)
 
-        self._btn_dictation = QPushButton("✎  Diktat")
+        self._btn_dictation = QPushButton(t("mainwindow.button.dictation"))
         self._btn_dictation.setMinimumHeight(28)
         self._btn_dictation.setStyleSheet("border-radius: 14px; font-weight: 600;")
         self._btn_dictation.setCheckable(True)
@@ -231,7 +231,7 @@ class MainWindow(QWidget):
         # Unterzeile: Verlauf (mit Zaehler), Vorlesen, Einstellungen
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(6)
-        self._btn_history = QPushButton("≡  Verlauf (0)")
+        self._btn_history = QPushButton(t("mainwindow.button.history").format(count=0))
         self._btn_history.setMinimumHeight(28)
         self._btn_history.setStyleSheet(f"border-radius: 14px; color: {theme.APP_TEXT_DIM};")
         self._btn_history.clicked.connect(self._controller.show_history_panel)
@@ -242,7 +242,7 @@ class MainWindow(QWidget):
         self._btn_tts.setStyleSheet(
             f"border-radius: 14px; font-size: 13px; color: {theme.APP_TEXT_DIM}; padding: 0;"
         )
-        self._btn_tts.setToolTip("Vorlesen")
+        self._btn_tts.setToolTip(t("mainwindow.tooltip.tts"))
         self._btn_tts.clicked.connect(self._controller.show_tts_window)
         bottom_row.addWidget(self._btn_tts)
 
@@ -251,7 +251,7 @@ class MainWindow(QWidget):
         self._btn_settings.setStyleSheet(
             f"border-radius: 14px; font-size: 13px; color: {theme.APP_TEXT_DIM}; padding: 0;"
         )
-        self._btn_settings.setToolTip("Einstellungen")
+        self._btn_settings.setToolTip(t("mainwindow.tooltip.settings"))
         self._btn_settings.clicked.connect(self._controller.show_settings_dialog)
         bottom_row.addWidget(self._btn_settings)
         layout.addLayout(bottom_row)
@@ -295,16 +295,16 @@ class MainWindow(QWidget):
         self._workflow_combo.setEnabled(state == "IDLE")
 
         if error:
-            self._set_status("Fehler", theme.STATE_ERROR)
+            self._set_status(t("mainwindow.status.error"), theme.STATE_ERROR)
         elif recording:
             # Der Workflow steht bereits im Dropdown darueber — kein Suffix noetig.
-            self._set_status("Aufnahme läuft…", theme.STATE_RECORDING)
+            self._set_status(t("mainwindow.status.recording"), theme.STATE_RECORDING)
         elif state == "TRANSCRIBING":
-            self._set_status("Transkribiere…", theme.STATE_PROCESSING)
+            self._set_status(t("mainwindow.status.transcribing"), theme.STATE_PROCESSING)
         elif state == "LLM_REWRITING":
-            self._set_status("Verarbeite mit KI…", theme.STATE_PROCESSING)
+            self._set_status(t("mainwindow.status.processing"), theme.STATE_PROCESSING)
         else:
-            self._set_status("Bereit", theme.STATE_IDLE)
+            self._set_status(t("mainwindow.status.ready"), theme.STATE_IDLE)
 
         if recording:
             if self._rec_start is None:
@@ -336,7 +336,7 @@ class MainWindow(QWidget):
         self._rec_indicator.setStyleSheet(f"color: {color}; font-size: 10px;")
 
     def set_history_count(self, count: int) -> None:
-        self._btn_history.setText(f"≡  Verlauf ({count})")
+        self._btn_history.setText(t("mainwindow.button.history").format(count=count))
 
     def set_dictation_checked(self, checked: bool) -> None:
         self._btn_dictation.blockSignals(True)
