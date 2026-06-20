@@ -1,0 +1,347 @@
+"""i18n-Modul für BlitztextLinux — Sprachen, Übersetzungen, Fallback.
+
+Reine Domänendaten + minimale Funktionen ohne Qt-Dependencies.
+"""
+from __future__ import annotations
+
+LANGUAGES: tuple[str, ...] = ("de", "en")
+DEFAULT_LANGUAGE: str = "de"
+
+LANGUAGE_DISPLAY_NAMES: dict[str, str] = {
+    "de": "Deutsch",
+    "en": "English",
+}
+
+TRANSLATIONS: dict[str, dict[str, str]] = {
+    "de": {
+        "app.name": "Blitztext",
+        "tray.settings": "Einstellungen",
+        "tray.quit": "Beenden",
+        "button.save": "Speichern",
+        "button.cancel": "Abbrechen",
+        "settings.window_title": "Blitztext Einstellungen",
+        "settings.tab.general": "Allgemein",
+        "settings.tab.speech": "Spracherkennung",
+        "settings.tab.workflows": "KI-Workflows",
+        "settings.whisper_model.label": "Whisper-Modell:",
+        "settings.whisper_model.help": "Wählen Sie die Modellgröße. Größere Modelle sind genauer, benötigen aber mehr Ressourcen.",
+        "settings.transcription_backend.label": "Transkription-Backend:",
+        "settings.transcription_backend.help": "faster-whisper ist deutlich schneller und ressourcenschonender.",
+        "settings.language.label": "Sprache:",
+        "settings.language.help": "Zweistelliger Ländercode (z. B. 'de', 'en') oder 'auto' für automatische Erkennung.",
+        "settings.audio_device.label": "Audio-Eingabegerät:",
+        "settings.audio_device.help": "'@DEFAULT_SOURCE@' nutzt das Standardmikrofon von PulseAudio/PipeWire.",
+        "settings.hotkey_mode.label": "Hotkey-Modus:",
+        "settings.hotkey_mode.help": "toggle: Einmal drücken zum Starten, erneut drücken zum Stoppen.\nhold: Gedrückt halten zum Aufnehmen, Loslassen zum Stoppen.",
+        "settings.record_key.label": "Aufnahme-Taste:",
+        "settings.record_key.help": "Einzelne Taste ohne Modifier (z. B. KEY_LEFTALT). Änderung wird sofort übernommen.",
+        "settings.api_key_env.label": "API-Key-Umgebung:",
+        "settings.api_key_env.help": "Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY.",
+        "settings.api_key.status": "Status: {status} ({env_name})",
+        "settings.api_key.legacy_notice": "Legacy openai_api_key gefunden. Er wird beim nächsten Speichern entfernt.",
+        "settings.llm_provider.label": "LLM-Anbieter:",
+        "settings.llm_provider.custom_endpoint": "Eigener Endpunkt",
+        "settings.llm_provider.help": "OpenAI = Standard. OpenRouter und 'Eigener Endpunkt' nutzen das OpenAI-kompatible API über eine eigene Basis-URL und ein eigenes Modell.",
+        "settings.base_url.label": "Basis-URL (base_url):",
+        "settings.base_url.help": "Leer = OpenAI-Standard. Für OpenRouter: https://openrouter.ai/api/v1. Muss mit http:// oder https:// beginnen.",
+        "settings.llm_model.label": "LLM-Modell:",
+        "settings.llm_model.help": "Modellname beim Anbieter, z. B. 'gpt-4o-mini' (OpenAI) oder 'openai/gpt-4o' (OpenRouter).",
+        "settings.tone.label": "Text-Verbesserer Tonfall:",
+        "settings.writing_preset.label": "Schreibstil-Vorlage:",
+        "settings.writing_preset.help": "Vorlage für den Text-Verbesserer (z. B. E-Mail formell, Stichpunkte). Bei 'Standard' greift der Tonfall oben; jede andere Vorlage bestimmt den Schreibstil selbst und ersetzt den Tonfall.",
+        "settings.emoji_density.label": "Emoji-Dichte:",
+        "settings.dampf_prompt.label": "Dampf-Umschreiber Prompt:",
+        "settings.dampf_prompt.placeholder": "Standard-Systemprompt verwenden...",
+        "settings.dampf_prompt.help": "Eigener System-Prompt, um wütende Aussagen in eine professionelle Form umzuschreiben.",
+        "settings.custom_terms.label": "Eigennamen / Begriffe:",
+        "settings.custom_terms.placeholder": "z. B. Blitztext",
+        "settings.custom_terms.add": "Hinzufügen",
+        "settings.custom_terms.remove_selected": "Ausgewählte entfernen",
+        "settings.custom_terms.help": "Wörter, Namen und Fachbegriffe, die bei Transkription und KI-Umschreibung exakt beibehalten werden sollen.",
+        "settings.autopaste.label": "Text automatisch einfügen (Auto-Paste)",
+        "settings.autopaste.help": "Simuliert Strg+V nach Abschluss der Aufnahme. Benötigt das Tool 'ydotool'.",
+        "settings.notes_folder.label": "Diktat-Notizordner:",
+        "settings.notes_folder.help": "Ordner für Diktat-Notizen (muss innerhalb von ~ liegen). Leer = Speichern deaktiviert.",
+        "settings.history_size.label": "Verlauf-Größe:",
+        "settings.history_size.help": "Maximale Anzahl der im Verlauf gespeicherten Einträge.",
+        "settings.ui_language.label": "Oberflächen-Sprache:",
+        "settings.ui_language.help": "Sprache für Fenster, Tray-Menü und Dialoge. Änderung wird nach dem Speichern übernommen.",
+        "settings.open_config.button": "📄  Konfigurationsdatei öffnen",
+        "settings.open_config.help": "Öffnet config.json im Standard-Editor – für erweiterte Prompt- und Workflow-Anpassungen, die über die Felder oben hinausgehen.",
+        "settings.open_config.warning_title": "Öffnen fehlgeschlagen",
+        "settings.open_config.warning_message": "Konfigurationsdatei konnte nicht geöffnet werden:\n{path}",
+        "settings.open_config.error_title": "Fehler",
+        "settings.open_config.error_message": "Konfigurationsdatei konnte nicht geöffnet werden: {error}",
+        "settings.version": "Version {version}",
+        "settings.save_error.title": "Fehler beim Speichern",
+        "settings.save_error.message": "Konfiguration konnte nicht gespeichert werden: {error}",
+        "tts.window_title": "Vorlesen",
+        "tts.text.placeholder": "Text zum Vorlesen eingeben…",
+        "tts.provider.label": "Anbieter:",
+        "tts.provider.piper_local": "Piper lokal",
+        "tts.provider.openai_cloud": "OpenAI Cloud",
+        "tts.voice.label": "Stimme:",
+        "tts.voice.none_found": "(keine Stimmen gefunden)",
+        "tts.model.label": "Modell:",
+        "tts.speed.label": "Tempo:",
+        "tts.speed.very_fast": "Sehr Schnell",
+        "tts.speed.fast": "Schnell",
+        "tts.speed.normal": "Normal",
+        "tts.speed.slow": "Langsam",
+        "tts.speed.very_slow": "Sehr Langsam",
+        "tts.button.close": "Schließen",
+        "tts.button.replay": "🔁 Nochmal",
+        "tts.button.pause": "Pause",
+        "tts.button.resume": "Fortsetzen",
+        "tts.button.speak": "Vorlesen",
+        "tts.button.stop": "Stopp",
+        "tts.error.piper_not_found": "Piper nicht gefunden. Installieren: pip install piper-tts und Stimmen nach ~/.local/share/piper-voices legen.",
+        "tts.error.openai_not_available": "OpenAI Cloud-TTS ist nicht verfuegbar. Bitte OPENAI_API_KEY in ~/.config/blitztext-linux/secrets.env setzen.",
+        "tts.consent.title": "OpenAI Cloud-TTS aktivieren?",
+        "tts.consent.message": "OpenAI Cloud-TTS sendet den eingegebenen Text zur Sprachsynthese an die OpenAI-Server. Lokale Texte verlassen damit deinen Rechner.\n\nMoechtest du Cloud-TTS aktivieren?",
+        "tts.status.openai_ready": "OpenAI Cloud-TTS bereit.",
+        "tts.status.piper_ready": "Piper bereit.",
+        "tts.status.playback": "Wiedergabe…",
+        "tts.status.paused": "Pausiert",
+        "tts.status.no_text": "Kein Text.",
+        "tts.status.no_voice_path": "Keine Stimme in ~/.local/share/piper-voices gefunden.",
+        "tts.status.synthesis": "Synthese…",
+        "tts.status.openai_not_confirmed": "OpenAI Cloud-TTS wurde nicht bestaetigt.",
+        "tts.status.cloud_synthesis": "Cloud-Synthese…",
+        "tts.status.cancelled": "Abgebrochen.",
+        "tts.status.error": "Fehler: {message}",
+        "tts.status.done": "Fertig.",
+        "history.tooltip.copy": "In Zwischenablage kopieren",
+        "history.tooltip.delete": "Eintrag löschen",
+        "history.tooltip.merge": "Alle Diktat-Einträge kombinieren, als Datei speichern und kopieren",
+        "history.header": "Verlauf ({count})",
+        "history.button.merge": "Zusammenführen",
+        "history.button.clear_all": "Alles löschen",
+        "history.button.confirm_clear": "Sicher?",
+        "history.status.saved": "✓ Gespeichert",
+        "history.status.copied": "✓ Kopiert",
+        "history.entry.meta": "{timestamp}  ·  {count} Wörter",
+        "history.note.heading": "Diktat {heading}",
+        "history.note.merged_heading": "Diktat (zusammengefuehrt) {heading}",
+        "history.note.merged_filename_prefix": "Diktat-zusammengefuehrt_",
+        "tray.show_window": "Fenster anzeigen",
+        "tray.writing_preset": "Schreibstil-Vorlage",
+        "workflow.transcription.name": "🎙  Blitztext",
+        "workflow.local.name": "🔒  Blitztext Lokal",
+        "workflow.text_improver.name": "✨  Blitztext+",
+        "workflow.dampf_ablassen.name": "🔥  Blitztext $%&!",
+        "workflow.emoji_text.name": "😊  Blitztext :)",
+        "preset.standard.name": "Standard (Text verbessern)",
+        "preset.email_formal.name": "E-Mail – formell",
+        "preset.email_locker.name": "E-Mail – locker",
+        "preset.stichpunkte.name": "Stichpunkte",
+        "preset.zusammenfassung.name": "Zusammenfassung",
+        "preset.du_form.name": "Persönlich (Du-Form)",
+        "preset.sie_form.name": "Höflich (Sie-Form)",
+        "preset.kurz_praezise.name": "Kurz & präzise",
+    },
+    "en": {
+        "app.name": "Blitztext",
+        "tray.settings": "Settings",
+        "tray.quit": "Quit",
+        "button.save": "Save",
+        "button.cancel": "Cancel",
+        "settings.window_title": "Blitztext Settings",
+        "settings.tab.general": "General",
+        "settings.tab.speech": "Speech Recognition",
+        "settings.tab.workflows": "AI Workflows",
+        "settings.whisper_model.label": "Whisper model:",
+        "settings.whisper_model.help": "Choose the model size. Larger models are more accurate but require more resources.",
+        "settings.transcription_backend.label": "Transcription backend:",
+        "settings.transcription_backend.help": "faster-whisper is significantly faster and more resource-efficient.",
+        "settings.language.label": "Language:",
+        "settings.language.help": "Two-letter country code (e.g. 'de', 'en') or 'auto' for automatic detection.",
+        "settings.audio_device.label": "Audio input device:",
+        "settings.audio_device.help": "'@DEFAULT_SOURCE@' uses the default PulseAudio/PipeWire microphone.",
+        "settings.hotkey_mode.label": "Hotkey mode:",
+        "settings.hotkey_mode.help": "toggle: Press once to start, press again to stop.\nhold: Hold to record, release to stop.",
+        "settings.record_key.label": "Recording key:",
+        "settings.record_key.help": "Single key without modifiers (e.g. KEY_LEFTALT). Changes apply immediately.",
+        "settings.api_key_env.label": "API key environment:",
+        "settings.api_key_env.help": "Only the environment variable name is stored. The key itself is read from os.environ (secrets.env). For OpenRouter, for example OPENROUTER_API_KEY.",
+        "settings.api_key.status": "Status: {status} ({env_name})",
+        "settings.api_key.legacy_notice": "Legacy openai_api_key found. It will be removed the next time settings are saved.",
+        "settings.llm_provider.label": "LLM provider:",
+        "settings.llm_provider.custom_endpoint": "Custom endpoint",
+        "settings.llm_provider.help": "OpenAI = default. OpenRouter and 'Custom endpoint' use the OpenAI-compatible API with a custom base URL and custom model.",
+        "settings.base_url.label": "Base URL (base_url):",
+        "settings.base_url.help": "Empty = OpenAI default. For OpenRouter: https://openrouter.ai/api/v1. Must start with http:// or https://.",
+        "settings.llm_model.label": "LLM model:",
+        "settings.llm_model.help": "Model name at the provider, e.g. 'gpt-4o-mini' (OpenAI) or 'openai/gpt-4o' (OpenRouter).",
+        "settings.tone.label": "Text improver tone:",
+        "settings.writing_preset.label": "Writing style preset:",
+        "settings.writing_preset.help": "Preset for the text improver (e.g. formal email, bullet points). With 'Standard', the tone above is used; every other preset determines the writing style itself and replaces the tone.",
+        "settings.emoji_density.label": "Emoji density:",
+        "settings.dampf_prompt.label": "Dampf rewrite prompt:",
+        "settings.dampf_prompt.placeholder": "Use default system prompt...",
+        "settings.dampf_prompt.help": "Custom system prompt for rewriting angry statements into a professional form.",
+        "settings.custom_terms.label": "Proper names / terms:",
+        "settings.custom_terms.placeholder": "e.g. Blitztext",
+        "settings.custom_terms.add": "Add",
+        "settings.custom_terms.remove_selected": "Remove selected",
+        "settings.custom_terms.help": "Words, names, and technical terms that should be preserved exactly during transcription and AI rewriting.",
+        "settings.autopaste.label": "Insert text automatically (Auto-Paste)",
+        "settings.autopaste.help": "Simulates Ctrl+V after recording finishes. Requires the 'ydotool' tool.",
+        "settings.notes_folder.label": "Dictation notes folder:",
+        "settings.notes_folder.help": "Folder for dictation notes (must be inside ~). Empty = saving disabled.",
+        "settings.history_size.label": "History size:",
+        "settings.history_size.help": "Maximum number of entries stored in history.",
+        "settings.ui_language.label": "Interface language:",
+        "settings.ui_language.help": "Language for windows, tray menu, and dialogs. Changes apply after saving.",
+        "settings.open_config.button": "📄  Open configuration file",
+        "settings.open_config.help": "Opens config.json in the default editor for advanced prompt and workflow adjustments beyond the fields above.",
+        "settings.open_config.warning_title": "Open failed",
+        "settings.open_config.warning_message": "Configuration file could not be opened:\n{path}",
+        "settings.open_config.error_title": "Error",
+        "settings.open_config.error_message": "Configuration file could not be opened: {error}",
+        "settings.version": "Version {version}",
+        "settings.save_error.title": "Error while saving",
+        "settings.save_error.message": "Configuration could not be saved: {error}",
+        "tts.window_title": "Read Aloud",
+        "tts.text.placeholder": "Enter text to read aloud…",
+        "tts.provider.label": "Provider:",
+        "tts.provider.piper_local": "Piper local",
+        "tts.provider.openai_cloud": "OpenAI Cloud",
+        "tts.voice.label": "Voice:",
+        "tts.voice.none_found": "(no voices found)",
+        "tts.model.label": "Model:",
+        "tts.speed.label": "Speed:",
+        "tts.speed.very_fast": "Very Fast",
+        "tts.speed.fast": "Fast",
+        "tts.speed.normal": "Normal",
+        "tts.speed.slow": "Slow",
+        "tts.speed.very_slow": "Very Slow",
+        "tts.button.close": "Close",
+        "tts.button.replay": "🔁 Again",
+        "tts.button.pause": "Pause",
+        "tts.button.resume": "Resume",
+        "tts.button.speak": "Read Aloud",
+        "tts.button.stop": "Stop",
+        "tts.error.piper_not_found": "Piper not found. Install with: pip install piper-tts and place voices in ~/.local/share/piper-voices.",
+        "tts.error.openai_not_available": "OpenAI Cloud-TTS is not available. Please set OPENAI_API_KEY in ~/.config/blitztext-linux/secrets.env.",
+        "tts.consent.title": "Enable OpenAI Cloud-TTS?",
+        "tts.consent.message": "OpenAI Cloud-TTS sends the entered text to OpenAI servers for speech synthesis. Local texts will leave your computer.\n\nDo you want to enable Cloud-TTS?",
+        "tts.status.openai_ready": "OpenAI Cloud-TTS ready.",
+        "tts.status.piper_ready": "Piper ready.",
+        "tts.status.playback": "Playback…",
+        "tts.status.paused": "Paused",
+        "tts.status.no_text": "No text.",
+        "tts.status.no_voice_path": "No voice found in ~/.local/share/piper-voices.",
+        "tts.status.synthesis": "Synthesizing…",
+        "tts.status.openai_not_confirmed": "OpenAI Cloud-TTS was not confirmed.",
+        "tts.status.cloud_synthesis": "Cloud synthesis…",
+        "tts.status.cancelled": "Cancelled.",
+        "tts.status.error": "Error: {message}",
+        "tts.status.done": "Done.",
+        "history.tooltip.copy": "Copy to clipboard",
+        "history.tooltip.delete": "Delete entry",
+        "history.tooltip.merge": "Combine all dictation entries, save as a file, and copy",
+        "history.header": "History ({count})",
+        "history.button.merge": "Merge",
+        "history.button.clear_all": "Delete all",
+        "history.button.confirm_clear": "Sure?",
+        "history.status.saved": "✓ Saved",
+        "history.status.copied": "✓ Copied",
+        "history.entry.meta": "{timestamp}  ·  {count} words",
+        "history.note.heading": "Dictation {heading}",
+        "history.note.merged_heading": "Dictation (merged) {heading}",
+        "history.note.merged_filename_prefix": "Dictation-merged_",
+        "tray.show_window": "Show window",
+        "tray.writing_preset": "Writing style preset",
+        "workflow.transcription.name": "🎙  Blitztext",
+        "workflow.local.name": "🔒  Blitztext Local",
+        "workflow.text_improver.name": "✨  Blitztext+",
+        "workflow.dampf_ablassen.name": "🔥  Blitztext $%&!",
+        "workflow.emoji_text.name": "😊  Blitztext :)",
+        "preset.standard.name": "Standard (improve text)",
+        "preset.email_formal.name": "Email - formal",
+        "preset.email_locker.name": "Email - casual",
+        "preset.stichpunkte.name": "Bullet points",
+        "preset.zusammenfassung.name": "Summary",
+        "preset.du_form.name": "Personal (Du form)",
+        "preset.sie_form.name": "Polite (Sie form)",
+        "preset.kurz_praezise.name": "Short & precise",
+    },
+}
+
+_active_language: str = DEFAULT_LANGUAGE
+
+
+def get_language() -> str:
+    """Gebe die aktive UI-Sprache zurück.
+
+    Returns:
+        "de" oder "en" (oder eine andere registrierte Sprache).
+    """
+    return _active_language
+
+
+def set_language(lang: str) -> None:
+    """Setze die aktive UI-Sprache.
+
+    Args:
+        lang: Sprach-Code, muss in LANGUAGES sein.
+
+    Raises:
+        ValueError: Wenn die Sprache nicht registriert ist.
+    """
+    global _active_language
+    if lang not in LANGUAGES:
+        raise ValueError(f"Ungültige Sprache: {lang!r}. Gültig: {LANGUAGES}")
+    _active_language = lang
+
+
+def t(key: str) -> str:
+    """Hole Übersetzung für Schlüssel in aktiver Sprache.
+
+    Fallback:
+    1. Wert in aktiver Sprache
+    2. Wert in DEFAULT_LANGUAGE ("de")
+    3. Der Schlüssel selbst
+
+    Args:
+        key: Übersetzungs-Schlüssel (z.B. "app.name", "button.save").
+
+    Returns:
+        Übersetzter String oder Fallback.
+    """
+    active = get_language()
+
+    # Versuch in aktiver Sprache
+    if active in TRANSLATIONS and key in TRANSLATIONS[active]:
+        return TRANSLATIONS[active][key]
+
+    # Fallback auf Default-Sprache
+    if DEFAULT_LANGUAGE in TRANSLATIONS and key in TRANSLATIONS[DEFAULT_LANGUAGE]:
+        return TRANSLATIONS[DEFAULT_LANGUAGE][key]
+
+    # Fallback auf Key selbst
+    return key
+
+
+def missing_keys() -> set[str]:
+    """Prüfe Vollständigkeits-Invariante.
+
+    Returns:
+        Menge von Keys, die in mindestens einer Sprache fehlen
+        (sollte leer sein).
+    """
+    if not TRANSLATIONS:
+        return set()
+
+    all_keys = set()
+    for lang_dict in TRANSLATIONS.values():
+        all_keys.update(lang_dict.keys())
+
+    missing = set()
+    for lang, lang_dict in TRANSLATIONS.items():
+        for key in all_keys:
+            if key not in lang_dict:
+                missing.add(f"{lang}: {key}")
+
+    return missing

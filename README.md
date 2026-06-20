@@ -2,37 +2,39 @@
   <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
   
   <h1>Blitztext Linux</h1>
-  <p><strong>Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland</strong></p>
+  <p><strong>Your local AI voice assistant for KDE Plasma & Wayland</strong></p>
 
   <p>
     <a href="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="Blitztext Linux CI"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-yellow.svg" alt="Lizenz: MIT"></a>
-    <img src="https://img.shields.io/badge/Plattform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Plattform">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+    <img src="https://img.shields.io/badge/Platform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Platform">
   </p>
-  <p><i>Sprache per Hotkey aufnehmen, lokal oder online transkribieren, optional per LLM umschreiben und direkt in die aktive Anwendung einfügen.</i></p>
+  <p><strong>🇬🇧 English</strong> | <a href="README.de.md">🇩🇪 Deutsch</a></p>
+  <p><i>Record speech via hotkey, transcribe locally or online, optionally rewrite it with an LLM, and paste it directly into the active application.</i></p>
 </div>
 
 > [!IMPORTANT]
-> **Eigenständiger Linux-Port:** Dieses Repository enthält ausschließlich den Linux-Port von Blitztext – eine eigenständige Python 3/PyQt6-Implementierung optimiert für **Kubuntu/Ubuntu unter KDE Plasma mit Wayland**. Für die originale macOS-Version besuche bitte das [offizielle Haupt-Repository](https://github.com/cmagnussen/blitztext-app).
+> **Standalone Linux port:** This repository contains exclusively the Linux port of Blitztext – a standalone Python 3/PyQt6 implementation optimized for **Kubuntu/Ubuntu running KDE Plasma with Wayland**. For the original macOS version, please visit the [official main repository](https://github.com/cmagnussen/blitztext-app).
 
 ---
 
 ## Features
 
-- **NEU: Eigennamen / Begriffe:** Erweitere das Vokabular der KI um eigene Begriffe, Namen oder Fachwörter für perfekte Transkriptionen.
+- **NEW: Multilingual interface (EN/DE):** Switch the app interface between German and English under **Settings → General → "Language"** (the change takes effect after restarting the app).
+- **Custom names / terms:** Extend the AI's vocabulary with your own terms, names, or technical words for perfect transcriptions.
 
-- **Globale Hotkeys:** Jederzeit von überall im System aufnehmen.
-- **Auto-Paste:** Erkennt Sprache und fügt sie direkt dort ein, wo der Cursor ist.
-- **LLM-gestützte Workflows:** Lass die KI deine Sätze professionell umformulieren, emotional filtern oder mit passenden Emojis anreichern.
-- **Lokale Verarbeitung:** Optional 100% offline für volle Privatsphäre.
+- **Global hotkeys:** Record from anywhere in the system at any time.
+- **Auto-paste:** Detects speech and pastes it right where your cursor is.
+- **LLM-powered workflows:** Let the AI rephrase your sentences professionally, filter them emotionally, or enrich them with fitting emojis.
+- **Local processing:** Optionally 100% offline for full privacy.
 
 ---
 
 ## Installation
 
-### Schnellinstallation (empfohlen)
+### Quick install (recommended)
 
-Der einfachste Weg, um Blitztext auf deinem System bereitzustellen:
+The easiest way to set up Blitztext on your system:
 
 ```bash
 git clone https://github.com/TimInTech/blitztext-linux.git
@@ -40,31 +42,31 @@ cd blitztext-linux
 bash scripts/install.sh
 ```
 
-**Was macht das Skript?**
-Es ist idempotent (mehrfach ausführbar) und erledigt alles vollautomatisch:
-1. Prüft dein System (Ubuntu/Debian) & Python-Version.
-2. Installiert fehlende Systempakete (inkl. `pipx`).
-3. Richtet eine `.venv` Umgebung ein und installiert `openai-whisper`/`faster-whisper`.
-4. Bereitet `ydotool.service` und den systemd-User-Service vor.
+**What does the script do?**
+It is idempotent (safe to run repeatedly) and handles everything fully automatically:
+1. Checks your system (Ubuntu/Debian) & Python version.
+2. Installs missing system packages (incl. `pipx`).
+3. Sets up a `.venv` environment and installs `openai-whisper`/`faster-whisper`.
+4. Prepares `ydotool.service` and the systemd user service.
 
-### Nach der Installation
+### After installation
 
-1. **Neustart erforderlich** (oder ab-/anmelden), damit die Gruppe `input` aktiv wird. Danach checken:
+1. **Restart required** (or log out/in) so the `input` group becomes active. Then verify:
    ```bash
    bash scripts/verify.sh
    ```
-2. **Manuell testen:**
+2. **Test manually:**
    ```bash
    ./run.sh
    ```
-   *(Erscheint das Tray-Symbol und reagieren die Hotkeys? Dann lief alles glatt!)*
-3. **Autostart aktivieren:**
+   *(Does the tray icon appear and do the hotkeys respond? Then everything went smoothly!)*
+3. **Enable autostart:**
    ```bash
    systemctl --user start blitztext-linux
    ```
 
 <details>
-<summary><b>Autostart wieder deaktivieren</b></summary>
+<summary><b>Disable autostart again</b></summary>
 
 ```bash
 systemctl --user stop blitztext-linux
@@ -73,57 +75,57 @@ systemctl --user disable blitztext-linux
 </details>
 
 <details>
-<summary><b>Manuelle Installation (Diagnose / Experten)</b></summary>
+<summary><b>Manual installation (diagnostics / experts)</b></summary>
 
-Falls du gezielt debuggen möchtest, anstatt `scripts/install.sh` zu nutzen:
+In case you want to debug specifically instead of using `scripts/install.sh`:
 
-**1. Systempakete (apt)**
+**1. System packages (apt)**
 ```bash
 sudo apt install pulseaudio-utils wl-clipboard xclip ydotool ffmpeg python3-venv python3-evdev build-essential python3-dev socat pipx
 ```
 
-| Paket | Zweck |
+| Package | Purpose |
 | :--- | :--- |
-| `pulseaudio-utils` | `parec` für die Audioaufnahme via PulseAudio/PipeWire |
-| `wl-clipboard` / `xclip` | Zwischenablage unter Wayland (`wl-copy`) bzw. X11-Fallback |
-| `ydotool` (≥ 1.0) | Simuliert `Ctrl+V` für automatisches Einfügen (Auto-Paste). Ab Version 1.0 werden rohe Keycodes verwendet. **Ubuntu 25.10/26.04** liefern ydotool ≥ 1.0 (1.0.4) direkt via `apt`. **Ubuntu 24.04 und 22.04** liefern per `apt` nur 0.1.x (z. B. 0.1.8), das keine Keycodes unterstützt und damit kein Auto-Paste – dort ydotool ≥ 1.0 aus dem Quellcode bauen (siehe unten). Auto-Paste auf 24.04, 25.10 und 26.04 verifiziert. |
-| `ffmpeg` | Audio-Konvertierungen |
-| `python3-evdev` | Eingabegeräte-Zugriff für den systemweiten Hotkey-Daemon |
-| `socat` | Optionale Socket-Kommunikation |
-| `pipx` | Isolierte Installation von Whisper-Engines |
+| `pulseaudio-utils` | `parec` for audio recording via PulseAudio/PipeWire |
+| `wl-clipboard` / `xclip` | Clipboard under Wayland (`wl-copy`) or X11 fallback |
+| `ydotool` (≥ 1.0) | Simulates `Ctrl+V` for automatic pasting (auto-paste). From version 1.0 onward, raw keycodes are used. **Ubuntu 25.10/26.04** ship ydotool ≥ 1.0 (1.0.4) directly via `apt`. **Ubuntu 24.04 and 22.04** only ship 0.1.x via `apt` (e.g. 0.1.8), which does not support keycodes and therefore has no auto-paste – build ydotool ≥ 1.0 from source there (see below). Auto-paste verified on 24.04, 25.10, and 26.04. |
+| `ffmpeg` | Audio conversions |
+| `python3-evdev` | Input device access for the system-wide hotkey daemon |
+| `socat` | Optional socket communication |
+| `pipx` | Isolated installation of Whisper engines |
 
-**2. evdev-Rechte vergeben**
+**2. Grant evdev permissions**
 ```bash
 sudo usermod -aG input $USER
 ```
 
-**3. Virtuelle Umgebung & Python-Pakete**
+**3. Virtual environment & Python packages**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install PyQt6 evdev openai pytest openai-whisper faster-whisper
 ```
 
-**4. Whisper-Engine als Alternative via pipx**
-Falls Sie `openai-whisper` losgelöst von der venv installieren möchten (umgeht Versionskonflikte auf neueren Ubuntu-Setups durch Python 3.11):
+**4. Whisper engine as an alternative via pipx**
+If you want to install `openai-whisper` decoupled from the venv (avoids version conflicts on newer Ubuntu setups due to Python 3.11):
 ```bash
 pipx install --python "$(command -v python3.11)" openai-whisper
-pipx inject openai-whisper faster-whisper   # optional, für beschleunigte Ausführung
+pipx inject openai-whisper faster-whisper   # optional, for accelerated execution
 ```
 
-**5. ydotool prüfen**
+**5. Check ydotool**
 ```bash
 systemctl --user start ydotool.service
 ```
-Liefert `apt` nur ydotool 0.1.x (Ubuntu 24.04/22.04), ydotool ≥ 1.0 aus dem Quellcode bauen:
+If `apt` only provides ydotool 0.1.x (Ubuntu 24.04/22.04), build ydotool ≥ 1.0 from source:
 ```bash
 sudo apt install cmake build-essential scdoc git
 git clone --depth 1 --branch v1.0.4 https://github.com/ReimuNotMoe/ydotool.git
 cd ydotool && cmake -B build -DCMAKE_BUILD_TYPE=Release && make -C build && sudo make -C build install
-systemctl --user enable --now ydotool.service   # nutzt /usr/local/bin/ydotoold
+systemctl --user enable --now ydotool.service   # uses /usr/local/bin/ydotoold
 ```
 
-**6. Anwendung starten**
+**6. Start the application**
 ```bash
 ./run.sh
 ```
@@ -131,156 +133,157 @@ systemctl --user enable --now ydotool.service   # nutzt /usr/local/bin/ydotoold
 
 ---
 
-## Die 5 Workflows und Hotkeys
+## The 5 workflows and hotkeys
 
-Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast du die volle Kontrolle:
+Blitztext registers global hotkeys via `evdev`. With these combinations you have full control:
 
-| Workflow | Hotkey | LLM? | Beschreibung |
+| Workflow | Hotkey | LLM? | Description |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Standard: Nimmt auf, transkribiert und fügt den Text ein. |
-| **Blitztext Lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
-| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Formuliert deine Aufnahme professionell via LLM um. |
-| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |
-| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Ergänzt deine Nachricht passend mit Emojis. |
+| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Default: records, transcribes, and pastes the text. |
+| **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
+| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
+| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
+| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
 
 > [!NOTE]
-> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **OpenAI API-Key** voraus. Lege ihn am einfachsten in `~/.config/blitztext-linux/secrets.env` ab, indem du dort die Variable `OPENAI_API_KEY` mit deinem Key als Wert setzt (Zeilenformat `NAME=WERT`). `./run.sh` und der systemd-Service laden diese Datei automatisch. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
+> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **OpenAI API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` by setting the variable `OPENAI_API_KEY` there with your key as the value (line format `NAME=VALUE`). `./run.sh` and the systemd service load this file automatically. Without this key, these functions are disabled in the menu and via the hotkeys, or result in an error message.
 
-## KI-Workflows
+## AI workflows
 
-Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du direkt in der App:
+The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings directly in the app:
 
 <div align="center">
-  <img src="docs/screenshots/linux/settings-ki-workflows.png" alt="KI-Workflows Einstellungen" width="480">
+  <img src="docs/screenshots/linux/settings-ki-workflows.png" alt="AI workflow settings" width="480">
   <br><br>
 </div>
 
-### Schreibstil-Vorlagen
+### Writing-style presets
 
-Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schreibstil-Vorlagen, die du unter **Einstellungen → KI-Workflows → „Schreibstil-Vorlage"** auswählst:
+For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"**:
 
-| Vorlage | Wirkung |
+| Preset | Effect |
 | --- | --- |
-| **Standard (Text verbessern)** | Bisheriges Verhalten – sauber formatierter Text, der gewählte **Tonfall** greift. |
-| **E-Mail – formell** | Höfliche E-Mail in der Sie-Form mit klarer Struktur. |
-| **E-Mail – locker** | Freundliche E-Mail in der Du-Form. |
-| **Stichpunkte** | Gliedert den Inhalt in prägnante Stichpunkte. |
-| **Zusammenfassung** | Knappe, sachliche Zusammenfassung der Kernaussagen. |
-| **Persönlich (Du-Form)** | Klarer Text in der persönlichen Du-Form. |
-| **Höflich (Sie-Form)** | Klarer Text in der höflichen Sie-Form. |
-| **Kurz & präzise** | Maximal knapp, ohne Füllwörter und Wiederholungen. |
+| **Standard (improve text)** | Previous behavior – cleanly formatted text, the selected **tone** applies. |
+| **Email – formal** | Polite email in the formal form with a clear structure. |
+| **Email – casual** | Friendly email in the informal form. |
+| **Bullet points** | Structures the content into concise bullet points. |
+| **Summary** | Concise, factual summary of the key statements. |
+| **Personal (informal)** | Clear text in a personal, informal tone. |
+| **Polite (formal)** | Clear text in a polite, formal tone. |
+| **Short & precise** | As concise as possible, without filler words and repetitions. |
 
-> Bei **Standard** wird zusätzlich der eingestellte **Tonfall** angewendet. Jede andere Vorlage bringt ihren eigenen Schreibstil mit und ersetzt den Tonfall. Eigennamen/Begriffe bleiben in allen Vorlagen erhalten.
+> With **Standard**, the configured **tone** is additionally applied. Every other preset brings its own writing style and replaces the tone. Custom names/terms are preserved in all presets.
 
 ---
 
-## Tray-Symbol: Statusfarben
+## Tray icon: status colors
 
-Das Mikrofon im System-Tray ist dein Indikator für den aktuellen Zustand:
+The microphone in the system tray is your indicator of the current state:
 
 <div align="center">
   <table>
     <tr>
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/tray-idle.png" width="60"><br><br>
-        <b>Grün</b> (IDLE)<br>
-        <i>Bereit — wartet auf deinen Einsatz.</i>
+        <b>Green</b> (IDLE)<br>
+        <i>Ready — waiting for your action.</i>
       </td>
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/tray-recording.png" width="60"><br><br>
-        <b>Rot</b> (RECORDING)<br>
-        <i>Aufnahme läuft aktiv.</i>
+        <b>Red</b> (RECORDING)<br>
+        <i>Recording is actively running.</i>
       </td>
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/tray-processing.png" width="60"><br><br>
         <b>Orange</b> (TRANSCRIBING)<br>
-        <i>Magie läuft (Transkription / KI-Umformulierung).</i>
+        <i>Magic in progress (transcription / AI rephrasing).</i>
       </td>
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/tray-error.png" width="60"><br><br>
-        <b>Grau</b> (ERROR)<br>
-        <i>Ups, etwas ist schiefgelaufen.</i>
+        <b>Gray</b> (ERROR)<br>
+        <i>Oops, something went wrong.</i>
       </td>
     </tr>
   </table>
 </div>
 
 > [!NOTE]
-> Steht im Desktop-Environment kein Tray-Bereich zur Verfügung, fällt das Icon auf das System-Theme `audio-input-microphone` zurück; die Farbkodierung greift dann ggf. nicht.
+> If no tray area is available in the desktop environment, the icon falls back to the system theme `audio-input-microphone`; the color coding may then not apply.
 
 ---
 
-## Hauptfenster (grafischer Fallback)
+## Main window (graphical fallback)
 
-Falls du keine Tastatur parat hast oder Hotkeys blockiert sind:
+In case you don't have a keyboard handy or hotkeys are blocked:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/main-window-compact-glass.png" alt="Hauptfenster" width="480">
+  <img src="docs/screenshots/linux/main-window-compact-glass.png" alt="Main window" width="480">
   <br><br>
 </div>
 
-- **Maus-Steuerung:** Start/Stopp-Button für die Aufnahme.
-- **Workflow-Menü:** Dropdown für alle 5 Modi.
-- **Abbruch:** Verwirft eine Aufnahme sofort ohne Transkription.
-- **Schnellzugriffe:** Diktat, Verlauf, Vorlesen und Einstellungen.
+- **Mouse control:** Start/stop button for recording.
+- **Workflow menu:** Dropdown for all 5 modes.
+- **Cancel:** Discards a recording immediately without transcription.
+- **Quick access:** Dictation, history, read-aloud, and settings.
 
-*Das Fenster öffnet sich beim Start sowie über den Tray-Eintrag **Fenster anzeigen** oder einen Klick auf das Tray-Icon. Schließen versteckt das Fenster nur — die App läuft im Tray weiter.*
+*The window opens at startup as well as via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
 
 ---
 
-## Diktat, Verlauf und Vorlesen
+## Dictation, history, and read-aloud
 
-Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
+In addition to the workflows, the tool offers three convenience functions:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/history.png" alt="Verlauf" width="340">
-  <img src="docs/screenshots/linux/tts.png" alt="Vorlesen" width="340">
+  <img src="docs/screenshots/linux/history.png" alt="History" width="340">
+  <img src="docs/screenshots/linux/tts.png" alt="Read aloud" width="340">
   <br><br>
 </div>
 
-| Menüpunkt | Beschreibung |
+| Menu item | Description |
 | :--- | :--- |
-| **Diktat-Modus** | Umschalter. Ist er aktiv, werden alle Transkripte als Diktat-Einträge gesammelt und einzeln als Markdown-Datei gespeichert. Im Verlauf erscheint dann eine Schaltfläche **Zusammenführen**, die alle Einträge kombiniert und in die Zwischenablage kopiert. |
-| **Verlauf…** | Öffnet ein Fenster mit den letzten Transkripten. Pro Eintrag: In Zwischenablage kopieren oder löschen. |
-| **Vorlesen…** | Lässt dir beliebigen Text vorlesen — lokal per **Piper TTS** (Standard) oder optional über **OpenAI Cloud-TTS** (inklusive Anbieter-, Stimmen- und Modellauswahl)! |
+| **Dictation mode** | Toggle. When active, all transcripts are collected as dictation entries and each saved as a Markdown file. The history then shows a **Merge** button that combines all entries and copies them to the clipboard. |
+| **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. |
+| **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection)! |
 
 > [!NOTE]
-> **Diktat-Notizen** werden ausschließlich in einen Ordner **innerhalb des Home-Verzeichnisses** geschrieben (Schutz gegen Pfad-Ausbruch), mit Berechtigungen `0o600`.
+> **Dictation notes** are written exclusively into a folder **inside the home directory** (protection against path traversal), with permissions `0o600`.
 
 > [!IMPORTANT]
-> **Piper TTS** muss für die Vorlesefunktion (sowie Stimmen) installiert sein:
+> **Piper TTS** must be installed for the read-aloud function (as well as voices):
 > ```bash
 > .venv/bin/pip install piper-tts
-> # Stimmen (.onnx + .onnx.json) nach ~/.local/share/piper-voices/ legen
+> # Place voices (.onnx + .onnx.json) into ~/.local/share/piper-voices/
 > ```
-> Fehlt Piper oder eine Stimme, zeigt das Vorlese-Fenster einen Installationshinweis; alle übrigen Funktionen bleiben nutzbar. Optionale Desktop-Benachrichtigungen nutzen `notify-send` (Paket `libnotify-bin`).
+> If Piper or a voice is missing, the read-aloud window shows an installation hint; all other functions remain usable. Optional desktop notifications use `notify-send` (package `libnotify-bin`).
 
 > [!NOTE]
-> **OpenAI Cloud-TTS** ist eine optionale Alternative zu Piper. Voraussetzung: das `openai`-Paket (`.venv/bin/pip install openai`) und ein gültiger Key in der Umgebungsvariable `OPENAI_API_KEY` (siehe `secrets.env` unten). Beim ersten Umschalten auf den Anbieter „OpenAI Cloud" fragt das Vorlese-Fenster einmalig nach Bestätigung, da der eingegebene Text zur Synthese an die OpenAI-Server gesendet wird. Piper bleibt Standard und arbeitet vollständig lokal.
+> **OpenAI Cloud TTS** is an optional alternative to Piper. Requirements: the `openai` package (`.venv/bin/pip install openai`) and a valid key in the environment variable `OPENAI_API_KEY` (see `secrets.env` below). When first switching to the "OpenAI Cloud" provider, the read-aloud window asks for confirmation once, because the entered text is sent to OpenAI's servers for synthesis. Piper remains the default and works entirely locally.
 
 ---
 
-## Konfiguration
+## Configuration
 
-Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. Der OpenAI-Schlüssel wird nicht mehr in dieser Datei abgelegt, sondern aus einer Umgebungsvariable gelesen. Die Konfigurationsdatei lässt sich für erweiterte Prompt- und Workflow-Anpassungen direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
+Everything is stored locally and securely under `~/.config/blitztext-linux/config.json`. The OpenAI key is no longer stored in this file but read from an environment variable. The configuration file can be opened directly from the settings for advanced prompt and workflow adjustments: **Settings → General → "Open configuration file"**.
 
 <div align="center">
-  <img src="docs/screenshots/linux/settings-allgemein.png" alt="Einstellungen Allgemein" width="480">
+  <img src="docs/screenshots/linux/settings-allgemein.png" alt="General settings" width="480">
   <br><br>
 </div>
 
 > [!IMPORTANT]
-> Die Konfigurationsdatei wird automatisch mit restriktiven Dateiberechtigungen (**`0o600` / `chmod 600`**) gespeichert. Der echte OpenAI-Key liegt stattdessen in `~/.config/blitztext-linux/secrets.env` oder wird als Umgebungsvariable bereitgestellt.
+> The configuration file is automatically saved with restrictive file permissions (**`0o600` / `chmod 600`**). The real OpenAI key instead lives in `~/.config/blitztext-linux/secrets.env` or is provided as an environment variable.
 
 <details>
-<summary><b>Beispiel-Konfiguration & Felderklärung</b></summary>
+<summary><b>Example configuration & field explanation</b></summary>
 
 ```json
 {
   "model": "base",
   "language": "de",
+  "ui_language": "de",
   "backend": "openai-whisper",
   "hotkey_mode": "toggle",
   "openai_api_key_env": "OPENAI_API_KEY",
@@ -294,78 +297,79 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 }
 ```
 
-- **model**: Whisper-Modellgröße (`tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`, `large-v3-turbo`). Standard: `base`.
-- **language**: Sprache (`de`, `en`) oder `auto`.
-- **backend**: `openai-whisper` oder `faster-whisper`.
+- **model**: Whisper model size (`tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`, `large-v3-turbo`). Default: `base`.
+- **language**: Transcription language (`de`, `en`) or `auto`.
+- **ui_language**: Language of the app interface (`de` or `en`). Default: `de`. Changes take effect after a restart.
+- **backend**: `openai-whisper` or `faster-whisper`.
 - **hotkey_mode**: 
-  - `toggle`: Einmal drücken startet, erneutes Drücken beendet.
-  - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird.
-- **openai_api_key_env**: Name der Umgebungsvariable für den OpenAI API-Key. Standard: `OPENAI_API_KEY`.
-- Der eigentliche Key liegt nicht in `config.json`, sondern in `~/.config/blitztext-linux/secrets.env` oder einer bereits gesetzten Umgebungsvariable.
-- **autopaste**: Fügt per `ydotool` ein.
-- **audio_device**: Name der Audioquelle.
-- **tts_provider**: TTS-Anbieter für „Vorlesen" — `piper` (lokal, Standard) oder `openai` (Cloud).
-- **tts_openai_model** / **tts_openai_voice**: Modell und Stimme für OpenAI Cloud-TTS (Standard: `gpt-4o-mini-tts`, `marin`).
-- **tts_openai_consent**: `true`, sobald die einmalige Datenschutz-Bestätigung für Cloud-TTS erteilt wurde. Standard: `false`.
-- **workflows**: Feintuning von Tonalität (`text_improver_tone`), Schreibstil-Vorlage (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
+  - `toggle`: press once to start, press again to stop.
+  - `hold`: recording runs as long as the hotkey is held.
+- **openai_api_key_env**: Name of the environment variable for the OpenAI API key. Default: `OPENAI_API_KEY`.
+- The actual key does not live in `config.json` but in `~/.config/blitztext-linux/secrets.env` or an already-set environment variable.
+- **autopaste**: Pastes via `ydotool`.
+- **audio_device**: Name of the audio source.
+- **tts_provider**: TTS provider for "Read aloud" — `piper` (local, default) or `openai` (cloud).
+- **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `marin`).
+- **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted. Default: `false`.
+- **workflows**: Fine-tuning of tonality (`text_improver_tone`), writing-style preset (`writing_preset`), emojis (`emoji_density`), and the steam-release prompt (`dampf_system_prompt`).
 </details>
 
 ---
 
-## Entwicklung und Tests
+## Development and tests
 
-Wir lieben Stabilität! Führe die Tests lokal aus:
+We love stability! Run the tests locally:
 
 ```bash
 pytest
 ```
 
-Die Suite umfasst aktuell **130 Tests** (9 werden ohne optionale Abhängigkeiten wie Piper TTS übersprungen).
-Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich die GUI-Tests des Hauptfensters.
+With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests of the main window run additionally.
 
 <details>
-<summary><b>Verzeichnisüberblick</b></summary>
+<summary><b>Directory overview</b></summary>
 
 ```text
 .
 ├── app/
 │   ├── __init__.py
-│   ├── audio_recorder.py   # PulseAudio/PipeWire-Aufnahme via parec
-│   ├── blitztext_linux.py  # PyQt6-Hauptanwendung (System-Tray)
-│   ├── config.py           # Konfigurations-Manager
-│   ├── hotkey_service.py   # evdev-basierter Hotkey-Daemon
-│   ├── llm_service.py      # OpenAI API Schnittstelle
-│   ├── paste_service.py    # Wayland-Clipboard-Integration
-│   ├── transcribe.py       # Whisper-Transkription
-│   └── workflows.py        # Workflows Definition
-├── tests/                  # Test-Suite
-└── README.md               # Dieses Dokument
+│   ├── audio_recorder.py   # PulseAudio/PipeWire recording via parec
+│   ├── blitztext_linux.py  # PyQt6 main application (system tray)
+│   ├── config.py           # Configuration manager
+│   ├── hotkey_service.py   # evdev-based hotkey daemon
+│   ├── i18n.py             # Interface translations (DE/EN)
+│   ├── llm_service.py      # OpenAI API interface
+│   ├── paste_service.py    # Wayland clipboard integration
+│   ├── transcribe.py       # Whisper transcription
+│   └── workflows.py        # Workflow definitions
+├── tests/                  # Test suite
+└── README.md               # This document (German version: README.de.md)
 ```
 </details>
 
 ---
 
-## Wichtige Hinweise
+## Important notes
 
-- **Linux Exclusive:** Nur für Linux-Systeme.
-- **Wayland Fokus:** Entwickelt für Wayland (`wl-clipboard`, `ydotool`).
-- **Datenschutz:** Lokale Workflows bleiben zu 100% auf deinem Rechner. OpenAI wird nur bei Bedarf für LLM-Aufgaben kontaktiert.
-- **Sicherheit (`evdev` & `input` Gruppe):** Das Tool liest Input global über `/dev/input/event*`. Auf System-Ebene bedeutet dies, dass alle Prozesse des Benutzers Eingaben mitlesen könnten (Trade-off unter Wayland ohne XDG GlobalShortcuts). Nutzen Sie Blitztext nur in Umgebungen, denen Sie vertrauen!
-- **Entwickler-Hinweis:** Dieses Projekt wurde mit Unterstützung künstlicher Intelligenz (AI-assisted) entworfen. Architektur, Code und Tests wurden manuell gesichtet und auf Funktion/Sicherheit lokal verifiziert.
+- **Linux exclusive:** For Linux systems only.
+- **Wayland focus:** Developed for Wayland (`wl-clipboard`, `ydotool`).
+- **Privacy:** Local workflows stay 100% on your machine. OpenAI is only contacted when needed for LLM tasks.
+- **Security (`evdev` & `input` group):** The tool reads input globally via `/dev/input/event*`. At the system level, this means all of the user's processes could read along with input (a trade-off under Wayland without XDG GlobalShortcuts). Only use Blitztext in environments you trust!
+- **Developer note:** This project was designed with the support of artificial intelligence (AI-assisted). Architecture, code, and tests were reviewed manually and verified locally for function/security.
 
 ---
 
-## Legal / Impressum & Datenschutz (Original-Projekt)
+## Legal / Imprint & privacy (original project)
 
-Dieses Projekt ist ein Linux-Port der macOS-Anwendung "Blitztext". Der Fairness halber und zur korrekten Attribution verweisen wir auf die rechtlichen Angaben des Original-Projekts:
+This project is a Linux port of the macOS application "Blitztext". For fairness and correct attribution, we refer to the legal information of the original project:
 
-Das Original-Projekt ist ein experimentelles, nicht-kommerzielles Open-Source-Projekt unter der MIT-Lizenz. Die zugehörige Website ([blitztext.de](https://blitztext.de/)) wird betrieben von der Blackboat Internet GmbH:
+The original project is an experimental, non-commercial open-source project under the MIT license. The associated website ([blitztext.de](https://blitztext.de/)) is operated by Blackboat Internet GmbH:
 
-- Impressum: https://www.blackboat.com/impressum
-- Datenschutz / Privacy: https://www.blackboat.com/datenschutz
+- Imprint: https://www.blackboat.com/impressum
+- Privacy: https://www.blackboat.com/datenschutz
 
 ---
 
 <div align="center">
-  <sub>Erstellt mit ❤️ (und ein bisschen KI-Hilfe).</sub>
+  <sub>Made with ❤️ (and a little AI help).</sub>
 </div>

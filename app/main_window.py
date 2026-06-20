@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.llm_service import WorkflowType, LLM_WORKFLOWS
-from app.workflows import WORKFLOW_META
+from app.i18n import t
 from app import theme
 
 # Reihenfolge der Workflows in der Auswahl
@@ -159,7 +159,7 @@ class MainWindow(QWidget):
         self._state = "IDLE"
         self._rec_start: Optional[float] = None
 
-        self.setWindowTitle("Blitztext")
+        self.setWindowTitle(t("app.name"))
         self.setFixedWidth(256)
         self.resize(256, 232)
 
@@ -179,9 +179,7 @@ class MainWindow(QWidget):
         self._workflow_combo = QComboBox()
         self._workflow_combo.setMinimumHeight(28)
         for wf in _WORKFLOW_ORDER:
-            meta = WORKFLOW_META.get(wf, {})
-            label = str(meta.get("display_name", wf.value)).strip()
-            self._workflow_combo.addItem(label, userData=wf)
+            self._workflow_combo.addItem(t(f"workflow.{wf.value}.name"), userData=wf)
         layout.addWidget(self._workflow_combo)
 
         # Hero: runder Record-Shutter

@@ -260,3 +260,64 @@ class TestAPIKeyHandling:
         monkeypatch.setenv("OPENAI_API_KEY", "env-placeholder")
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.resolve_openai_api_key() == "env-placeholder"
+
+
+class TestUILanguage:
+    """Tests für ui_language Config-Property."""
+
+    def test_ui_language_default_is_de(self, config):
+        """Default ui_language ist 'de'."""
+        assert config.ui_language == "de"
+
+    def test_ui_language_setter_accepts_en(self, config):
+        """Setter akzeptiert 'en'."""
+        config.ui_language = "en"
+        assert config.ui_language == "en"
+
+    def test_ui_language_setter_accepts_de(self, config):
+        """Setter akzeptiert 'de'."""
+        config.ui_language = "de"
+        assert config.ui_language == "de"
+
+    def test_ui_language_setter_rejects_invalid(self, config):
+        """Setter wirft ValueError für ungültige Sprachen."""
+        with pytest.raises(ValueError) as exc_info:
+            config.ui_language = "fr"
+        assert "fr" in str(exc_info.value).lower() or "language" in str(exc_info.value).lower()
+
+    def test_ui_language_in_as_dict(self, config):
+        """as_dict() enthält ui_language."""
+        config.ui_language = "en"
+        data = config.as_dict()
+        assert "ui_language" in data
+        assert data["ui_language"] == "en"
+
+    def test_ui_language_persists_on_save_load(self, config, config_dir):
+        """ui_language wird in JSON gespeichert und geladen."""
+        config.ui_language = "en"
+        config.save()
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.ui_language == "en"
+
+    def test_ui_language_corrupted_sanitized_to_de(self, config_dir):
+        """Ungültiges ui_language wird auf 'de' saniert."""
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"model": "base", "ui_language": "fr"}),
+            encoding="utf-8"
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.ui_language == "de"
+
+    def test_ui_language_missing_defaults_to_de(self, config_dir):
+        """Fehlender ui_language wird auf 'de' gesetzt."""
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"model": "base"}),
+            encoding="utf-8"
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.ui_language == "de"

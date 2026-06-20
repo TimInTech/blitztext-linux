@@ -23,17 +23,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from app.i18n import t
+
 PIPER_VENV_PATH = str(Path(__file__).resolve().parents[1] / ".venv" / "bin" / "piper")
 VOICES_DIR = Path.home() / ".local" / "share" / "piper-voices"
 TTS_WAV = os.path.join(os.environ.get("XDG_RUNTIME_DIR", tempfile.gettempdir()), "blitztext-tts.wav")
-PIPER_INSTALL_HINT = (
-    "Piper nicht gefunden. Installieren: pip install piper-tts und Stimmen nach "
-    "~/.local/share/piper-voices legen."
-)
-OPENAI_TTS_INSTALL_HINT = (
-    "OpenAI Cloud-TTS ist nicht verfuegbar. Bitte OPENAI_API_KEY in "
-    "~/.config/blitztext-linux/secrets.env setzen."
-)
 OPENAI_TTS_MODEL_DEFAULT = "gpt-4o-mini-tts"
 OPENAI_TTS_VOICE_DEFAULT = "marin"
 OPENAI_TTS_VOICES = [
@@ -53,11 +47,18 @@ OPENAI_TTS_VOICES = [
 ]
 OPENAI_TTS_MODEL_OPTIONS = [OPENAI_TTS_MODEL_DEFAULT, "tts-1", "tts-1-hd"]
 OPENAI_TTS_TIMEOUT = 30.0
-OPENAI_TTS_CONSENT_TEXT = (
-    "OpenAI Cloud-TTS sendet den eingegebenen Text zur Sprachsynthese an die "
-    "OpenAI-Server. Lokale Texte verlassen damit deinen Rechner.\n\n"
-    "Moechtest du Cloud-TTS aktivieren?"
-)
+
+
+def _piper_install_hint() -> str:
+    return t("tts.error.piper_not_found")
+
+
+def _openai_tts_install_hint() -> str:
+    return t("tts.error.openai_not_available")
+
+
+def _openai_tts_consent_text() -> str:
+    return t("tts.consent.message")
 
 
 def _scrub_secret(text: str, secret: str) -> str:
@@ -219,7 +220,7 @@ class TtsWindow(QDialog):
     def __init__(self, config, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle("Vorlesen")
+        self.setWindowTitle(t("tts.window_title"))
         self.resize(430, 340)
         self._piper_proc: Optional[QProcess] = None
         self._aplay_proc: Optional[QProcess] = None
@@ -241,22 +242,22 @@ class TtsWindow(QDialog):
         layout.setSpacing(6)
 
         self._text_edit = QTextEdit()
-        self._text_edit.setPlaceholderText("Text zum Vorlesen eingeben…")
+        self._text_edit.setPlaceholderText(t("tts.text.placeholder"))
         layout.addWidget(self._text_edit, 1)
 
         provider_row = QHBoxLayout()
         provider_row.setSpacing(6)
-        provider_row.addWidget(QLabel("Anbieter:"))
+        provider_row.addWidget(QLabel(t("tts.provider.label")))
         self._provider_combo = QComboBox()
-        self._provider_combo.addItem("Piper lokal", "piper")
-        self._provider_combo.addItem("OpenAI Cloud", "openai")
+        self._provider_combo.addItem(t("tts.provider.piper_local"), "piper")
+        self._provider_combo.addItem(t("tts.provider.openai_cloud"), "openai")
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         provider_row.addWidget(self._provider_combo, 1)
         layout.addLayout(provider_row)
 
         voice_row = QHBoxLayout()
         voice_row.setSpacing(6)
-        voice_row.addWidget(QLabel("Stimme:"))
+        voice_row.addWidget(QLabel(t("tts.voice.label")))
         self._voice_combo = QComboBox()
         self._voice_combo.currentIndexChanged.connect(self._on_voice_changed)
         voice_row.addWidget(self._voice_combo, 1)
@@ -264,7 +265,7 @@ class TtsWindow(QDialog):
 
         model_row = QHBoxLayout()
         model_row.setSpacing(6)
-        model_row.addWidget(QLabel("Modell:"))
+        model_row.addWidget(QLabel(t("tts.model.label")))
         self._model_edit = QLineEdit()
         self._model_edit.setPlaceholderText(OPENAI_TTS_MODEL_DEFAULT)
         self._model_edit.editingFinished.connect(self._on_model_changed)
@@ -273,13 +274,13 @@ class TtsWindow(QDialog):
 
         speed_row = QHBoxLayout()
         speed_row.setSpacing(6)
-        speed_row.addWidget(QLabel("Tempo:"))
+        speed_row.addWidget(QLabel(t("tts.speed.label")))
         self._speed_combo = QComboBox()
-        self._speed_combo.addItem("Sehr Schnell", 0.6)
-        self._speed_combo.addItem("Schnell", 0.8)
-        self._speed_combo.addItem("Normal", 1.0)
-        self._speed_combo.addItem("Langsam", 1.25)
-        self._speed_combo.addItem("Sehr Langsam", 1.5)
+        self._speed_combo.addItem(t("tts.speed.very_fast"), 0.6)
+        self._speed_combo.addItem(t("tts.speed.fast"), 0.8)
+        self._speed_combo.addItem(t("tts.speed.normal"), 1.0)
+        self._speed_combo.addItem(t("tts.speed.slow"), 1.25)
+        self._speed_combo.addItem(t("tts.speed.very_slow"), 1.5)
         saved_speed = float(self._config.tts_speed)
         idx = self._speed_combo.findData(saved_speed)
         self._speed_combo.setCurrentIndex(idx if idx >= 0 else 2)
@@ -294,21 +295,21 @@ class TtsWindow(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self._btn_close = QPushButton("Schließen")
+        self._btn_close = QPushButton(t("tts.button.close"))
         self._btn_close.clicked.connect(self.accept)
         btn_row.addWidget(self._btn_close)
 
-        self._btn_replay = QPushButton("🔁 Nochmal")
+        self._btn_replay = QPushButton(t("tts.button.replay"))
         self._btn_replay.clicked.connect(self._on_replay_clicked)
         self._btn_replay.setEnabled(False)
         btn_row.addWidget(self._btn_replay)
 
-        self._btn_pause = QPushButton("Pause")
+        self._btn_pause = QPushButton(t("tts.button.pause"))
         self._btn_pause.clicked.connect(self._on_pause_clicked)
         self._btn_pause.setEnabled(False)
         btn_row.addWidget(self._btn_pause)
 
-        self._btn_speak = QPushButton("Vorlesen")
+        self._btn_speak = QPushButton(t("tts.button.speak"))
         self._btn_speak.clicked.connect(self._on_speak_clicked)
         btn_row.addWidget(self._btn_speak)
 
@@ -334,7 +335,7 @@ class TtsWindow(QDialog):
         else:
             voices = list_voices()
             if not voices:
-                self._voice_combo.addItem("(keine Stimmen gefunden)")
+                self._voice_combo.addItem(t("tts.voice.none_found"))
                 self._voice_combo.setEnabled(False)
             else:
                 for label, path in voices:
@@ -353,17 +354,17 @@ class TtsWindow(QDialog):
         if provider == "openai":
             service = CloudTtsService(self._config)
             if service.is_available():
-                self._status_label.setText("OpenAI Cloud-TTS bereit.")
+                self._status_label.setText(t("tts.status.openai_ready"))
                 self._status_label.setStyleSheet("color: #4caf50;")
             else:
-                self._status_label.setText(OPENAI_TTS_INSTALL_HINT)
+                self._status_label.setText(_openai_tts_install_hint())
                 self._status_label.setStyleSheet("color: #f44336;")
         else:
             if self._piper_path:
-                self._status_label.setText("Piper bereit.")
+                self._status_label.setText(t("tts.status.piper_ready"))
                 self._status_label.setStyleSheet("color: #4caf50;")
             else:
-                self._status_label.setText(PIPER_INSTALL_HINT)
+                self._status_label.setText(_piper_install_hint())
                 self._status_label.setStyleSheet("color: #f44336;")
         self._update_speak_button_state()
 
@@ -399,8 +400,8 @@ class TtsWindow(QDialog):
             return True
         answer = QMessageBox.question(
             self,
-            "OpenAI Cloud-TTS aktivieren?",
-            OPENAI_TTS_CONSENT_TEXT,
+            t("tts.consent.title"),
+            _openai_tts_consent_text(),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -516,13 +517,13 @@ class TtsWindow(QDialog):
             if self._is_paused:
                 os.kill(pid, signal.SIGCONT)
                 self._is_paused = False
-                self._btn_pause.setText("Pause")
-                self._status_label.setText("Wiedergabe…")
+                self._btn_pause.setText(t("tts.button.pause"))
+                self._status_label.setText(t("tts.status.playback"))
             else:
                 os.kill(pid, signal.SIGSTOP)
                 self._is_paused = True
-                self._btn_pause.setText("Fortsetzen")
-                self._status_label.setText("Pausiert")
+                self._btn_pause.setText(t("tts.button.resume"))
+                self._status_label.setText(t("tts.status.paused"))
         except OSError:
             pass
 
@@ -530,7 +531,7 @@ class TtsWindow(QDialog):
         if text is None:
             text = self._current_tts_text()
         if not text:
-            self._status_label.setText("Kein Text.")
+            self._status_label.setText(t("tts.status.no_text"))
             self._status_label.setStyleSheet("color: #f44336;")
             return
         self._last_tts_text = text
@@ -544,13 +545,13 @@ class TtsWindow(QDialog):
 
     def _start_piper_tts(self, text: str) -> None:
         if not self._piper_path:
-            self._status_label.setText(PIPER_INSTALL_HINT)
+            self._status_label.setText(_piper_install_hint())
             self._status_label.setStyleSheet("color: #f44336;")
             return
 
         model_path = self._current_voice()
         if not model_path:
-            self._status_label.setText("Keine Stimme in ~/.local/share/piper-voices gefunden.")
+            self._status_label.setText(t("tts.status.no_voice_path"))
             self._status_label.setStyleSheet("color: #f44336;")
             return
 
@@ -565,9 +566,9 @@ class TtsWindow(QDialog):
         proc.errorOccurred.connect(self._on_tts_error)
         self._piper_proc = proc
 
-        self._status_label.setText("Synthese…")
+        self._status_label.setText(t("tts.status.synthesis"))
         self._status_label.setStyleSheet("")
-        self._btn_speak.setText("Stopp")
+        self._btn_speak.setText(t("tts.button.stop"))
         self._update_speak_button_state()
 
         proc.start()
@@ -576,13 +577,13 @@ class TtsWindow(QDialog):
 
     def _start_cloud_tts(self, text: str) -> None:
         if not self._config.tts_openai_consent:
-            self._status_label.setText("OpenAI Cloud-TTS wurde nicht bestaetigt.")
+            self._status_label.setText(t("tts.status.openai_not_confirmed"))
             self._status_label.setStyleSheet("color: #f44336;")
             self._update_speak_button_state()
             return
         service = CloudTtsService(self._config)
         if not service.is_available():
-            self._status_label.setText(OPENAI_TTS_INSTALL_HINT)
+            self._status_label.setText(_openai_tts_install_hint())
             self._status_label.setStyleSheet("color: #f44336;")
             self._update_speak_button_state()
             return
@@ -601,9 +602,9 @@ class TtsWindow(QDialog):
         self._cloud_thread = thread
         self._cloud_worker = worker
 
-        self._status_label.setText("Cloud-Synthese…")
+        self._status_label.setText(t("tts.status.cloud_synthesis"))
         self._status_label.setStyleSheet("")
-        self._btn_speak.setText("Stopp")
+        self._btn_speak.setText(t("tts.button.stop"))
         self._btn_pause.setEnabled(False)
         thread.start()
         self._update_speak_button_state()
@@ -637,11 +638,11 @@ class TtsWindow(QDialog):
 
         self._detach_cloud_thread()
 
-        self._btn_speak.setText("Vorlesen")
+        self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
-        self._btn_pause.setText("Pause")
-        self._status_label.setText("Abgebrochen.")
+        self._btn_pause.setText(t("tts.button.pause"))
+        self._status_label.setText(t("tts.status.cancelled"))
         self._status_label.setStyleSheet("color: #ff9800;")
         self._update_speak_button_state()
         QTimer.singleShot(2000, self._clear_status)
@@ -688,7 +689,7 @@ class TtsWindow(QDialog):
     @pyqtSlot(str)
     def _on_cloud_finished(self, wav_path: str) -> None:
         self._cleanup_cloud_state()
-        self._status_label.setText("Wiedergabe…")
+        self._status_label.setText(t("tts.status.playback"))
         program, args = _playback_command(wav_path)
         aplay = QProcess(self)
         aplay.setProgram(program)
@@ -697,20 +698,20 @@ class TtsWindow(QDialog):
         aplay.errorOccurred.connect(self._on_tts_error)
         self._aplay_proc = aplay
         self._is_paused = False
-        self._btn_pause.setText("Pause")
+        self._btn_pause.setText(t("tts.button.pause"))
         self._btn_pause.setEnabled(True)
-        self._btn_speak.setText("Stopp")
+        self._btn_speak.setText(t("tts.button.stop"))
         aplay.start()
 
     @pyqtSlot(str)
     def _on_cloud_error(self, message: str) -> None:
         self._cleanup_cloud_state()
-        self._status_label.setText(f"Fehler: {message}")
+        self._status_label.setText(t("tts.status.error").format(message=message))
         self._status_label.setStyleSheet("color: #f44336;")
-        self._btn_speak.setText("Vorlesen")
+        self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
-        self._btn_pause.setText("Pause")
+        self._btn_pause.setText(t("tts.button.pause"))
         self._update_speak_button_state()
         QTimer.singleShot(2500, self._clear_status)
 
@@ -729,16 +730,16 @@ class TtsWindow(QDialog):
                 stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
                 proc.deleteLater()
             msg = stderr or f"Exit {exit_code}"
-            self._status_label.setText(f"Fehler: {msg}")
+            self._status_label.setText(t("tts.status.error").format(message=msg))
             self._status_label.setStyleSheet("color: #f44336;")
-            self._btn_speak.setText("Vorlesen")
+            self._btn_speak.setText(t("tts.button.speak"))
             self._update_speak_button_state()
             QTimer.singleShot(2500, self._clear_status)
             return
         if proc is not None:
             proc.deleteLater()
 
-        self._status_label.setText("Wiedergabe…")
+        self._status_label.setText(t("tts.status.playback"))
         program, args = _playback_command(TTS_WAV)
         aplay = QProcess(self)
         aplay.setProgram(program)
@@ -747,7 +748,7 @@ class TtsWindow(QDialog):
         aplay.errorOccurred.connect(self._on_tts_error)
         self._aplay_proc = aplay
         self._is_paused = False
-        self._btn_pause.setText("Pause")
+        self._btn_pause.setText(t("tts.button.pause"))
         self._btn_pause.setEnabled(True)
         aplay.start()
 
@@ -755,19 +756,19 @@ class TtsWindow(QDialog):
     def _on_aplay_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         proc = self._aplay_proc
         self._aplay_proc = None
-        self._btn_speak.setText("Vorlesen")
+        self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
-        self._btn_pause.setText("Pause")
+        self._btn_pause.setText(t("tts.button.pause"))
         if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0:
-            self._status_label.setText("Fertig.")
+            self._status_label.setText(t("tts.status.done"))
             self._status_label.setStyleSheet("color: #4caf50;")
         else:
             stderr = ""
             if proc is not None:
                 stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
             msg = stderr or f"Exit {exit_code}"
-            self._status_label.setText(f"Fehler: {msg}")
+            self._status_label.setText(t("tts.status.error").format(message=msg))
             self._status_label.setStyleSheet("color: #f44336;")
         if proc is not None:
             proc.deleteLater()
@@ -777,14 +778,14 @@ class TtsWindow(QDialog):
     @pyqtSlot(QProcess.ProcessError)
     def _on_tts_error(self, error: QProcess.ProcessError) -> None:
         if error == QProcess.ProcessError.FailedToStart:
-            self._status_label.setText(PIPER_INSTALL_HINT if self._current_provider() == "piper" else OPENAI_TTS_INSTALL_HINT)
+            self._status_label.setText(_piper_install_hint() if self._current_provider() == "piper" else _openai_tts_install_hint())
         else:
-            self._status_label.setText(f"Fehler: {error.name}")
+            self._status_label.setText(t("tts.status.error").format(message=error.name))
         self._status_label.setStyleSheet("color: #f44336;")
-        self._btn_speak.setText("Vorlesen")
+        self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
-        self._btn_pause.setText("Pause")
+        self._btn_pause.setText(t("tts.button.pause"))
         for attr in ("_piper_proc", "_aplay_proc"):
             proc = getattr(self, attr, None)
             if proc is not None:
