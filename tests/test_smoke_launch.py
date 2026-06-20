@@ -17,33 +17,47 @@ echtes Audio, keine echte Whisper/Piper-Nutzung. GUI-gated ueber
 ``WHISPER_GUI_TESTS=1`` (Display/Offscreen noetig).
 """
 import os
+from unittest.mock import patch
 
 import pytest
+
+from app.i18n import DEFAULT_LANGUAGE, get_language, set_language
 
 _GUI = os.environ.get("WHISPER_GUI_TESTS") == "1"
 gui_only = pytest.mark.skipif(not _GUI, reason="benötigt WHISPER_GUI_TESTS=1 (Display)")
 
 
 @gui_only
-def test_app_boots_idles_and_exits_clean():
+@pytest.mark.parametrize("ui_language", ["de", "en"])
+def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
     """Echte App bootet offscreen, idlet kurz und beendet mit Exit 0."""
     from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
 
     from app.blitztext_linux import BlitztextApp
+    from app.config import Config
+
+    config = Config.load(tmp_path / "config.json")
+    config.ui_language = ui_language
 
     qapp = QApplication.instance() or QApplication([])
-    app = BlitztextApp(qapp)
-    # Kein echter evdev-Thread waehrend des Idle-Loops (Pattern aus gui_app).
-    app.stop_hotkey_worker()
-    # Hauptfenster offscreen hochfahren -- exakt wie main().
-    app.show_main_window()
+    app = None
+    try:
+        with patch("app.blitztext_linux.Config.load", return_value=config):
+            app = BlitztextApp(qapp)
+        # Kein echter evdev-Thread waehrend des Idle-Loops (Pattern aus gui_app).
+        app.stop_hotkey_worker()
+        # Hauptfenster offscreen hochfahren -- exakt wie main().
+        app.show_main_window()
 
-    # Kurz idlen, dann deterministisch sauber beenden.
-    QTimer.singleShot(50, qapp.quit)
-    exit_code = qapp.exec()
+        # Kurz idlen, dann deterministisch sauber beenden.
+        QTimer.singleShot(50, qapp.quit)
+        exit_code = qapp.exec()
 
-    assert exit_code == 0
-
-    # Idempotentes Cleanup, damit kein Thread in Folgetests nachhaengt.
-    app.stop_hotkey_worker()
+        assert exit_code == 0
+        assert get_language() == ui_language
+    finally:
+        # Idempotentes Cleanup, damit kein Thread in Folgetests nachhaengt.
+        if app is not None:
+            app.stop_hotkey_worker()
+        set_language(DEFAULT_LANGUAGE)

@@ -32,7 +32,7 @@ if PROJECT_DIR not in sys.path:
 
 from app.config import Config, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, LLMServiceError
-from app.writing_presets import WRITING_PRESETS, WRITING_PRESET_KEYS, get_preset, preset_index
+from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
 from app.hotkey_service import HotkeyWorker
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
@@ -40,6 +40,7 @@ from app.paste_service import PasteService, PasteServiceError
 from app.history_panel import HistoryPanel
 from app.tts_window import TtsWindow
 from app.main_window import MainWindow
+from app.i18n import LANGUAGES, LANGUAGE_DISPLAY_NAMES, set_language, t
 from app import notify as notify_service
 from app import __version__ as APP_VERSION
 
@@ -156,7 +157,7 @@ class SettingsDialog(QDialog):
     def __init__(self, config: Config, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.config = config
-        self.setWindowTitle("Blitztext Einstellungen")
+        self.setWindowTitle(t("settings.window_title"))
         self.resize(580, 560)
         self.init_ui()
 
@@ -208,25 +209,25 @@ class SettingsDialog(QDialog):
         self.combo_transcription_key.addItems(sorted(VALID_HOTKEY_KEYS))
         self.combo_transcription_key.setCurrentText(self.config.transcription_hotkey)
 
-        form_whisper.addRow("Whisper-Modell:", self.combo_model)
-        form_whisper.addRow(create_help_label("Wählen Sie die Modellgröße. Größere Modelle sind genauer, benötigen aber mehr Ressourcen."))
+        form_whisper.addRow(t("settings.whisper_model.label"), self.combo_model)
+        form_whisper.addRow(create_help_label(t("settings.whisper_model.help")))
 
-        form_whisper.addRow("Transkription-Backend:", self.combo_backend)
-        form_whisper.addRow(create_help_label("faster-whisper ist deutlich schneller und ressourcenschonender."))
+        form_whisper.addRow(t("settings.transcription_backend.label"), self.combo_backend)
+        form_whisper.addRow(create_help_label(t("settings.transcription_backend.help")))
 
-        form_whisper.addRow("Sprache:", self.edit_language)
-        form_whisper.addRow(create_help_label("Zweistelliger Ländercode (z. B. 'de', 'en') oder 'auto' für automatische Erkennung."))
+        form_whisper.addRow(t("settings.language.label"), self.edit_language)
+        form_whisper.addRow(create_help_label(t("settings.language.help")))
 
-        form_whisper.addRow("Audio-Eingabegerät:", self.edit_audio_device)
-        form_whisper.addRow(create_help_label("'@DEFAULT_SOURCE@' nutzt das Standardmikrofon von PulseAudio/PipeWire."))
+        form_whisper.addRow(t("settings.audio_device.label"), self.edit_audio_device)
+        form_whisper.addRow(create_help_label(t("settings.audio_device.help")))
 
-        form_whisper.addRow("Hotkey-Modus:", self.combo_hotkey_mode)
-        form_whisper.addRow(create_help_label("toggle: Einmal drücken zum Starten, erneut drücken zum Stoppen.\nhold: Gedrückt halten zum Aufnehmen, Loslassen zum Stoppen."))
+        form_whisper.addRow(t("settings.hotkey_mode.label"), self.combo_hotkey_mode)
+        form_whisper.addRow(create_help_label(t("settings.hotkey_mode.help")))
 
-        form_whisper.addRow("Aufnahme-Taste:", self.combo_transcription_key)
-        form_whisper.addRow(create_help_label("Einzelne Taste ohne Modifier (z. B. KEY_LEFTALT). Änderung wird sofort übernommen."))
+        form_whisper.addRow(t("settings.record_key.label"), self.combo_transcription_key)
+        form_whisper.addRow(create_help_label(t("settings.record_key.help")))
 
-        self.tabs.addTab(self._scrollable(tab_whisper), "Spracherkennung")
+        self.tabs.addTab(self._scrollable(tab_whisper), t("settings.tab.speech"))
 
         # Tab 2: LLM (KI)
         tab_llm = QWidget()
@@ -247,7 +248,7 @@ class SettingsDialog(QDialog):
         api_key_layout.addWidget(self.lbl_api_key_status)
         if self.config.has_legacy_openai_api_key:
             self.lbl_legacy_api_key_notice = QLabel(
-                "Legacy openai_api_key gefunden. Er wird beim nächsten Speichern entfernt."
+                t("settings.api_key.legacy_notice")
             )
             self.lbl_legacy_api_key_notice.setWordWrap(True)
             self.lbl_legacy_api_key_notice.setStyleSheet("color: #b26a00; font-size: 10px;")
@@ -260,7 +261,7 @@ class SettingsDialog(QDialog):
         self.combo_llm_provider = QComboBox()
         self.combo_llm_provider.addItem("OpenAI", "openai")
         self.combo_llm_provider.addItem("OpenRouter", "openrouter")
-        self.combo_llm_provider.addItem("Eigener Endpunkt", "custom")
+        self.combo_llm_provider.addItem(t("settings.llm_provider.custom_endpoint"), "custom")
         provider_index = self.combo_llm_provider.findData(self.config.llm_provider)
         self.combo_llm_provider.setCurrentIndex(provider_index if provider_index >= 0 else 0)
         self.combo_llm_provider.currentIndexChanged.connect(lambda *_: self._on_llm_provider_changed())
@@ -280,7 +281,7 @@ class SettingsDialog(QDialog):
 
         self.combo_writing_preset = QComboBox()
         for key in WRITING_PRESET_KEYS:
-            self.combo_writing_preset.addItem(WRITING_PRESETS[key].display_name, key)
+            self.combo_writing_preset.addItem(t(f"preset.{key}.name"), key)
         self.combo_writing_preset.setCurrentIndex(preset_index(self.config.writing_preset))
 
         self.combo_emoji = QComboBox()
@@ -289,20 +290,20 @@ class SettingsDialog(QDialog):
 
         self.edit_dampf_prompt = QPlainTextEdit()
         self.edit_dampf_prompt.setPlainText(self.config.dampf_system_prompt)
-        self.edit_dampf_prompt.setPlaceholderText("Standard-Systemprompt verwenden...")
+        self.edit_dampf_prompt.setPlaceholderText(t("settings.dampf_prompt.placeholder"))
         self.edit_dampf_prompt.setMinimumHeight(72)
         self.edit_dampf_prompt.setMaximumHeight(120)
 
         self.edit_custom_term = QLineEdit()
-        self.edit_custom_term.setPlaceholderText("z. B. Blitztext")
+        self.edit_custom_term.setPlaceholderText(t("settings.custom_terms.placeholder"))
         self.edit_custom_term.returnPressed.connect(self._add_custom_term)
         self.list_custom_terms = QListWidget()
         self.list_custom_terms.addItems(self.config.custom_terms)
         self.list_custom_terms.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.list_custom_terms.setMaximumHeight(120)
-        self.btn_add_custom_term = QPushButton("Hinzufügen")
+        self.btn_add_custom_term = QPushButton(t("settings.custom_terms.add"))
         self.btn_add_custom_term.clicked.connect(self._add_custom_term)
-        self.btn_remove_custom_term = QPushButton("Ausgewählte entfernen")
+        self.btn_remove_custom_term = QPushButton(t("settings.custom_terms.remove_selected"))
         self.btn_remove_custom_term.clicked.connect(self._remove_selected_custom_term)
 
         custom_terms_input_layout = QHBoxLayout()
@@ -317,27 +318,27 @@ class SettingsDialog(QDialog):
         custom_terms_widget = QWidget()
         custom_terms_widget.setLayout(custom_terms_layout)
 
-        form_llm.addRow("API-Key-Umgebung:", api_key_layout)
-        form_llm.addRow(create_help_label("Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY."))
+        form_llm.addRow(t("settings.api_key_env.label"), api_key_layout)
+        form_llm.addRow(create_help_label(t("settings.api_key_env.help")))
 
-        form_llm.addRow("LLM-Anbieter:", self.combo_llm_provider)
-        form_llm.addRow(create_help_label("OpenAI = Standard. OpenRouter und 'Eigener Endpunkt' nutzen das OpenAI-kompatible API über eine eigene Basis-URL und ein eigenes Modell."))
-        form_llm.addRow("Basis-URL (base_url):", self.edit_base_url)
-        form_llm.addRow(create_help_label("Leer = OpenAI-Standard. Für OpenRouter: https://openrouter.ai/api/v1. Muss mit http:// oder https:// beginnen."))
-        form_llm.addRow("LLM-Modell:", self.edit_llm_model)
-        form_llm.addRow(create_help_label("Modellname beim Anbieter, z. B. 'gpt-4o-mini' (OpenAI) oder 'openai/gpt-4o' (OpenRouter)."))
+        form_llm.addRow(t("settings.llm_provider.label"), self.combo_llm_provider)
+        form_llm.addRow(create_help_label(t("settings.llm_provider.help")))
+        form_llm.addRow(t("settings.base_url.label"), self.edit_base_url)
+        form_llm.addRow(create_help_label(t("settings.base_url.help")))
+        form_llm.addRow(t("settings.llm_model.label"), self.edit_llm_model)
+        form_llm.addRow(create_help_label(t("settings.llm_model.help")))
 
-        form_llm.addRow("Text-Verbesserer Tonfall:", self.combo_tone)
-        form_llm.addRow("Schreibstil-Vorlage:", self.combo_writing_preset)
-        form_llm.addRow(create_help_label("Vorlage für den Text-Verbesserer (z. B. E-Mail formell, Stichpunkte). Bei 'Standard' greift der Tonfall oben; jede andere Vorlage bestimmt den Schreibstil selbst und ersetzt den Tonfall."))
-        form_llm.addRow("Emoji-Dichte:", self.combo_emoji)
+        form_llm.addRow(t("settings.tone.label"), self.combo_tone)
+        form_llm.addRow(t("settings.writing_preset.label"), self.combo_writing_preset)
+        form_llm.addRow(create_help_label(t("settings.writing_preset.help")))
+        form_llm.addRow(t("settings.emoji_density.label"), self.combo_emoji)
 
-        form_llm.addRow("Dampf-Umschreiber Prompt:", self.edit_dampf_prompt)
-        form_llm.addRow(create_help_label("Eigener System-Prompt, um wütende Aussagen in eine professionelle Form umzuschreiben."))
-        form_llm.addRow("Eigennamen / Begriffe:", custom_terms_widget)
-        form_llm.addRow(create_help_label("Wörter, Namen und Fachbegriffe, die bei Transkription und KI-Umschreibung exakt beibehalten werden sollen."))
+        form_llm.addRow(t("settings.dampf_prompt.label"), self.edit_dampf_prompt)
+        form_llm.addRow(create_help_label(t("settings.dampf_prompt.help")))
+        form_llm.addRow(t("settings.custom_terms.label"), custom_terms_widget)
+        form_llm.addRow(create_help_label(t("settings.custom_terms.help")))
 
-        self.tabs.addTab(self._scrollable(tab_llm), "KI-Workflows")
+        self.tabs.addTab(self._scrollable(tab_llm), t("settings.tab.workflows"))
 
         # Tab 3: Allgemein
         tab_general = QWidget()
@@ -345,42 +346,54 @@ class SettingsDialog(QDialog):
         form_general.setSpacing(10)
         form_general.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
-        self.check_autopaste = QCheckBox("Text automatisch einfügen (Auto-Paste)")
+        self.check_autopaste = QCheckBox(t("settings.autopaste.label"))
         self.check_autopaste.setChecked(self.config.autopaste)
         form_general.addRow(self.check_autopaste)
-        form_general.addRow(create_help_label("Simuliert Strg+V nach Abschluss der Aufnahme. Benötigt das Tool 'ydotool'."))
+        form_general.addRow(create_help_label(t("settings.autopaste.help")))
 
         self.edit_notes_folder = QLineEdit()
         self.edit_notes_folder.setText(self.config.notes_folder)
         self.edit_notes_folder.setPlaceholderText(str(Path.home() / "Blitztext-Notizen"))
-        form_general.addRow("Diktat-Notizordner:", self.edit_notes_folder)
-        form_general.addRow(create_help_label("Ordner für Diktat-Notizen (muss innerhalb von ~ liegen). Leer = Speichern deaktiviert."))
+        form_general.addRow(t("settings.notes_folder.label"), self.edit_notes_folder)
+        form_general.addRow(create_help_label(t("settings.notes_folder.help")))
 
         self.spin_history_size = QComboBox()
         self.spin_history_size.addItems(["10", "25", "50", "75", "100"])
         self.spin_history_size.setCurrentText(str(self.config.history_size))
-        form_general.addRow("Verlauf-Größe:", self.spin_history_size)
-        form_general.addRow(create_help_label("Maximale Anzahl der im Verlauf gespeicherten Einträge."))
+        form_general.addRow(t("settings.history_size.label"), self.spin_history_size)
+        form_general.addRow(create_help_label(t("settings.history_size.help")))
 
-        self.btn_open_config = QPushButton("📄  Konfigurationsdatei öffnen")
+        self.combo_ui_language = QComboBox()
+        for lang in LANGUAGES:
+            self.combo_ui_language.addItem(LANGUAGE_DISPLAY_NAMES[lang], lang)
+        ui_language_index = self.combo_ui_language.findData(self.config.ui_language)
+        self.combo_ui_language.setCurrentIndex(ui_language_index if ui_language_index >= 0 else 0)
+        form_general.addRow(t("settings.ui_language.label"), self.combo_ui_language)
+        form_general.addRow(create_help_label(t("settings.ui_language.help")))
+
+        self.btn_open_config = QPushButton(t("settings.open_config.button"))
         self.btn_open_config.clicked.connect(self._open_config_file)
         form_general.addRow(self.btn_open_config)
-        form_general.addRow(create_help_label(
-            "Öffnet config.json im Standard-Editor – für erweiterte Prompt- und "
-            "Workflow-Anpassungen, die über die Felder oben hinausgehen."))
+        form_general.addRow(create_help_label(t("settings.open_config.help")))
 
         # Dezente Versionsanzeige ganz unten auf der letzten Einstellungsseite
-        version_label = QLabel(f"Version {APP_VERSION}")
+        version_label = QLabel(t("settings.version").format(version=APP_VERSION))
         version_label.setStyleSheet("color: gray; font-size: 9px;")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         form_general.addRow(version_label)
 
-        self.tabs.addTab(self._scrollable(tab_general), "Allgemein")
+        self.tabs.addTab(self._scrollable(tab_general), t("settings.tab.general"))
 
         layout.addWidget(self.tabs)
 
         # Dialog Button Box
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        button_save = button_box.button(QDialogButtonBox.StandardButton.Save)
+        if button_save is not None:
+            button_save.setText(t("button.save"))
+        button_cancel = button_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if button_cancel is not None:
+            button_cancel.setText(t("button.cancel"))
         button_box.accepted.connect(self.save_settings)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -389,7 +402,9 @@ class SettingsDialog(QDialog):
         env_name = self.edit_api_key_env.text().strip() or self.config.openai_api_key_env
         env_value = os.environ.get(env_name, "").strip()
         status = "gesetzt" if env_value else "nicht gesetzt"
-        self.lbl_api_key_status.setText(f"Status: {status} ({env_name})")
+        self.lbl_api_key_status.setText(
+            t("settings.api_key.status").format(status=status, env_name=env_name)
+        )
 
     def _on_llm_provider_changed(self) -> None:
         provider = self.combo_llm_provider.currentData()
@@ -418,14 +433,14 @@ class SettingsDialog(QDialog):
             if not opened:
                 QMessageBox.warning(
                     self,
-                    "Öffnen fehlgeschlagen",
-                    f"Konfigurationsdatei konnte nicht geöffnet werden:\n{self.config.config_file}",
+                    t("settings.open_config.warning_title"),
+                    t("settings.open_config.warning_message").format(path=self.config.config_file),
                 )
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "Fehler",
-                f"Konfigurationsdatei konnte nicht geöffnet werden: {e}",
+                t("settings.open_config.error_title"),
+                t("settings.open_config.error_message").format(error=e),
             )
 
     def _collect_custom_terms(self) -> list[str]:
@@ -479,11 +494,17 @@ class SettingsDialog(QDialog):
             self.config.autopaste = self.check_autopaste.isChecked()
             self.config.notes_folder = self.edit_notes_folder.text().strip()
             self.config.history_size = int(self.spin_history_size.currentText())
+            self.config.ui_language = self.combo_ui_language.currentData()
 
             self.config.save()
+            set_language(self.config.ui_language)
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Speichern", f"Konfiguration konnte nicht gespeichert werden: {e}")
+            QMessageBox.critical(
+                self,
+                t("settings.save_error.title"),
+                t("settings.save_error.message").format(error=e),
+            )
 
 
 class _WorkerSignals(QObject):
@@ -578,6 +599,8 @@ class BlitztextApp(QObject):
         super().__init__()
         self.app = app
         self.config = Config.load()
+        set_language(self.config.ui_language)
+        self.app.setApplicationName(t("app.name"))
 
         self.llm_service = self._build_llm_service()
         self.audio_recorder = AudioRecorder()
@@ -641,7 +664,7 @@ class BlitztextApp(QObject):
         if icon.isNull():
             icon = self.app.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume)
         self.tray_icon.setIcon(icon)
-        self.tray_icon.setToolTip("Blitztext")
+        self.tray_icon.setToolTip(t("app.name"))
 
         # Show window via single/double click on the tray icon
         self.tray_icon.activated.connect(self._on_tray_activated)
@@ -650,41 +673,41 @@ class BlitztextApp(QObject):
         self.menu = QMenu()
 
         # Fenster anzeigen (grafischer Fallback)
-        self.action_show_window = QAction("🪟  Fenster anzeigen", self)
+        self.action_show_window = QAction(f"🪟  {t('tray.show_window')}", self)
         self.action_show_window.triggered.connect(self.show_main_window)
         self.menu.addAction(self.action_show_window)
         self.menu.addSeparator()
 
         # Actions für die fünf Workflows
-        self.action_transcription = QAction("🎙  Blitztext\tMeta+H", self)
+        self.action_transcription = QAction(f"{t('workflow.transcription.name')}\tMeta+H", self)
         self.action_transcription.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TRANSCRIPTION))
         self.menu.addAction(self.action_transcription)
 
-        self.action_local = QAction("🔒  Blitztext Lokal\tMeta+Shift+H", self)
+        self.action_local = QAction(f"{t('workflow.local.name')}\tMeta+Shift+H", self)
         self.action_local.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.LOCAL))
         self.menu.addAction(self.action_local)
 
-        self.action_improver = QAction("✨  Blitztext+\tMeta+Shift+T", self)
+        self.action_improver = QAction(f"{t('workflow.text_improver.name')}\tMeta+Shift+T", self)
         self.action_improver.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TEXT_IMPROVER))
         self.menu.addAction(self.action_improver)
 
-        self.action_dampf = QAction("🔥  Blitztext $%&!\tMeta+Shift+D", self)
+        self.action_dampf = QAction(f"{t('workflow.dampf_ablassen.name')}\tMeta+Shift+D", self)
         self.action_dampf.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.DAMPF_ABLASSEN))
         self.menu.addAction(self.action_dampf)
 
-        self.action_emoji = QAction("😊  Blitztext :)\tMeta+Shift+E", self)
+        self.action_emoji = QAction(f"{t('workflow.emoji_text.name')}\tMeta+Shift+E", self)
         self.action_emoji.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.EMOJI_TEXT))
         self.menu.addAction(self.action_emoji)
 
         # Submenu: Schreibstil-Vorlage für Blitztext+ (Text-Verbesserer).
         # Exklusive, abhakbare Auswahl gespeist aus dem Preset-Katalog; die
         # Vorauswahl spiegelt die persistierte config.writing_preset wider.
-        self.menu_preset = self.menu.addMenu("✨  Schreibstil-Vorlage")
+        self.menu_preset = self.menu.addMenu(f"✨  {t('tray.writing_preset')}")
         self.preset_action_group = QActionGroup(self)
         self.preset_action_group.setExclusive(True)
         self.preset_actions: dict[str, QAction] = {}
         for key in WRITING_PRESET_KEYS:
-            preset_action = QAction(WRITING_PRESETS[key].display_name, self)
+            preset_action = QAction(t(f"preset.{key}.name"), self)
             preset_action.setCheckable(True)
             preset_action.triggered.connect(
                 lambda _checked=False, preset_key=key: self._on_writing_preset_selected(preset_key)
@@ -715,12 +738,12 @@ class BlitztextApp(QObject):
         self.menu.addSeparator()
 
         # Settings action
-        self.action_settings = QAction("⚙   Einstellungen...", self)
+        self.action_settings = QAction(f"⚙   {t('tray.settings')}...", self)
         self.action_settings.triggered.connect(self.show_settings_dialog)
         self.menu.addAction(self.action_settings)
 
         # Quit action
-        self.action_quit = QAction("✕   Beenden", self)
+        self.action_quit = QAction(f"✕   {t('tray.quit')}", self)
         self.action_quit.triggered.connect(self.quit_app)
         self.menu.addAction(self.action_quit)
 
@@ -759,6 +782,31 @@ class BlitztextApp(QObject):
         # nutzbaren LLM-Dienst wird das Submenu mitdeaktiviert.
         self.menu_preset.setEnabled(available)
 
+    def _refresh_i18n_texts(self) -> None:
+        """Aktualisiert Texte, die nach Settings-Save bereits existieren."""
+        self.app.setApplicationName(t("app.name"))
+        if hasattr(self, "action_show_window"):
+            self.action_show_window.setText(f"🪟  {t('tray.show_window')}")
+        if hasattr(self, "action_transcription"):
+            self.action_transcription.setText(f"{t('workflow.transcription.name')}\tMeta+H")
+        if hasattr(self, "action_local"):
+            self.action_local.setText(f"{t('workflow.local.name')}\tMeta+Shift+H")
+        if hasattr(self, "action_improver"):
+            self.action_improver.setText(f"{t('workflow.text_improver.name')}\tMeta+Shift+T")
+        if hasattr(self, "action_dampf"):
+            self.action_dampf.setText(f"{t('workflow.dampf_ablassen.name')}\tMeta+Shift+D")
+        if hasattr(self, "action_emoji"):
+            self.action_emoji.setText(f"{t('workflow.emoji_text.name')}\tMeta+Shift+E")
+        if hasattr(self, "menu_preset"):
+            self.menu_preset.setTitle(f"✨  {t('tray.writing_preset')}")
+        self.action_settings.setText(f"⚙   {t('tray.settings')}...")
+        self.action_quit.setText(f"✕   {t('tray.quit')}")
+        if hasattr(self, "preset_actions"):
+            self._refresh_preset_menu()
+        if self._main_window is not None:
+            self._main_window.setWindowTitle(t("app.name"))
+        self.update_tray_state()
+
     def _refresh_preset_menu(self) -> None:
         """Spiegelt die aktuelle ``config.writing_preset`` im Preset-Submenu.
 
@@ -768,6 +816,8 @@ class BlitztextApp(QObject):
         gewordener Config-Wert eine konsistente Auswahl ergibt.
         """
         current_key = get_preset(self.config.writing_preset).key
+        for key, preset_action in self.preset_actions.items():
+            preset_action.setText(t(f"preset.{key}.name"))
         action = self.preset_actions.get(current_key)
         if action is not None:
             action.setChecked(True)
@@ -818,6 +868,7 @@ class BlitztextApp(QObject):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Update LLM Service parameters from saved configuration
             self.llm_service = self._build_llm_service()
+            self._refresh_i18n_texts()
             self.update_menu_availability()
             # Preset kann im Dialog geändert worden sein -> Häkchen angleichen.
             self._refresh_preset_menu()
@@ -1108,7 +1159,7 @@ class BlitztextApp(QObject):
             self.tray_icon.setToolTip(f"Blitztext Fehler: {self._tray_error_message}")
         elif self.state == "IDLE":
             self.tray_icon.setIcon(self._tray_icons["IDLE"])
-            self.tray_icon.setToolTip("Blitztext")
+            self.tray_icon.setToolTip(t("app.name"))
         elif self.state == "RECORDING":
             self.tray_icon.setIcon(self._tray_icons["RECORDING"])
             wf_name = self.current_workflow.value if self.current_workflow else ""
@@ -1180,7 +1231,7 @@ def main() -> int:
         )
         return 1
 
-    app.setApplicationName("Blitztext")
+    app.setApplicationName(t("app.name"))
     app.setQuitOnLastWindowClosed(False)
 
     # Design-System: Glass-Theme + Marken-App-Icon (Mikrofon + Blitz)

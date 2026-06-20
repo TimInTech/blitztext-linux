@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from app.i18n import t
+
 logger = logging.getLogger("blitztext.history")
 
 
@@ -58,7 +60,7 @@ def save_dictation_note(folder: str, text: str) -> Optional[str]:
         filename = now.strftime("%Y-%m-%d_%H-%M-%S") + ".md"
         heading = now.strftime("%Y-%m-%d %H:%M:%S")
         path = os.path.join(resolved, filename)
-        content = f"# Diktat {heading}\n\n{text}\n"
+        content = f"# {t('history.note.heading').format(heading=heading)}\n\n{text}\n"
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
@@ -92,10 +94,10 @@ def save_merged_dictation(folder: str, combined: str) -> Optional[str]:
     try:
         os.makedirs(resolved, exist_ok=True)
         now = datetime.now()
-        filename = "Diktat-zusammengefuehrt_" + now.strftime("%Y-%m-%d_%H-%M-%S") + ".md"
+        filename = t("history.note.merged_filename_prefix") + now.strftime("%Y-%m-%d_%H-%M-%S") + ".md"
         heading = now.strftime("%Y-%m-%d %H:%M:%S")
         path = os.path.join(resolved, filename)
-        content = f"# Diktat (zusammengefuehrt) {heading}\n\n{combined}\n"
+        content = f"# {t('history.note.merged_heading').format(heading=heading)}\n\n{combined}\n"
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(content)
@@ -171,7 +173,7 @@ class HistoryEntryWidget(QFrame):
         layout.setSpacing(3)
 
         top_row = QHBoxLayout()
-        meta_text = f"{entry.timestamp}  ·  {entry.word_count} Wörter"
+        meta_text = t("history.entry.meta").format(timestamp=entry.timestamp, count=entry.word_count)
         if entry.is_dictation:
             meta_text = f"\U0001f3a4 {meta_text}"
         meta_label = QLabel(meta_text)
@@ -179,13 +181,13 @@ class HistoryEntryWidget(QFrame):
         top_row.addWidget(meta_label, 1)
 
         self._btn_copy = QPushButton("\U0001f4cb")
-        self._btn_copy.setToolTip("In Zwischenablage kopieren")
+        self._btn_copy.setToolTip(t("history.tooltip.copy"))
         self._btn_copy.setFixedSize(28, 24)
         self._btn_copy.clicked.connect(self._copy_to_clipboard)
         top_row.addWidget(self._btn_copy)
 
         btn_delete = QPushButton("✕")
-        btn_delete.setToolTip("Eintrag löschen")
+        btn_delete.setToolTip(t("history.tooltip.delete"))
         btn_delete.setFixedSize(28, 24)
         btn_delete.clicked.connect(lambda: self.deleted.emit(self.entry))
         top_row.addWidget(btn_delete)
@@ -244,17 +246,17 @@ class HistoryPanel(QWidget):
         layout.setSpacing(4)
 
         header_row = QHBoxLayout()
-        self._header_label = QLabel("Verlauf (0)")
+        self._header_label = QLabel(t("history.header").format(count=0))
         self._header_label.setStyleSheet("font-size: 13px; font-weight: bold;")
         header_row.addWidget(self._header_label, 1)
 
-        self._btn_merge = QPushButton("Zusammenführen")
-        self._btn_merge.setToolTip("Alle Diktat-Einträge kombinieren, als Datei speichern und kopieren")
+        self._btn_merge = QPushButton(t("history.button.merge"))
+        self._btn_merge.setToolTip(t("history.tooltip.merge"))
         self._btn_merge.clicked.connect(self._merge_dictation)
         self._btn_merge.hide()
         header_row.addWidget(self._btn_merge)
 
-        self._btn_clear = QPushButton("Alles löschen")
+        self._btn_clear = QPushButton(t("history.button.clear_all"))
         self._btn_clear.clicked.connect(self._on_clear_clicked)
         header_row.addWidget(self._btn_clear)
 
@@ -319,7 +321,7 @@ class HistoryPanel(QWidget):
     def _on_clear_clicked(self) -> None:
         if not self._clear_armed:
             self._clear_armed = True
-            self._btn_clear.setText("Sicher?")
+            self._btn_clear.setText(t("history.button.confirm_clear"))
             self._btn_clear.setStyleSheet("color: #f44336; font-weight: bold;")
             QTimer.singleShot(3000, self._disarm_clear)
         else:
@@ -327,7 +329,7 @@ class HistoryPanel(QWidget):
 
     def _disarm_clear(self) -> None:
         self._clear_armed = False
-        self._btn_clear.setText("Alles löschen")
+        self._btn_clear.setText(t("history.button.clear_all"))
         self._btn_clear.setStyleSheet("")
 
     def clear_all(self) -> None:
@@ -337,7 +339,7 @@ class HistoryPanel(QWidget):
             widget.deleteLater()
         self._entry_widgets.clear()
         self._clear_armed = False
-        self._btn_clear.setText("Alles löschen")
+        self._btn_clear.setText(t("history.button.clear_all"))
         self._btn_clear.setStyleSheet("")
         self._update_header()
         self._update_merge_button()
@@ -352,17 +354,17 @@ class HistoryPanel(QWidget):
         if path:
             self.merged.emit(path)
 
-        self._btn_merge.setText("✓ Gespeichert" if path else "✓ Kopiert")
+        self._btn_merge.setText(t("history.status.saved") if path else t("history.status.copied"))
         self._btn_merge.setStyleSheet("color: #4caf50; font-weight: bold;")
         QTimer.singleShot(2500, self._reset_merge_button)
 
     def _reset_merge_button(self) -> None:
-        self._btn_merge.setText("Zusammenführen")
+        self._btn_merge.setText(t("history.button.merge"))
         self._btn_merge.setStyleSheet("")
 
     def _update_header(self) -> None:
         count = len(self._entries)
-        self._header_label.setText(f"Verlauf ({count})")
+        self._header_label.setText(t("history.header").format(count=count))
         self.count_changed.emit(count)
 
     def _update_merge_button(self) -> None:

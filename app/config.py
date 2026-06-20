@@ -16,6 +16,8 @@ from typing import Any
 
 from app.writing_presets import DEFAULT_PRESET_KEY, WRITING_PRESET_KEYS
 
+from app.i18n import LANGUAGES as I18N_LANGUAGES, DEFAULT_LANGUAGE as I18N_DEFAULT_LANGUAGE
+
 logger = logging.getLogger("blitztext.config")
 
 DEFAULTS: dict[str, Any] = {
@@ -45,6 +47,7 @@ DEFAULTS: dict[str, Any] = {
         "custom_terms": [],
         "writing_preset": DEFAULT_PRESET_KEY,
     },
+    "ui_language": I18N_DEFAULT_LANGUAGE,
 }
 
 VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
@@ -56,6 +59,7 @@ VALID_WRITING_PRESETS = set(WRITING_PRESET_KEYS)
 VALID_LLM_PROVIDERS = {"openai", "openrouter", "custom"}
 VALID_TTS_PROVIDERS = {"piper", "openai"}
 VALID_OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"}
+VALID_UI_LANGUAGES = set(I18N_LANGUAGES)
 BASE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
 VALID_HOTKEY_KEYS = {
     "KEY_LEFTALT", "KEY_RIGHTALT", "KEY_RIGHTCTRL", "KEY_LEFTCTRL",
@@ -198,6 +202,18 @@ class BlitztextConfig:
     @language.setter
     def language(self, value: str) -> None:
         self._data["language"] = value
+
+    @property
+    def ui_language(self) -> str:
+        """Gebe die UI-Sprache zurück, validiert."""
+        value = self._data.get("ui_language", DEFAULTS["ui_language"])
+        return value if value in VALID_UI_LANGUAGES else DEFAULTS["ui_language"]
+
+    @ui_language.setter
+    def ui_language(self, value: str) -> None:
+        if value not in VALID_UI_LANGUAGES:
+            raise ValueError(f"Ungueltige UI-Sprache: {value!r}. Gueltig: {sorted(VALID_UI_LANGUAGES)}")
+        self._data["ui_language"] = value
 
     @property
     def backend(self) -> str:
@@ -375,6 +391,8 @@ class BlitztextConfig:
             self._data["model"] = "base"
         if self._data.get("backend") not in VALID_BACKENDS:
             self._data["backend"] = "openai-whisper"
+        if self._data.get("ui_language") not in VALID_UI_LANGUAGES:
+            self._data["ui_language"] = DEFAULTS["ui_language"]
         if self._data.get("hotkey_mode") not in VALID_HOTKEY_MODES:
             self._data["hotkey_mode"] = "toggle"
         if self._data.get("transcription_hotkey") not in VALID_HOTKEY_KEYS:

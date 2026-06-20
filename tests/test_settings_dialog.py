@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app.blitztext_linux import SettingsDialog
 from app.config import BlitztextConfig
+from app.i18n import DEFAULT_LANGUAGE, get_language, set_language
 
 
 def _fake_self(config_dir):
@@ -130,7 +131,7 @@ class _Check:
         return self._checked
 
 
-def _fake_save_self(config_dir, preset_key):
+def _fake_save_self(config_dir, preset_key, ui_language="de"):
     config = BlitztextConfig(config_dir=config_dir)
     return SimpleNamespace(
         config=config,
@@ -152,6 +153,10 @@ def _fake_save_self(config_dir, preset_key):
         check_autopaste=_Check(True),
         edit_notes_folder=_Edit(""),
         spin_history_size=_Combo("50"),
+        combo_ui_language=_Combo(
+            text="English" if ui_language == "en" else "Deutsch",
+            data=ui_language,
+        ),
         accept=lambda: None,
     )
 
@@ -177,6 +182,65 @@ def test_save_settings_persists_llm_provider_fields(tmp_path):
     assert reloaded.llm_provider == "openrouter"
     assert reloaded.llm_base_url == "https://openrouter.ai/api/v1"
     assert reloaded.llm_model == "openai/gpt-4o"
+
+
+def test_save_settings_persists_and_applies_ui_language(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard", ui_language="en")
+
+    try:
+        set_language("de")
+        SettingsDialog.save_settings(fake)
+
+        reloaded = BlitztextConfig(config_dir=config_dir)
+        assert reloaded.ui_language == "en"
+        assert get_language() == "en"
+    finally:
+        set_language(DEFAULT_LANGUAGE)
+
+
+def test_app_init_applies_configured_ui_language(tmp_path):
+    from app.blitztext_linux import BlitztextApp
+
+    config = BlitztextConfig(config_dir=tmp_path / ".config" / "blitztext-linux")
+    config.ui_language = "en"
+    fake_qapp = Mock()
+
+    try:
+        set_language("de")
+        with patch("app.blitztext_linux.Config.load", return_value=config), \
+                patch.object(BlitztextApp, "setup_tray"), \
+                patch.object(BlitztextApp, "start_hotkey_worker"), \
+                patch("app.blitztext_linux.AudioRecorder"), \
+                patch("app.blitztext_linux.PasteService"):
+            BlitztextApp(fake_qapp)
+
+        assert get_language() == "en"
+    finally:
+        set_language(DEFAULT_LANGUAGE)
+
+
+def test_refresh_i18n_texts_updates_existing_shell():
+    from app.blitztext_linux import BlitztextApp
+
+    fake = SimpleNamespace(
+        app=Mock(),
+        action_settings=Mock(),
+        action_quit=Mock(),
+        _main_window=Mock(),
+        update_tray_state=Mock(),
+    )
+
+    try:
+        set_language("en")
+        BlitztextApp._refresh_i18n_texts(fake)
+
+        fake.action_settings.setText.assert_called_once_with("⚙   Settings...")
+        fake.action_quit.setText.assert_called_once_with("✕   Quit")
+        fake._main_window.setWindowTitle.assert_called_once_with("Blitztext")
+        fake.update_tray_state.assert_called_once()
+    finally:
+        set_language(DEFAULT_LANGUAGE)
 
 
 def test_build_llm_service_includes_base_url_and_model(tmp_path):
