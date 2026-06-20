@@ -16,7 +16,7 @@ from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (
-    QAction, QBrush, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap,
+    QAction, QActionGroup, QBrush, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
@@ -32,7 +32,7 @@ if PROJECT_DIR not in sys.path:
 
 from app.config import Config, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, LLMServiceError
-from app.writing_presets import WRITING_PRESETS, WRITING_PRESET_KEYS, preset_index
+from app.writing_presets import WRITING_PRESETS, WRITING_PRESET_KEYS, get_preset, preset_index
 from app.hotkey_service import HotkeyWorker
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
@@ -676,6 +676,24 @@ class BlitztextApp(QObject):
         self.action_emoji.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.EMOJI_TEXT))
         self.menu.addAction(self.action_emoji)
 
+        # Submenu: Schreibstil-Vorlage für Blitztext+ (Text-Verbesserer).
+        # Exklusive, abhakbare Auswahl gespeist aus dem Preset-Katalog; die
+        # Vorauswahl spiegelt die persistierte config.writing_preset wider.
+        self.menu_preset = self.menu.addMenu("✨  Schreibstil-Vorlage")
+        self.preset_action_group = QActionGroup(self)
+        self.preset_action_group.setExclusive(True)
+        self.preset_actions: dict[str, QAction] = {}
+        for key in WRITING_PRESET_KEYS:
+            preset_action = QAction(WRITING_PRESETS[key].display_name, self)
+            preset_action.setCheckable(True)
+            preset_action.triggered.connect(
+                lambda _checked=False, preset_key=key: self._on_writing_preset_selected(preset_key)
+            )
+            self.preset_action_group.addAction(preset_action)
+            self.menu_preset.addAction(preset_action)
+            self.preset_actions[key] = preset_action
+        self._refresh_preset_menu()
+
         self.menu.addSeparator()
 
         # Diktat-Modus (Toggle): sammelt Transkripte als Notizen
@@ -738,6 +756,34 @@ class BlitztextApp(QObject):
         self.action_dampf.setEnabled(available)
         self.action_emoji.setEnabled(available)
 
+    def _refresh_preset_menu(self) -> None:
+        """Spiegelt die aktuelle ``config.writing_preset`` im Preset-Submenu.
+
+        Gemeinsamer Helper für Init (``setup_tray``) und Settings-Save: setzt das
+        Häkchen auf den gespeicherten Preset. ``get_preset`` liefert immer einen
+        gültigen Schlüssel (Fallback auf ``standard``), sodass auch ein unbekannt
+        gewordener Config-Wert eine konsistente Auswahl ergibt.
+        """
+        current_key = get_preset(self.config.writing_preset).key
+        action = self.preset_actions.get(current_key)
+        if action is not None:
+            action.setChecked(True)
+
+    def _on_writing_preset_selected(self, key: str) -> None:
+        """Übernimmt die im Tray gewählte Schreibstil-Vorlage.
+
+        Persistiert den neuen Preset und baut den LLM-Service neu, damit
+        Blitztext+ ab sofort mit dem gewählten Stil arbeitet. Ein erneutes
+        Auswählen des bereits aktiven Presets ist ein No-Op (kein Disk-Write).
+        """
+        if key == self.config.writing_preset:
+            return
+        self.config.writing_preset = key
+        self.config.save()
+        self.llm_service = self._build_llm_service()
+        self.update_menu_availability()
+        logger.info("Writing preset changed via tray: %s", key)
+
     def start_hotkey_worker(self) -> None:
         self.stop_hotkey_worker()
 
@@ -770,6 +816,8 @@ class BlitztextApp(QObject):
             # Update LLM Service parameters from saved configuration
             self.llm_service = self._build_llm_service()
             self.update_menu_availability()
+            # Preset kann im Dialog geändert worden sein -> Häkchen angleichen.
+            self._refresh_preset_menu()
 
             # Restart hotkey listener if mode or key changed
             if self.hotkey_worker and (
