@@ -120,3 +120,19 @@ class TestPresetMenu:
         tray_app.show_settings_dialog()
 
         assert tray_app.preset_actions[target].isChecked() is True
+
+    def test_submenu_disabled_when_llm_unavailable(self, tray_app, monkeypatch):
+        """Ohne nutzbaren LLM-Dienst wird das Preset-Submenu deaktiviert."""
+        monkeypatch.setattr(tray_app.llm_service, "is_available", lambda: False)
+
+        tray_app.update_menu_availability()
+
+        assert tray_app.menu_preset.isEnabled() is False
+
+    def test_submenu_enabled_when_llm_available(self, tray_app, monkeypatch):
+        """Mit nutzbarem LLM-Dienst ist das Preset-Submenu auswählbar."""
+        monkeypatch.setattr(tray_app.llm_service, "is_available", lambda: True)
+
+        tray_app.update_menu_availability()
+
+        assert tray_app.menu_preset.isEnabled() is True

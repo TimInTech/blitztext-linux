@@ -755,6 +755,9 @@ class BlitztextApp(QObject):
         self.action_improver.setEnabled(available)
         self.action_dampf.setEnabled(available)
         self.action_emoji.setEnabled(available)
+        # Schreibstil-Vorlage wirkt nur auf Blitztext+ (Text-Verbesserer); ohne
+        # nutzbaren LLM-Dienst wird das Submenu mitdeaktiviert.
+        self.menu_preset.setEnabled(available)
 
     def _refresh_preset_menu(self) -> None:
         """Spiegelt die aktuelle ``config.writing_preset`` im Preset-Submenu.
