@@ -60,6 +60,21 @@ class TestPasteTimeouts:
             svc.paste("text")
         assert run_mock.call_args.kwargs.get("timeout") is not None
 
+    def test_paste_uses_configured_key_delay_for_ydotool(self):
+        svc = PasteService(autopaste=True, key_delay_ms=135)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch("app.paste_service.time.sleep"), \
+             patch("app.paste_service.subprocess.run") as run_mock:
+            def side_effect(cmd, *args, **kwargs):
+                if cmd[0] == "wl-copy":
+                    return subprocess.CompletedProcess(cmd, 0, b"", b"")
+                return subprocess.CompletedProcess(cmd, 0, b"", b"")
+            run_mock.side_effect = side_effect
+            svc.paste("hallo welt")
+
+        ydotool_call = run_mock.call_args_list[1]
+        assert ydotool_call.args[0][:4] == ["ydotool", "key", "--key-delay", "135"]
+
     def test_paste_missing_ydotoold_does_not_raise(self, caplog):
         svc = PasteService(autopaste=True)
         caplog.set_level(logging.WARNING, logger="blitztext.paste_service")

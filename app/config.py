@@ -31,6 +31,7 @@ DEFAULTS: dict[str, Any] = {
     "llm_base_url": "",
     "llm_model": "gpt-4o-mini",
     "autopaste": True,
+    "paste_key_delay_ms": 80,
     "audio_device": "@DEFAULT_SOURCE@",
     "notes_folder": str(Path.home() / "Blitztext-Notizen"),
     "history_size": 50,
@@ -112,8 +113,11 @@ class BlitztextConfig:
             sanitized = dict(data)
             sanitized.pop("openai_api_key", None)
             return _deep_merge(DEFAULTS, sanitized)
-        except Exception:
-            logger.warning("Config could not be loaded, using defaults")
+        except json.JSONDecodeError:
+            logger.warning("Config file is not valid JSON, using defaults", exc_info=True)
+            return _deep_merge(DEFAULTS, {})
+        except OSError:
+            logger.warning("Config file could not be read, using defaults", exc_info=True)
             return _deep_merge(DEFAULTS, {})
 
     def save(self) -> None:
@@ -252,6 +256,19 @@ class BlitztextConfig:
     @autopaste.setter
     def autopaste(self, value: bool) -> None:
         self._data["autopaste"] = bool(value)
+
+    @property
+    def paste_key_delay_ms(self) -> int:
+        raw = self._data.get("paste_key_delay_ms", DEFAULTS["paste_key_delay_ms"])
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return DEFAULTS["paste_key_delay_ms"]
+        return max(0, min(1000, value))
+
+    @paste_key_delay_ms.setter
+    def paste_key_delay_ms(self, value: int) -> None:
+        self._data["paste_key_delay_ms"] = max(0, min(1000, int(value)))
 
     @property
     def audio_device(self) -> str:

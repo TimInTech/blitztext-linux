@@ -23,10 +23,18 @@ trap 'rm -f "${LOCKFILE}"' EXIT INT TERM
 
 # --- secrets.env (optional) ---
 if [[ -f "${SECRETS_FILE}" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "${SECRETS_FILE}"
-    set +a
+    if [[ ! -O "${SECRETS_FILE}" ]]; then
+        echo "WARNUNG: ${SECRETS_FILE} gehört nicht dem aktuellen Nutzer und wird nicht geladen." >&2
+    else
+        SECRETS_PERMS=$(stat -c '%a' "${SECRETS_FILE}" 2>/dev/null || true)
+        if [[ -n "${SECRETS_PERMS}" ]] && (( 10#${SECRETS_PERMS} > 600 )); then
+            echo "WARNUNG: ${SECRETS_FILE} hat zu offene Rechte (${SECRETS_PERMS}); erwartet 600 oder restriktiver." >&2
+        fi
+        set -a
+        # shellcheck disable=SC1090
+        source "${SECRETS_FILE}"
+        set +a
+    fi
 fi
 
 # --- venv-Prüfung ---

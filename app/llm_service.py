@@ -4,13 +4,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from app.config import DEFAULTS
 from app.workflows import WorkflowType
 from app.writing_presets import DEFAULT_PRESET_KEY, get_preset
 
 logger = logging.getLogger("blitztext.llm_service")
 
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
-MODEL = "gpt-4o-mini"
+DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
 
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
@@ -40,6 +41,20 @@ class LLMServiceError(Exception):
     """Raised when an LLM call fails."""
 
 
+class _NullLLMClient:
+    """Minimaler Platzhalter, damit der Produktionspfad kein unittest.mock nutzt."""
+
+    class _Chat:
+        class _Completions:
+            @staticmethod
+            def create(*args, **kwargs):
+                raise RuntimeError("Null client cannot create completions")
+
+        completions = _Completions()
+
+    chat = _Chat()
+
+
 class LLMService:
     """Wraps OpenAI API calls for BlitztextLinux rewrite workflows."""
 
@@ -59,7 +74,7 @@ class LLMService:
         self.api_key = api_key or ""
         self.api_key_env = api_key_env or "OPENAI_API_KEY"
         self.base_url = (base_url or "").strip()
-        self.model = (model or "").strip() or MODEL
+        self.model = (model or "").strip() or DEFAULT_LLM_MODEL
         self.tone = tone
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt
@@ -76,9 +91,7 @@ class LLMService:
             except ImportError:
                 self._openai_installed = False
                 self._client_is_fallback_mock = True
-                from unittest.mock import MagicMock
-
-                self.client = MagicMock()
+                self.client = _NullLLMClient()
             else:
                 if self.api_key and self.api_key.strip():
                     self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url or None)
@@ -87,9 +100,7 @@ class LLMService:
                     # werfen bereits im Konstruktor bei leerem Key. Der eigentliche
                     # Fehler wird zur Aufrufzeit über _check_openai() klar gemeldet,
                     # damit die App auch ohne gesetzten Key startet.
-                    from unittest.mock import MagicMock
-
-                    self.client = MagicMock()
+                    self.client = _NullLLMClient()
 
     def is_available(self) -> bool:
         return bool(self.api_key and self.api_key.strip())

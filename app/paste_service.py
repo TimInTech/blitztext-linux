@@ -56,12 +56,14 @@ class PasteService:
         svc.paste("Hallo Welt")
     """
 
-    def __init__(self, autopaste: bool = True) -> None:
+    def __init__(self, autopaste: bool = True, key_delay_ms: int = _KEY_DELAY_MS) -> None:
         """
         Args:
             autopaste: True = nach wl-copy automatisch Ctrl+V via ydotool senden.
+            key_delay_ms: Verzögerung zwischen ydotool-Keyevents in Millisekunden.
         """
         self.autopaste = autopaste
+        self.key_delay_ms = max(0, int(key_delay_ms))
 
     def paste(self, text: str) -> None:
         """Text ins Clipboard schreiben und optional einfuegen.
@@ -154,7 +156,7 @@ class PasteService:
         time.sleep(_PASTE_DELAY)
         try:
             result = subprocess.run(
-                ["ydotool", "key", "--key-delay", str(_KEY_DELAY_MS), *_CTRL_V_KEYCODES],
+                ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *_CTRL_V_KEYCODES],
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,

@@ -59,7 +59,7 @@ def transcribe(
         TranscribeError: Bei fehlender Abhaengigkeit, fehlendem File oder
                          Modell-Fehler.
     """
-    wav_file = Path(wav_file)
+    wav_file = Path(wav_file).resolve()
 
     if model not in VALID_MODEL_NAMES:
         raise TranscribeError(
@@ -150,16 +150,25 @@ def _load_faster_whisper_model_class():
 
 def _transcribe_openai(wav_file: str, model_name: str, language: str, hint: str | None = None) -> str:
     warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
-    if _should_force_cpu_for_openai():
+    original_cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+    should_force_cpu = _should_force_cpu_for_openai()
+    if should_force_cpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
-    whisper = _load_openai_whisper_module()
+    try:
+        whisper = _load_openai_whisper_module()
 
-    model = whisper.load_model(model_name)
-    result = model.transcribe(
-        wav_file,
-        language=_normalize_language(language),
-        initial_prompt=hint,
-    )
+        model = whisper.load_model(model_name)
+        result = model.transcribe(
+            wav_file,
+            language=_normalize_language(language),
+            initial_prompt=hint,
+        )
+    finally:
+        if should_force_cpu:
+            if original_cuda_visible_devices is None:
+                os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+            else:
+                os.environ["CUDA_VISIBLE_DEVICES"] = original_cuda_visible_devices
     if not isinstance(result, dict):
         logger.warning("Transcription result is not a dict: %r", type(result).__name__)
         return ""
