@@ -5,6 +5,7 @@ import os
 import shutil
 import signal
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,7 @@ from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -27,7 +29,7 @@ from app.i18n import t
 
 PIPER_VENV_PATH = str(Path(__file__).resolve().parents[1] / ".venv" / "bin" / "piper")
 VOICES_DIR = Path.home() / ".local" / "share" / "piper-voices"
-TTS_WAV = os.path.join(os.environ.get("XDG_RUNTIME_DIR", tempfile.gettempdir()), "blitztext-tts.wav")
+TTS_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", tempfile.gettempdir())
 OPENAI_TTS_MODEL_DEFAULT = "gpt-4o-mini-tts"
 OPENAI_TTS_VOICE_DEFAULT = "marin"
 OPENAI_TTS_VOICES = [
@@ -55,6 +57,10 @@ def _piper_install_hint() -> str:
 
 def _openai_tts_install_hint() -> str:
     return t("tts.error.openai_not_available")
+
+
+def _find_ffmpeg() -> Optional[str]:
+    return shutil.which("ffmpeg")
 
 
 def _openai_tts_consent_text() -> str:
@@ -103,6 +109,73 @@ def _playback_command(wav_path: str) -> tuple[str, list[str]]:
     return "aplay", ["-D", "pipewire", wav_path]
 
 
+def _build_ffmpeg_export_command(input_wav: str, output_path: str, ffmpeg_path: Optional[str] = None) -> tuple[str, list[str]]:
+    program = ffmpeg_path or _find_ffmpeg() or "ffmpeg"
+    suffix = Path(output_path).suffix.lower()
+    if suffix in {".ogg", ".opus"}:
+        args = [
+            "-y",
+            "-i", input_wav,
+            "-vn",
+            "-c:a", "libopus",
+            "-b:a", "32k",
+            output_path,
+        ]
+    elif suffix == ".mp3":
+        args = [
+            "-y",
+            "-i", input_wav,
+            "-vn",
+            "-c:a", "libmp3lame",
+            "-q:a", "4",
+            output_path,
+        ]
+    else:
+        raise ValueError(f"unsupported export format: {suffix or '(none)'}")
+    return program, args
+
+
+def _safe_unlink(path: Optional[str]) -> None:
+    if not path:
+        return
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _make_tts_wav_path() -> str:
+    fd, path = tempfile.mkstemp(prefix="blitztext-tts-", suffix=".wav", dir=TTS_RUNTIME_DIR)
+    os.close(fd)
+    _safe_unlink(path)
+    return path
+
+
+def _make_export_temp_path(output_path: str) -> str:
+    target = Path(output_path)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{target.stem}.blitztext-",
+        suffix=target.suffix,
+        dir=str(target.parent),
+    )
+    os.close(fd)
+    _safe_unlink(temp_path)
+    return temp_path
+
+
+def _normalize_export_path(selected_path: str, selected_filter: str) -> str:
+    path = Path(selected_path)
+    if path.suffix:
+        return str(path)
+
+    normalized_filter = selected_filter.lower()
+    if "mp3" in normalized_filter and "ogg" not in normalized_filter and "opus" not in normalized_filter:
+        return str(path.with_suffix(".mp3"))
+    if "opus" in normalized_filter and "ogg" not in normalized_filter:
+        return str(path.with_suffix(".opus"))
+    return str(path.with_suffix(".ogg"))
+
+
 class CloudTtsServiceError(Exception):
     """Raised when OpenAI Cloud-TTS cannot be synthesized."""
 
@@ -147,10 +220,12 @@ class CloudTtsService:
         if not self._openai_installed or self.client is None:
             raise CloudTtsServiceError(self._missing_openai_package_message())
 
-    def synthesize(self, text: str, output_path: str = TTS_WAV) -> str:
+    def synthesize(self, text: str, output_path: Optional[str] = None) -> str:
         self._check_ready()
         if not text or not text.strip():
             raise ValueError("text must not be empty")
+        if output_path is None:
+            output_path = _make_tts_wav_path()
 
         response = self.client.audio.speech.create(
             model=self.config.tts_openai_model,
@@ -224,6 +299,7 @@ class TtsWindow(QDialog):
         self.resize(430, 340)
         self._piper_proc: Optional[QProcess] = None
         self._aplay_proc: Optional[QProcess] = None
+        self._export_proc: Optional[QProcess] = None
         self._cloud_thread: Optional[QThread] = None
         self._cloud_worker: Optional[_CloudTtsWorker] = None
         # Noch laufende, vom Dialog geloeste Cloud-Threads bis 'finished' referenziert
@@ -231,6 +307,9 @@ class TtsWindow(QDialog):
         self._detached_cloud_threads: list[QThread] = []
         self._piper_path = _find_piper()
         self._last_tts_text = ""
+        self._pending_export_path: Optional[str] = None
+        self._active_wav_path: Optional[str] = None
+        self._export_temp_path: Optional[str] = None
         self._is_paused = False
         self._setup_ui()
         self._populate_voices()
@@ -304,6 +383,10 @@ class TtsWindow(QDialog):
         self._btn_replay.setEnabled(False)
         btn_row.addWidget(self._btn_replay)
 
+        self._btn_export = QPushButton(t("tts.button.export"))
+        self._btn_export.clicked.connect(self._on_export_clicked)
+        btn_row.addWidget(self._btn_export)
+
         self._btn_pause = QPushButton(t("tts.button.pause"))
         self._btn_pause.clicked.connect(self._on_pause_clicked)
         self._btn_pause.setEnabled(False)
@@ -371,9 +454,11 @@ class TtsWindow(QDialog):
     def _update_speak_button_state(self) -> None:
         provider = self._current_provider()
         if provider == "openai":
-            self._btn_speak.setEnabled(CloudTtsService(self._config).is_available() or self._cloud_is_running())
+            can_synthesize = CloudTtsService(self._config).is_available() or self._cloud_is_running()
         else:
-            self._btn_speak.setEnabled(bool(self._piper_path) or self._cloud_is_running())
+            can_synthesize = bool(self._piper_path) or self._cloud_is_running()
+        self._btn_speak.setEnabled(can_synthesize or self._is_speaking())
+        self._btn_export.setEnabled(can_synthesize and not self._is_speaking())
 
     def _current_provider(self) -> str:
         provider = self._provider_combo.currentData()
@@ -390,6 +475,24 @@ class TtsWindow(QDialog):
 
     def _current_tts_text(self) -> str:
         return self._text_edit.toPlainText().strip()
+
+    def _cleanup_active_wav(self) -> None:
+        _safe_unlink(self._active_wav_path)
+        self._active_wav_path = None
+
+    def _cleanup_export_temp(self) -> None:
+        _safe_unlink(self._export_temp_path)
+        self._export_temp_path = None
+
+    def _prepare_new_tts_job(self) -> str:
+        self._cleanup_active_wav()
+        self._cleanup_export_temp()
+        wav_path = _make_tts_wav_path()
+        self._active_wav_path = wav_path
+        return wav_path
+
+    def _current_wav_path(self) -> Optional[str]:
+        return self._active_wav_path
 
     def _cloud_is_running(self) -> bool:
         return self._cloud_thread is not None and self._cloud_thread.isRunning()
@@ -486,7 +589,7 @@ class TtsWindow(QDialog):
             pass
 
     def _is_speaking(self) -> bool:
-        for proc in (self._piper_proc, self._aplay_proc):
+        for proc in (self._piper_proc, self._aplay_proc, self._export_proc):
             if proc is not None and proc.state() != QProcess.ProcessState.NotRunning:
                 return True
         return self._cloud_is_running()
@@ -496,6 +599,7 @@ class TtsWindow(QDialog):
         if self._is_speaking():
             self._stop_tts()
             return
+        self._pending_export_path = None
         self._start_tts()
 
     @pyqtSlot()
@@ -504,7 +608,35 @@ class TtsWindow(QDialog):
             return
         if self._is_speaking():
             self._stop_tts()
+        self._pending_export_path = None
         self._start_tts(text=self._last_tts_text)
+
+    @pyqtSlot()
+    def _on_export_clicked(self) -> None:
+        if self._is_speaking():
+            return
+        text = self._current_tts_text()
+        if not text:
+            self._status_label.setText(t("tts.status.no_text"))
+            self._status_label.setStyleSheet("color: #f44336;")
+            return
+        if not _find_ffmpeg():
+            self._status_label.setText(t("tts.status.export_ffmpeg_missing"))
+            self._status_label.setStyleSheet("color: #f44336;")
+            QTimer.singleShot(2500, self._clear_status)
+            return
+        default_name = t("tts.export.default_filename_prefix") + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".ogg"
+        suggested_path = str(Path.home() / default_name)
+        selected_path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            t("tts.export.dialog_title"),
+            suggested_path,
+            "Audio (*.ogg *.opus *.mp3);;Ogg (*.ogg);;Opus (*.opus);;MP3 (*.mp3)",
+        )
+        if not selected_path:
+            return
+        self._pending_export_path = _normalize_export_path(selected_path, selected_filter)
+        self._start_tts(text=text)
 
     @pyqtSlot()
     def _on_pause_clicked(self) -> None:
@@ -555,12 +687,13 @@ class TtsWindow(QDialog):
             self._status_label.setStyleSheet("color: #f44336;")
             return
 
+        wav_path = self._prepare_new_tts_job()
         proc = QProcess(self)
         proc.setProgram(self._piper_path)
         proc.setArguments([
             "--model", model_path,
             "--length_scale", str(float(self._config.tts_speed)),
-            "--output_file", TTS_WAV,
+            "--output_file", wav_path,
         ])
         proc.finished.connect(self._on_piper_finished)
         proc.errorOccurred.connect(self._on_tts_error)
@@ -588,8 +721,9 @@ class TtsWindow(QDialog):
             self._update_speak_button_state()
             return
 
+        wav_path = self._prepare_new_tts_job()
         thread = QThread(self)
-        worker = _CloudTtsWorker(service, text, TTS_WAV)
+        worker = _CloudTtsWorker(service, text, wav_path)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(self._on_cloud_finished)
@@ -609,8 +743,79 @@ class TtsWindow(QDialog):
         thread.start()
         self._update_speak_button_state()
 
+    def _start_export_process(self, input_wav: str) -> None:
+        output_path = self._pending_export_path
+        ffmpeg_path = _find_ffmpeg()
+        if not output_path or not ffmpeg_path:
+            self._cleanup_export_temp()
+            self._cleanup_active_wav()
+            self._pending_export_path = None
+            self._status_label.setText(t("tts.status.export_ffmpeg_missing"))
+            self._status_label.setStyleSheet("color: #f44336;")
+            self._btn_speak.setText(t("tts.button.speak"))
+            self._btn_pause.setEnabled(False)
+            self._is_paused = False
+            self._btn_pause.setText(t("tts.button.pause"))
+            self._update_speak_button_state()
+            clear_status = getattr(self, "_clear_status", None)
+            if callable(clear_status):
+                QTimer.singleShot(2500, clear_status)
+            return
+
+        try:
+            export_temp_path = _make_export_temp_path(output_path)
+            program, args = _build_ffmpeg_export_command(input_wav, export_temp_path, ffmpeg_path=ffmpeg_path)
+        except ValueError:
+            self._cleanup_export_temp()
+            self._cleanup_active_wav()
+            self._pending_export_path = None
+            self._status_label.setText(t("tts.status.export_format_unsupported"))
+            self._status_label.setStyleSheet("color: #f44336;")
+            self._btn_speak.setText(t("tts.button.speak"))
+            self._btn_pause.setEnabled(False)
+            self._is_paused = False
+            self._btn_pause.setText(t("tts.button.pause"))
+            self._update_speak_button_state()
+            clear_status = getattr(self, "_clear_status", None)
+            if callable(clear_status):
+                QTimer.singleShot(2500, clear_status)
+            return
+        except OSError as exc:
+            self._cleanup_export_temp()
+            self._cleanup_active_wav()
+            self._pending_export_path = None
+            self._status_label.setText(t("tts.status.error").format(message=str(exc)))
+            self._status_label.setStyleSheet("color: #f44336;")
+            self._btn_speak.setText(t("tts.button.speak"))
+            self._btn_pause.setEnabled(False)
+            self._is_paused = False
+            self._btn_pause.setText(t("tts.button.pause"))
+            self._update_speak_button_state()
+            clear_status = getattr(self, "_clear_status", None)
+            if callable(clear_status):
+                QTimer.singleShot(2500, clear_status)
+            return
+
+        self._cleanup_export_temp()
+        self._export_temp_path = export_temp_path
+        export_proc = QProcess(self)
+        export_proc.setProgram(program)
+        export_proc.setArguments(args)
+        export_proc.finished.connect(self._on_export_finished)
+        export_proc.errorOccurred.connect(self._on_tts_error)
+        self._export_proc = export_proc
+
+        self._status_label.setText(t("tts.status.exporting"))
+        self._status_label.setStyleSheet("")
+        self._btn_speak.setText(t("tts.button.stop"))
+        self._btn_pause.setEnabled(False)
+        self._is_paused = False
+        self._btn_pause.setText(t("tts.button.pause"))
+        self._update_speak_button_state()
+        export_proc.start()
+
     def _stop_tts(self) -> None:
-        for attr in ("_piper_proc", "_aplay_proc"):
+        for attr in ("_piper_proc", "_aplay_proc", "_export_proc"):
             proc = getattr(self, attr, None)
             if proc is None:
                 continue
@@ -637,6 +842,9 @@ class TtsWindow(QDialog):
             setattr(self, attr, None)
 
         self._detach_cloud_thread()
+        self._cleanup_export_temp()
+        self._cleanup_active_wav()
+        self._pending_export_path = None
 
         self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
@@ -689,6 +897,9 @@ class TtsWindow(QDialog):
     @pyqtSlot(str)
     def _on_cloud_finished(self, wav_path: str) -> None:
         self._cleanup_cloud_state()
+        if self._pending_export_path:
+            self._start_export_process(wav_path)
+            return
         self._status_label.setText(t("tts.status.playback"))
         program, args = _playback_command(wav_path)
         aplay = QProcess(self)
@@ -706,6 +917,8 @@ class TtsWindow(QDialog):
     @pyqtSlot(str)
     def _on_cloud_error(self, message: str) -> None:
         self._cleanup_cloud_state()
+        self._cleanup_export_temp()
+        self._cleanup_active_wav()
         self._status_label.setText(t("tts.status.error").format(message=message))
         self._status_label.setStyleSheet("color: #f44336;")
         self._btn_speak.setText(t("tts.button.speak"))
@@ -722,6 +935,7 @@ class TtsWindow(QDialog):
     @pyqtSlot(int, QProcess.ExitStatus)
     def _on_piper_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
         proc = self._piper_proc
+        wav_path = self._current_wav_path()
         self._piper_proc = None
 
         if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
@@ -729,6 +943,8 @@ class TtsWindow(QDialog):
             if proc is not None:
                 stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
                 proc.deleteLater()
+            self._cleanup_export_temp()
+            self._cleanup_active_wav()
             msg = stderr or f"Exit {exit_code}"
             self._status_label.setText(t("tts.status.error").format(message=msg))
             self._status_label.setStyleSheet("color: #f44336;")
@@ -739,8 +955,20 @@ class TtsWindow(QDialog):
         if proc is not None:
             proc.deleteLater()
 
+        if self._pending_export_path and wav_path:
+            self._start_export_process(wav_path)
+            return
+
+        if not wav_path:
+            self._status_label.setText(t("tts.status.error").format(message=t("tts.status.missing_wav_output")))
+            self._status_label.setStyleSheet("color: #f44336;")
+            self._btn_speak.setText(t("tts.button.speak"))
+            self._update_speak_button_state()
+            QTimer.singleShot(2500, self._clear_status)
+            return
+
         self._status_label.setText(t("tts.status.playback"))
-        program, args = _playback_command(TTS_WAV)
+        program, args = _playback_command(wav_path)
         aplay = QProcess(self)
         aplay.setProgram(program)
         aplay.setArguments(args)
@@ -772,13 +1000,53 @@ class TtsWindow(QDialog):
             self._status_label.setStyleSheet("color: #f44336;")
         if proc is not None:
             proc.deleteLater()
+        self._cleanup_export_temp()
+        self._cleanup_active_wav()
+        self._update_speak_button_state()
+        QTimer.singleShot(2500, self._clear_status)
+
+    @pyqtSlot(int, QProcess.ExitStatus)
+    def _on_export_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        proc = self._export_proc
+        export_temp_path = self._export_temp_path
+        output_path = self._pending_export_path
+        self._export_proc = None
+        self._btn_speak.setText(t("tts.button.speak"))
+        self._btn_pause.setEnabled(False)
+        self._is_paused = False
+        self._btn_pause.setText(t("tts.button.pause"))
+        self._pending_export_path = None
+        if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0 and export_temp_path and output_path:
+            try:
+                os.replace(export_temp_path, output_path)
+                self._status_label.setText(t("tts.status.export_done"))
+                self._status_label.setStyleSheet("color: #4caf50;")
+                self._export_temp_path = None
+            except OSError as exc:
+                self._status_label.setText(t("tts.status.error").format(message=str(exc)))
+                self._status_label.setStyleSheet("color: #f44336;")
+                self._cleanup_export_temp()
+        else:
+            stderr = ""
+            if proc is not None:
+                stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
+            msg = stderr or f"Exit {exit_code}"
+            self._status_label.setText(t("tts.status.error").format(message=msg))
+            self._status_label.setStyleSheet("color: #f44336;")
+            self._cleanup_export_temp()
+        if proc is not None:
+            proc.deleteLater()
+        self._cleanup_active_wav()
         self._update_speak_button_state()
         QTimer.singleShot(2500, self._clear_status)
 
     @pyqtSlot(QProcess.ProcessError)
     def _on_tts_error(self, error: QProcess.ProcessError) -> None:
         if error == QProcess.ProcessError.FailedToStart:
-            self._status_label.setText(_piper_install_hint() if self._current_provider() == "piper" else _openai_tts_install_hint())
+            if self._export_proc is not None or self._pending_export_path:
+                self._status_label.setText(t("tts.status.export_ffmpeg_missing"))
+            else:
+                self._status_label.setText(_piper_install_hint() if self._current_provider() == "piper" else _openai_tts_install_hint())
         else:
             self._status_label.setText(t("tts.status.error").format(message=error.name))
         self._status_label.setStyleSheet("color: #f44336;")
@@ -786,11 +1054,14 @@ class TtsWindow(QDialog):
         self._btn_pause.setEnabled(False)
         self._is_paused = False
         self._btn_pause.setText(t("tts.button.pause"))
-        for attr in ("_piper_proc", "_aplay_proc"):
+        self._pending_export_path = None
+        for attr in ("_piper_proc", "_aplay_proc", "_export_proc"):
             proc = getattr(self, attr, None)
             if proc is not None:
                 proc.deleteLater()
                 setattr(self, attr, None)
+        self._cleanup_export_temp()
+        self._cleanup_active_wav()
         self._update_speak_button_state()
 
     def _clear_status(self) -> None:

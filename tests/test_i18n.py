@@ -77,6 +77,7 @@ class TestTranslations:
         expected_keys = {
             "tts.window_title",
             "tts.button.speak",
+            "tts.button.export",
             "tts.error.piper_not_found",
             "tts.error.openai_not_available",
             "tts.consent.message",

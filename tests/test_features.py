@@ -311,6 +311,48 @@ class TestTtsAvailability:
         with pytest.raises(TimeoutError):
             service.synthesize("Hallo Welt", output_path=str(tmp_path / "x.wav"))
 
+    def test_build_ffmpeg_export_command_prefers_opus_for_ogg(self):
+        program, args = tts_window._build_ffmpeg_export_command("/tmp/in.wav", "/tmp/out.ogg", ffmpeg_path="/usr/bin/ffmpeg")
+        assert program == "/usr/bin/ffmpeg"
+        assert args == [
+            "-y",
+            "-i", "/tmp/in.wav",
+            "-vn",
+            "-c:a", "libopus",
+            "-b:a", "32k",
+            "/tmp/out.ogg",
+        ]
+
+    def test_build_ffmpeg_export_command_supports_opus_extension(self):
+        program, args = tts_window._build_ffmpeg_export_command("/tmp/in.wav", "/tmp/out.opus", ffmpeg_path="/usr/bin/ffmpeg")
+        assert program == "/usr/bin/ffmpeg"
+        assert args == [
+            "-y",
+            "-i", "/tmp/in.wav",
+            "-vn",
+            "-c:a", "libopus",
+            "-b:a", "32k",
+            "/tmp/out.opus",
+        ]
+
+    def test_build_ffmpeg_export_command_uses_mp3_codec_for_mp3(self):
+        program, args = tts_window._build_ffmpeg_export_command("/tmp/in.wav", "/tmp/out.mp3", ffmpeg_path="/usr/bin/ffmpeg")
+        assert program == "/usr/bin/ffmpeg"
+        assert args == [
+            "-y",
+            "-i", "/tmp/in.wav",
+            "-vn",
+            "-c:a", "libmp3lame",
+            "-q:a", "4",
+            "/tmp/out.mp3",
+        ]
+
+    def test_normalize_export_path_uses_filter_when_suffix_missing(self):
+        assert tts_window._normalize_export_path("/tmp/audio", "Opus (*.opus)") == "/tmp/audio.opus"
+        assert tts_window._normalize_export_path("/tmp/audio", "MP3 (*.mp3)") == "/tmp/audio.mp3"
+        assert tts_window._normalize_export_path("/tmp/audio", "Audio (*.ogg *.opus *.mp3)") == "/tmp/audio.ogg"
+        assert tts_window._normalize_export_path("/tmp/audio.ogg", "MP3 (*.mp3)") == "/tmp/audio.ogg"
+
     def test_scrub_secret_removes_api_key(self):
         msg = tts_window._scrub_secret("Fehler mit sk-secret123 im Text", "sk-secret123")
         assert "sk-secret123" not in msg
@@ -396,6 +438,7 @@ class TestCloudTtsConsentGate:
             _on_cloud_finished=MagicMock(),
             _on_cloud_error=MagicMock(),
             _on_cloud_thread_finished=MagicMock(),
+            _prepare_new_tts_job=MagicMock(return_value=str(tmp_path / "cloud.wav")),
         )
         service = MagicMock()
         service.is_available.return_value = True
@@ -411,6 +454,144 @@ class TestCloudTtsConsentGate:
         thread.finished.connect.assert_any_call(thread.deleteLater)
         thread.finished.connect.assert_any_call(fake._on_cloud_thread_finished)
         thread.start.assert_called_once()
+
+    def test_start_export_process_reports_missing_ffmpeg(self, tmp_path):
+        input_wav = tmp_path / "input.wav"
+        input_wav.write_bytes(b"RIFF\x00WAVE")
+        fake = SimpleNamespace(
+            _status_label=MagicMock(),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _pending_export_path=str(tmp_path / "out.ogg"),
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+        )
+        with patch.object(tts_window, "_find_ffmpeg", return_value=None):
+            tts_window.TtsWindow._start_export_process(fake, str(input_wav))
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_ffmpeg_missing"))
+        fake._btn_speak.setText.assert_called_once()
+
+    def test_on_tts_error_uses_export_message_for_failed_export_start(self):
+        fake = SimpleNamespace(
+            _status_label=MagicMock(),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _export_proc=MagicMock(),
+            _piper_proc=None,
+            _aplay_proc=None,
+            _pending_export_path="/tmp/out.ogg",
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+        )
+        fake._current_provider = lambda: "piper"
+        tts_window.TtsWindow._on_tts_error(fake, tts_window.QProcess.ProcessError.FailedToStart)
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_ffmpeg_missing"))
+        assert fake._export_proc is None
+        assert fake._pending_export_path is None
+
+    def test_cloud_finished_starts_export_when_path_pending(self):
+        fake = SimpleNamespace(
+            _cleanup_cloud_state=MagicMock(),
+            _pending_export_path="/tmp/out.ogg",
+            _start_export_process=MagicMock(),
+        )
+        tts_window.TtsWindow._on_cloud_finished(fake, "/tmp/source.wav")
+        fake._cleanup_cloud_state.assert_called_once()
+        fake._start_export_process.assert_called_once_with("/tmp/source.wav")
+
+    def test_on_export_finished_replaces_temp_file_and_cleans_wav(self, tmp_path):
+        final_path = tmp_path / "final.ogg"
+        temp_path = tmp_path / "temp.ogg"
+        wav_path = tmp_path / "source.wav"
+        temp_path.write_bytes(b"ogg")
+        wav_path.write_bytes(b"wav")
+        fake = SimpleNamespace(
+            _export_proc=MagicMock(),
+            _export_temp_path=str(temp_path),
+            _pending_export_path=str(final_path),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _status_label=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _cleanup_export_temp=MagicMock(),
+            _clear_status=MagicMock(),
+            _is_paused=False,
+        )
+        with patch.object(tts_window.os, "replace") as replace_mock:
+            tts_window.TtsWindow._on_export_finished(fake, 0, tts_window.QProcess.ExitStatus.NormalExit)
+        replace_mock.assert_called_once_with(str(temp_path), str(final_path))
+        assert fake._export_temp_path is None
+        fake._cleanup_active_wav.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_done"))
+
+    def test_on_export_finished_failure_cleans_temp_and_wav(self, tmp_path):
+        temp_path = tmp_path / "temp.ogg"
+        temp_path.write_bytes(b"ogg")
+        fake = SimpleNamespace(
+            _export_proc=MagicMock(),
+            _export_temp_path=str(temp_path),
+            _pending_export_path=str(tmp_path / "final.ogg"),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _status_label=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _clear_status=MagicMock(),
+            _is_paused=False,
+        )
+        fake._cleanup_export_temp = lambda: (tts_window._safe_unlink(fake._export_temp_path), setattr(fake, "_export_temp_path", None))
+        fake._export_proc.readAllStandardError.return_value = b"ffmpeg failed"
+        tts_window.TtsWindow._on_export_finished(fake, 1, tts_window.QProcess.ExitStatus.NormalExit)
+        assert fake._export_temp_path is None
+        assert not temp_path.exists()
+        fake._cleanup_active_wav.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.error").format(message="ffmpeg failed"))
+
+    def test_start_piper_tts_uses_generated_wav_path(self, tmp_path):
+        wav_path = str(tmp_path / "job.wav")
+        fake = SimpleNamespace(
+            _piper_path="/usr/bin/piper",
+            _config=SimpleNamespace(tts_speed=1.0),
+            _current_voice=lambda: "/tmp/voice.onnx",
+            _prepare_new_tts_job=MagicMock(return_value=wav_path),
+            _status_label=MagicMock(),
+            _btn_speak=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _on_piper_finished=MagicMock(),
+            _on_tts_error=MagicMock(),
+        )
+        proc = MagicMock()
+        with patch.object(tts_window, "QProcess", return_value=proc):
+            tts_window.TtsWindow._start_piper_tts(fake, "Hallo Welt")
+        proc.setArguments.assert_called_once_with([
+            "--model", "/tmp/voice.onnx",
+            "--length_scale", "1.0",
+            "--output_file", wav_path,
+        ])
+
+    def test_stop_tts_cleans_temp_paths(self):
+        fake = SimpleNamespace(
+            _piper_proc=None,
+            _aplay_proc=None,
+            _export_proc=None,
+            _detach_cloud_thread=MagicMock(),
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _status_label=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _pending_export_path="/tmp/out.ogg",
+            _is_paused=False,
+            _clear_status=MagicMock(),
+        )
+        tts_window.TtsWindow._stop_tts(fake)
+        fake._cleanup_export_temp.assert_called_once()
+        fake._cleanup_active_wav.assert_called_once()
+        assert fake._pending_export_path is None
 
 
 class TestDetachCloudThread:
