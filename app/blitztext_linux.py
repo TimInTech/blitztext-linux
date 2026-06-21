@@ -604,7 +604,7 @@ class BlitztextApp(QObject):
 
         self.llm_service = self._build_llm_service()
         self.audio_recorder = AudioRecorder()
-        self.paste_service = PasteService(autopaste=self.config.autopaste)
+        self.paste_service = PasteService(autopaste=self.config.autopaste, key_delay_ms=self.config.paste_key_delay_ms)
 
         # State machine state: "IDLE", "RECORDING", "TRANSCRIBING", "LLM_REWRITING"
         self.state = "IDLE"
@@ -964,6 +964,7 @@ class BlitztextApp(QObject):
 
             # Ensure PasteService has the latest autopaste configuration
             self.paste_service.autopaste = self.config.autopaste
+            self.paste_service.key_delay_ms = self.config.paste_key_delay_ms
 
             # Create the transcribe worker
             worker = _TranscribeWorker(

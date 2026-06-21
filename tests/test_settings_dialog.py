@@ -204,6 +204,7 @@ def test_app_init_applies_configured_ui_language(tmp_path):
 
     config = BlitztextConfig(config_dir=tmp_path / ".config" / "blitztext-linux")
     config.ui_language = "en"
+    config.paste_key_delay_ms = 135
     fake_qapp = Mock()
 
     try:
@@ -212,10 +213,11 @@ def test_app_init_applies_configured_ui_language(tmp_path):
                 patch.object(BlitztextApp, "setup_tray"), \
                 patch.object(BlitztextApp, "start_hotkey_worker"), \
                 patch("app.blitztext_linux.AudioRecorder"), \
-                patch("app.blitztext_linux.PasteService"):
+                patch("app.blitztext_linux.PasteService") as paste_service_cls:
             BlitztextApp(fake_qapp)
 
         assert get_language() == "en"
+        paste_service_cls.assert_called_once_with(autopaste=config.autopaste, key_delay_ms=135)
     finally:
         set_language(DEFAULT_LANGUAGE)
 

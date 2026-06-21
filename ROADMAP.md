@@ -57,7 +57,7 @@ Phase 2 — optional cleanups (LOW):
 
 Phase 3 — only if desired / verify first:
 
-- [ ] H6 Make `paste_service._KEY_DELAY_MS` configurable via config.
+- [x] H6 Make `PasteService` key delay configurable via config and wire it through app init/runtime updates.
 - [x] H7 `transcribe._transcribe_openai`: avoid leaking `CUDA_VISIBLE_DEVICES`
       mutations beyond the OpenAI Whisper call; local override restored after use.
 - [x] H8 Collapse the duplicate default model source (`llm_service.MODEL` vs

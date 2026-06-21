@@ -35,6 +35,7 @@ class TestConfigFeatureFields:
         assert cfg.tts_openai_model == "gpt-4o-mini-tts"
         assert cfg.tts_openai_voice == "marin"
         assert cfg.notes_folder.endswith("Blitztext-Notizen")
+        assert cfg.paste_key_delay_ms == 80
 
     def test_history_size_clamped(self, tmp_path):
         cfg = Config.load(tmp_path / "config.json")
@@ -59,6 +60,7 @@ class TestConfigFeatureFields:
         cfg.tts_openai_voice = "nova"
         cfg.notes_folder = str(Path.home() / "Notizen")
         cfg.history_size = 25
+        cfg.paste_key_delay_ms = 135
         cfg.save()
         cfg2 = Config.load(path)
         assert cfg2.tts_voice == "de_DE-thorsten-medium.onnx"
@@ -67,6 +69,7 @@ class TestConfigFeatureFields:
         assert cfg2.tts_openai_voice == "nova"
         assert cfg2.history_size == 25
         assert cfg2.notes_folder.endswith("Notizen")
+        assert cfg2.paste_key_delay_ms == 135
 
     def test_sanitize_bad_values(self, tmp_path):
         path = tmp_path / "config.json"
