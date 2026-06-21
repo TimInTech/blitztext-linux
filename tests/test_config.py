@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -260,6 +261,43 @@ class TestAPIKeyHandling:
         monkeypatch.setenv("OPENAI_API_KEY", "env-placeholder")
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.resolve_openai_api_key() == "env-placeholder"
+
+
+class TestLoadFailures:
+    def test_invalid_json_logs_json_decode_error_with_exc_info(self, config_dir, caplog):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text("{kaputt", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="blitztext.config"):
+            loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.model == "base"
+        records = [r for r in caplog.records if "valid JSON" in r.message]
+        assert len(records) == 1
+        assert records[0].exc_info is not None
+        assert records[0].exc_info[0] is json.JSONDecodeError
+
+    def test_read_error_logs_os_error_with_exc_info(self, config_dir, caplog, monkeypatch):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_file = config_dir / "config.json"
+        config_file.write_text("{}", encoding="utf-8")
+        original_read_text = Path.read_text
+
+        def fake_read_text(self, *args, **kwargs):
+            if self == config_file:
+                raise PermissionError("denied")
+            return original_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+        with caplog.at_level(logging.WARNING, logger="blitztext.config"):
+            loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.model == "base"
+        records = [r for r in caplog.records if "could not be read" in r.message]
+        assert len(records) == 1
+        assert records[0].exc_info is not None
+        assert records[0].exc_info[0] is PermissionError
 
 
 class TestUILanguage:
