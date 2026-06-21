@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.llm_service import LLMService, LLMServiceError
+from app.llm_service import LLMService, LLMServiceError, _NullLLMClient
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESETS
 
@@ -51,6 +51,13 @@ class TestLLMServiceInit:
 
 
 class TestProviderConfig:
+
+    def test_empty_api_key_uses_null_client_instead_of_mock(self):
+        fake_openai = MagicMock()
+        with patch.dict("sys.modules", {"openai": fake_openai}):
+            service = LLMService(api_key="", base_url="")
+        assert isinstance(service.client, _NullLLMClient)
+
     def test_default_model_is_gpt_4o_mini(self, service):
         assert service.model == "gpt-4o-mini"
 

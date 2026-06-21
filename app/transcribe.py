@@ -59,7 +59,7 @@ def transcribe(
         TranscribeError: Bei fehlender Abhaengigkeit, fehlendem File oder
                          Modell-Fehler.
     """
-    wav_file = Path(wav_file)
+    wav_file = Path(wav_file).resolve()
 
     if model not in VALID_MODEL_NAMES:
         raise TranscribeError(
