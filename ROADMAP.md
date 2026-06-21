@@ -58,8 +58,8 @@ Phase 2 — optional cleanups (LOW):
 Phase 3 — only if desired / verify first:
 
 - [ ] H6 Make `paste_service._KEY_DELAY_MS` configurable via config.
-- [ ] H7 `transcribe._transcribe_openai`: set `CUDA_VISIBLE_DEVICES` locally via
-      `subprocess(env=...)` instead of mutating the global process env.
+- [~] H7 `transcribe._transcribe_openai`: set `CUDA_VISIBLE_DEVICES` locally via
+      `subprocess(env=...)` instead of mutating the global process env. *(in Bearbeitung)*
 - [x] H8 Collapse the duplicate default model source (`llm_service.MODEL` vs
       `config.py` default) to a single source of truth.
 - [x] H9 Verify (do not blindly remove) the `tts_openai_voice` validation set:
