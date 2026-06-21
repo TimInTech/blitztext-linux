@@ -4,13 +4,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from app.config import DEFAULTS
 from app.workflows import WorkflowType
 from app.writing_presets import DEFAULT_PRESET_KEY, get_preset
 
 logger = logging.getLogger("blitztext.llm_service")
 
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
-MODEL = "gpt-4o-mini"
+DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
 
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
@@ -73,7 +74,7 @@ class LLMService:
         self.api_key = api_key or ""
         self.api_key_env = api_key_env or "OPENAI_API_KEY"
         self.base_url = (base_url or "").strip()
-        self.model = (model or "").strip() or MODEL
+        self.model = (model or "").strip() or DEFAULT_LLM_MODEL
         self.tone = tone
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt

@@ -30,7 +30,7 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
-from app.config import Config, VALID_HOTKEY_KEYS
+from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, LLMServiceError
 from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
 from app.hotkey_service import HotkeyWorker
@@ -273,7 +273,7 @@ class SettingsDialog(QDialog):
 
         self.edit_llm_model = QLineEdit()
         self.edit_llm_model.setText(self.config.llm_model)
-        self.edit_llm_model.setPlaceholderText("gpt-4o-mini")
+        self.edit_llm_model.setPlaceholderText(DEFAULTS["llm_model"])
 
         self.combo_tone = QComboBox()
         self.combo_tone.addItems(["formal", "neutral", "locker"])

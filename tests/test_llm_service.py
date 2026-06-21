@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.config import DEFAULTS
 from app.llm_service import LLMService, LLMServiceError, _NullLLMClient
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESETS
@@ -58,8 +59,8 @@ class TestProviderConfig:
             service = LLMService(api_key="", base_url="")
         assert isinstance(service.client, _NullLLMClient)
 
-    def test_default_model_is_gpt_4o_mini(self, service):
-        assert service.model == "gpt-4o-mini"
+    def test_default_model_comes_from_config_defaults(self, service):
+        assert service.model == DEFAULTS["llm_model"]
 
     def test_custom_model_is_used_in_requests(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, model="openai/gpt-4o")
@@ -67,9 +68,9 @@ class TestProviderConfig:
         kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert kwargs["model"] == "openai/gpt-4o"
 
-    def test_empty_model_falls_back_to_default(self, mock_client):
+    def test_empty_model_falls_back_to_config_default(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, model="")
-        assert service.model == "gpt-4o-mini"
+        assert service.model == DEFAULTS["llm_model"]
 
     def test_base_url_stored_on_service(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, base_url="https://openrouter.ai/api/v1")

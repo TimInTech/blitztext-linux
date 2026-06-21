@@ -60,11 +60,12 @@ Phase 3 — only if desired / verify first:
 - [ ] H6 Make `paste_service._KEY_DELAY_MS` configurable via config.
 - [ ] H7 `transcribe._transcribe_openai`: set `CUDA_VISIBLE_DEVICES` locally via
       `subprocess(env=...)` instead of mutating the global process env.
-- [ ] H8 Collapse the duplicate default model source (`llm_service.MODEL` vs
+- [x] H8 Collapse the duplicate default model source (`llm_service.MODEL` vs
       `config.py` default) to a single source of truth.
-- [ ] H9 Verify (do not blindly remove) the `tts_openai_voice` validation set:
+- [x] H9 Verify (do not blindly remove) the `tts_openai_voice` validation set:
       "marin"/"cedar" appear to be real newer OpenAI voices — the audit is
-      likely wrong here.
+      likely wrong here. Verified against the installed OpenAI client; no code
+      change needed.
 
 Explicitly out: treating finding 2 (path traversal) as critical; adopting the
 audit's flawed `run.sh` xargs fix.
