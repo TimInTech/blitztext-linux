@@ -19,9 +19,15 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageDraw, ImageFont
 
-from app.i18n import set_language, t
+# Pillow ist eine reine Dev-/Tooling-Abhängigkeit (siehe requirements-dev.txt).
+# Fehlt sie in einer Teilumgebung, werden diese Tests sauber übersprungen statt
+# die Collection der gesamten Suite abzubrechen.
+pytest.importorskip("PIL")
+
+from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+
+from app.i18n import set_language, t  # noqa: E402
 
 _MODULE_PATH = Path(__file__).resolve().parent.parent / "scripts" / "_make_screenshots.py"
 
