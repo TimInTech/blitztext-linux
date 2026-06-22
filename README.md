@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
-  
   <h1>Blitztext Linux</h1>
   <p><strong>Your local AI voice assistant for KDE Plasma & Wayland</strong></p>
 
@@ -150,12 +148,7 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 
 ## AI workflows
 
-The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings directly in the app:
-
-<div align="center">
-  <img src="docs/screenshots/linux/settings-ki-workflows.png" alt="AI workflow settings" width="480">
-  <br><br>
-</div>
+The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings directly in the app.
 
 ### Writing-style presets
 
@@ -216,12 +209,6 @@ The microphone in the system tray is your indicator of the current state:
 
 In case you don't have a keyboard handy or hotkeys are blocked:
 
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/main-window-compact-glass.png" alt="Main window" width="480">
-  <br><br>
-</div>
-
 - **Mouse control:** Start/stop button for recording.
 - **Workflow menu:** Dropdown for all 5 modes.
 - **Cancel:** Discards a recording immediately without transcription.
@@ -234,13 +221,6 @@ In case you don't have a keyboard handy or hotkeys are blocked:
 ## Dictation, history, and read-aloud
 
 In addition to the workflows, the tool offers three convenience functions:
-
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/history.png" alt="History" width="340">
-  <img src="docs/screenshots/linux/tts.png" alt="Read aloud" width="340">
-  <br><br>
-</div>
 
 | Menu item | Description |
 | :--- | :--- |
@@ -267,11 +247,6 @@ In addition to the workflows, the tool offers three convenience functions:
 ## Configuration
 
 Everything is stored locally and securely under `~/.config/blitztext-linux/config.json`. The OpenAI key is no longer stored in this file but read from an environment variable. The configuration file can be opened directly from the settings for advanced prompt and workflow adjustments: **Settings → General → "Open configuration file"**.
-
-<div align="center">
-  <img src="docs/screenshots/linux/settings-allgemein.png" alt="General settings" width="480">
-  <br><br>
-</div>
 
 > [!IMPORTANT]
 > The configuration file is automatically saved with restrictive file permissions (**`0o600` / `chmod 600`**). The real OpenAI key instead lives in `~/.config/blitztext-linux/secrets.env` or is provided as an environment variable.
