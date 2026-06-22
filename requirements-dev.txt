@@ -5,3 +5,6 @@ PyQt6
 evdev
 openai
 pytest
+# Pillow: nur fuer scripts/_make_screenshots.py (Banner-/Screenshot-Generator)
+# und dessen Unit-Tests (tests/test_make_screenshots.py).
+Pillow
