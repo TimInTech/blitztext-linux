@@ -69,6 +69,7 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
         assert win._btn_tts.toolTip() == t("mainwindow.tooltip.tts")
         assert win._btn_settings.toolTip() == t("mainwindow.tooltip.settings")
         assert win._status_label.text() == t("mainwindow.status.ready")
+        assert app.action_compose.text() == f"✍  {t('tray.compose')}"
         assert app.action_dictation.text() == t("tray.dictation_mode")
         assert app.action_history.text() == t("tray.history")
         assert app.action_tts.text() == t("tray.tts")
@@ -82,6 +83,54 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
             assert "Verlauf" in app.action_history.text()
     finally:
         # Idempotentes Cleanup, damit kein Thread in Folgetests nachhaengt.
+        if app is not None:
+            app.stop_hotkey_worker()
+        set_language(DEFAULT_LANGUAGE)
+
+
+@gui_only
+def test_compose_dialog_lifecycle(tmp_path):
+    """Compose-Dialog öffnet sich, wird wiederverwendet und übersetzt sich neu."""
+    from PyQt6.QtWidgets import QApplication
+
+    from app.blitztext_linux import BlitztextApp
+    from app.config import Config
+
+    config = Config.load(tmp_path / "config.json")
+    config.ui_language = "de"
+
+    qapp = QApplication.instance() or QApplication([])
+    app = None
+    try:
+        with patch("app.blitztext_linux.Config.load", return_value=config):
+            app = BlitztextApp(qapp)
+        app.stop_hotkey_worker()
+
+        # Erster Aufruf: Dialog wird erstellt und ist sichtbar.
+        app.show_compose_window()
+        qapp.processEvents()
+        w1 = app._compose_window
+        assert w1 is not None
+        assert w1.isVisible() is True
+
+        # Wiederholter Aufruf: dieselbe Instanz wird wiederverwendet.
+        app.show_compose_window()
+        qapp.processEvents()
+        assert app._compose_window is w1
+
+        # Deutschsprachige Texte korrekt.
+        set_language("de")
+        w1.retranslate_ui()
+        qapp.processEvents()
+        assert "verfassen" in w1.windowTitle().lower()
+
+        # Nach Sprachenwechsel auf EN werden übersetzte Texte gezeigt.
+        set_language("en")
+        w1.retranslate_ui()
+        qapp.processEvents()
+        assert "Compose" in w1.windowTitle()
+
+    finally:
         if app is not None:
             app.stop_hotkey_worker()
         set_language(DEFAULT_LANGUAGE)

@@ -90,6 +90,27 @@ class TestTranslations:
         actual_keys = set(TRANSLATIONS["de"].keys())
         assert expected_keys.issubset(actual_keys), f"Fehlende Wave-B3-Keys: {expected_keys - actual_keys}"
 
+    def test_compose_namespace_seeded(self):
+        """Compose-Fenster bringt alle neuen sichtbaren Schlüssel mit."""
+        expected_keys = {
+            "tray.compose",
+            "compose.window_title",
+            "compose.workflow.label",
+            "compose.preset.label",
+            "compose.voice_routing.label",
+            "compose.input.label",
+            "compose.output.label",
+            "compose.button.improve",
+            "compose.button.copy",
+            "compose.button.insert_close",
+            "compose.button.close",
+            "compose.status.processing",
+            "compose.status.error",
+            "compose.status.empty_input",
+        }
+        actual_keys = set(TRANSLATIONS["de"].keys())
+        assert expected_keys.issubset(actual_keys), f"Fehlende Compose-Keys: {expected_keys - actual_keys}"
+
 
 class TestTranslationFunction:
     """Test t() Funktion."""

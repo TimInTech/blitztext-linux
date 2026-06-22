@@ -65,11 +65,12 @@ class PasteService:
         self.autopaste = autopaste
         self.key_delay_ms = max(0, int(key_delay_ms))
 
-    def paste(self, text: str) -> None:
+    def paste(self, text: str, force_autopaste: Optional[bool] = None) -> None:
         """Text ins Clipboard schreiben und optional einfuegen.
 
         Args:
             text: Der einzufuegende Text.
+            force_autopaste: Optionaler Override fuer den Auto-Paste-Schritt.
 
         Raises:
             PasteServiceError: Wenn wl-copy nicht gefunden oder hart fehlschlaegt.
@@ -80,7 +81,8 @@ class PasteService:
 
         self._copy_to_clipboard(text)
 
-        if self.autopaste:
+        do_autopaste = self.autopaste if force_autopaste is None else bool(force_autopaste)
+        if do_autopaste:
             self._ydotool_paste()
 
     def clipboard_only(self, text: str) -> None:

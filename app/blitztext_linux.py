@@ -38,6 +38,7 @@ from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
 from app.paste_service import PasteService, PasteServiceError
 from app.history_panel import HistoryPanel
+from app.compose_window import ComposeWindow
 from app.tts_window import TtsWindow
 from app.main_window import MainWindow
 from app.i18n import LANGUAGES, LANGUAGE_DISPLAY_NAMES, set_language, t
@@ -615,6 +616,7 @@ class BlitztextApp(QObject):
         # Diktat-/Verlauf-/TTS-Zustand
         self._dictation_mode = False
         self._history_panel: Optional[HistoryPanel] = None
+        self._compose_window: Optional[ComposeWindow] = None
         self._tts_window: Optional[TtsWindow] = None
         self._main_window: Optional[MainWindow] = None
 
@@ -676,6 +678,9 @@ class BlitztextApp(QObject):
         self.action_show_window = QAction(f"🪟  {t('tray.show_window')}", self)
         self.action_show_window.triggered.connect(self.show_main_window)
         self.menu.addAction(self.action_show_window)
+        self.action_compose = QAction(f"✍  {t('tray.compose')}", self)
+        self.action_compose.triggered.connect(lambda _checked=False: self.show_compose_window())
+        self.menu.addAction(self.action_compose)
         self.menu.addSeparator()
 
         # Actions für die fünf Workflows
@@ -787,6 +792,8 @@ class BlitztextApp(QObject):
         self.app.setApplicationName(t("app.name"))
         if hasattr(self, "action_show_window"):
             self.action_show_window.setText(f"🪟  {t('tray.show_window')}")
+        if hasattr(self, "action_compose"):
+            self.action_compose.setText(f"✍  {t('tray.compose')}")
         if hasattr(self, "action_transcription"):
             self.action_transcription.setText(f"{t('workflow.transcription.name')}\tMeta+H")
         if hasattr(self, "action_local"):
@@ -805,6 +812,9 @@ class BlitztextApp(QObject):
             self._refresh_preset_menu()
         if self._main_window is not None:
             self._main_window.setWindowTitle(t("app.name"))
+        compose_window = getattr(self, "_compose_window", None)
+        if compose_window is not None:
+            compose_window.retranslate_ui()
         self.update_tray_state()
 
     def _refresh_preset_menu(self) -> None:
@@ -1091,6 +1101,25 @@ class BlitztextApp(QObject):
         self._tts_window.raise_()
         self._tts_window.activateWindow()
 
+    def _ensure_compose_window(self) -> ComposeWindow:
+        if self._compose_window is None:
+            window = ComposeWindow(self.llm_service, self.paste_service)
+            try:
+                from app import theme
+                window.setWindowIcon(theme.create_app_icon())
+            except Exception:  # pragma: no cover - rein kosmetisch
+                pass
+            self._compose_window = window
+        return self._compose_window
+
+    def show_compose_window(self, text: str = "") -> None:
+        window = self._ensure_compose_window()
+        if text:
+            window.set_input_text(text)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
     def _on_tts_closed(self, _result: int) -> None:
         self._tts_window = None
 
@@ -1203,6 +1232,8 @@ class BlitztextApp(QObject):
         if self._history_panel is not None:
             self._history_panel.close()
             self._history_panel = None
+        if self._compose_window is not None:
+            self._compose_window.close()
         if self._main_window is not None:
             self._main_window.hide()
             self._main_window = None
