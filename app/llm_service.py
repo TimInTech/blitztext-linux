@@ -142,6 +142,31 @@ class LLMService:
             + ", ".join(terms)
         )
 
+    def _rewrite_for_workflow(
+        self,
+        workflow: WorkflowType,
+        text: str,
+        writing_preset: Optional[str] = None,
+    ) -> str:
+        if workflow not in LLM_WORKFLOWS:
+            raise LLMServiceError(f"rewrite() only allowed for LLM workflows, got {workflow!r}")
+        if not text or not text.strip():
+            raise ValueError("text must not be empty")
+
+        try:
+            if workflow == WorkflowType.DAMPF_ABLASSEN:
+                return self.dampf_ablassen(text, custom_system_prompt=self.dampf_system_prompt)
+            if workflow == WorkflowType.TEXT_IMPROVER:
+                preset = get_preset(writing_preset or self.writing_preset)
+                return self.text_improver(text, tone=self.tone, custom_prompt=preset.system_prompt)
+            if workflow == WorkflowType.EMOJI_TEXT:
+                return self.emoji_text(text, density=self.emoji_density)
+            raise LLMServiceError(f"Unsupported workflow: {workflow}")
+        except Exception as exc:
+            if isinstance(exc, LLMServiceError):
+                raise
+            raise LLMServiceError(f"OpenAI API-Fehler: {exc}") from exc
+
     def dampf_ablassen(self, transcript: str, custom_system_prompt: str = "") -> str:
         self._check_openai()
         if not transcript or not transcript.strip():
@@ -212,20 +237,13 @@ class LLMService:
         Raises:
             LLMServiceError: If key is missing, package missing, or API error.
         """
-        self._check_openai()
-        if workflow not in LLM_WORKFLOWS:
-            raise LLMServiceError(f"rewrite() only allowed for LLM workflows, got {workflow!r}")
+        return self._rewrite_for_workflow(workflow, transcript)
 
-        try:
-            if workflow == WorkflowType.DAMPF_ABLASSEN:
-                return self.dampf_ablassen(transcript, custom_system_prompt=self.dampf_system_prompt)
-            if workflow == WorkflowType.TEXT_IMPROVER:
-                preset = get_preset(self.writing_preset)
-                return self.text_improver(transcript, tone=self.tone, custom_prompt=preset.system_prompt)
-            if workflow == WorkflowType.EMOJI_TEXT:
-                return self.emoji_text(transcript, density=self.emoji_density)
-            raise LLMServiceError(f"Unsupported workflow: {workflow}")
-        except Exception as exc:
-            if isinstance(exc, LLMServiceError):
-                raise
-            raise LLMServiceError(f"OpenAI API-Fehler: {exc}") from exc
+    def rewrite_text(
+        self,
+        workflow: WorkflowType,
+        text: str,
+        writing_preset: Optional[str] = None,
+    ) -> str:
+        """Direct text entry point for the compose window."""
+        return self._rewrite_for_workflow(workflow, text, writing_preset=writing_preset)

@@ -144,6 +144,25 @@ class TestRewrite:
         patched.assert_called_once_with("roh", tone=service.tone, custom_prompt="")
         assert result == "verbessert"
 
+    def test_rewrite_text_uses_override_preset_without_mutating_service(self, mock_client):
+        service = LLMService(
+            api_key=DUMMY_API_KEY,
+            client=mock_client,
+            writing_preset="standard",
+        )
+
+        result = service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            writing_preset="email_formal",
+        )
+
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        system_message = next(m["content"] for m in messages if m["role"] == "system")
+        assert result == "OK"
+        assert WRITING_PRESETS["email_formal"].system_prompt in system_message
+        assert service.writing_preset == "standard"
+
     def test_openai_error_is_wrapped(self, service):
         with patch.object(service, "dampf_ablassen", side_effect=RuntimeError("API Error")):
             with pytest.raises(LLMServiceError, match="OpenAI API-Fehler: API Error"):

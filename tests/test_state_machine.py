@@ -96,6 +96,32 @@ class TestPasteTimeouts:
 
         assert "ydotoold nicht verfügbar" in caplog.text
 
+    def test_force_autopaste_override_enables_ydotool(self):
+        """force_autopaste=True überschreibt autopaste=False: Clipboard + ydotool."""
+        svc = PasteService(autopaste=False)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch("app.paste_service.time.sleep"), \
+             patch("app.paste_service.subprocess.run") as run_mock:
+            def side_effect(cmd, *args, **kwargs):
+                return subprocess.CompletedProcess(cmd, 0, b"", b"")
+            run_mock.side_effect = side_effect
+            svc.paste("hallo welt", force_autopaste=True)
+        assert run_mock.call_count == 2
+        cmd_names = [call.args[0][0] for call in run_mock.call_args_list]
+        assert any(name in ("wl-copy", "xclip") for name in cmd_names)
+        assert "ydotool" in cmd_names
+
+    def test_autopaste_false_without_override_skips_ydotool(self):
+        """autopaste=False ohne force_autopaste: nur Clipboard-Write, kein ydotool."""
+        svc = PasteService(autopaste=False)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch("app.paste_service.subprocess.run") as run_mock:
+            run_mock.return_value = subprocess.CompletedProcess([], 0, b"", b"")
+            svc.paste("hallo welt")
+        assert run_mock.call_count == 1
+        cmd_names = [call.args[0][0] for call in run_mock.call_args_list]
+        assert "ydotool" not in cmd_names
+
 
 # ---------------------------------------------------------------------------
 # Hilfen: minimales Fake-evdev fuer den HotkeyWorker-Event-Loop
