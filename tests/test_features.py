@@ -347,6 +347,39 @@ class TestTtsAvailability:
             "/tmp/out.mp3",
         ]
 
+    def test_make_tts_wav_path_returns_unique_paths_without_creating_files(self, tmp_path):
+        with patch.object(tts_window, "TTS_RUNTIME_DIR", str(tmp_path)):
+            first = Path(tts_window._make_tts_wav_path())
+            second = Path(tts_window._make_tts_wav_path())
+
+        assert first != second
+        assert first.parent.parent == tmp_path
+        assert second.parent.parent == tmp_path
+        assert first.parent.name.startswith("blitztext-tts-")
+        assert second.parent.name.startswith("blitztext-tts-")
+        assert (first.parent.stat().st_mode & 0o777) == 0o700
+        assert (second.parent.stat().st_mode & 0o777) == 0o700
+        assert first.parent != second.parent
+        assert first.suffix == ".wav"
+        assert second.suffix == ".wav"
+        assert first.name == "speech.wav"
+        assert second.name == "speech.wav"
+        assert not first.exists()
+        assert not second.exists()
+
+    def test_cleanup_active_wav_removes_private_job_dir(self, tmp_path):
+        job_dir = tmp_path / "blitztext-tts" / "job-1"
+        job_dir.mkdir(parents=True)
+        wav_path = job_dir / "speech.wav"
+        wav_path.write_bytes(b"wav")
+        fake = SimpleNamespace(_active_wav_path=str(wav_path))
+
+        tts_window.TtsWindow._cleanup_active_wav(fake)
+
+        assert fake._active_wav_path is None
+        assert not wav_path.exists()
+        assert not job_dir.exists()
+
     def test_normalize_export_path_uses_filter_when_suffix_missing(self):
         assert tts_window._normalize_export_path("/tmp/audio", "Opus (*.opus)") == "/tmp/audio.opus"
         assert tts_window._normalize_export_path("/tmp/audio", "MP3 (*.mp3)") == "/tmp/audio.mp3"
@@ -372,6 +405,33 @@ class TestTtsAvailability:
 
 class TestCloudTtsConsentGate:
     """Consent-Logik GUI-frei via Fake-self (Muster wie test_settings_dialog)."""
+
+    def test_schedule_status_clear_uses_generation_guard(self):
+        fake = SimpleNamespace(
+            _status_clear_generation=0,
+            _clear_status_if_current=MagicMock(),
+        )
+        with patch.object(tts_window.QTimer, "singleShot") as single_shot:
+            tts_window.TtsWindow._schedule_status_clear(fake, 2500)
+
+        assert fake._status_clear_generation == 1
+        single_shot.assert_called_once()
+        delay_ms, callback = single_shot.call_args.args
+        assert delay_ms == 2500
+        callback()
+        fake._clear_status_if_current.assert_called_once_with(1)
+
+    def test_clear_status_if_current_ignores_stale_generations(self):
+        fake = SimpleNamespace(
+            _status_clear_generation=2,
+            _clear_status=MagicMock(),
+        )
+
+        tts_window.TtsWindow._clear_status_if_current(fake, 1)
+        fake._clear_status.assert_not_called()
+
+        tts_window.TtsWindow._clear_status_if_current(fake, 2)
+        fake._clear_status.assert_called_once()
 
     def _fake_window(self, tmp_path):
         cfg = Config.load(tmp_path / "config.json")
@@ -419,11 +479,51 @@ class TestCloudTtsConsentGate:
             _config=cfg,
             _status_label=MagicMock(),
             _update_speak_button_state=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
         )
         with patch.object(tts_window, "CloudTtsService") as service:
             tts_window.TtsWindow._start_cloud_tts(fake, "Hallo Welt")
         service.assert_not_called()
         fake._status_label.setText.assert_called_once()
+        fake._invalidate_status_clear.assert_called_once()
+
+    def test_start_cloud_tts_unavailable_service_invalidates_status_clear(self, tmp_path):
+        cfg = Config.load(tmp_path / "config.json")
+        cfg.tts_provider = "openai"
+        cfg.tts_openai_consent = True
+        fake = SimpleNamespace(
+            _config=cfg,
+            _status_label=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+        )
+        service = MagicMock()
+        service.is_available.return_value = False
+        with patch.object(tts_window, "CloudTtsService", return_value=service):
+            tts_window.TtsWindow._start_cloud_tts(fake, "Hallo Welt")
+        fake._invalidate_status_clear.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window._openai_tts_install_hint())
+
+    def test_start_piper_tts_missing_binary_invalidates_status_clear(self):
+        fake = SimpleNamespace(
+            _piper_path=None,
+            _status_label=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+        )
+        tts_window.TtsWindow._start_piper_tts(fake, "Hallo Welt")
+        fake._invalidate_status_clear.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window._piper_install_hint())
+
+    def test_start_piper_tts_missing_voice_invalidates_status_clear(self):
+        fake = SimpleNamespace(
+            _piper_path="/usr/bin/piper",
+            _current_voice=lambda: None,
+            _status_label=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+        )
+        tts_window.TtsWindow._start_piper_tts(fake, "Hallo Welt")
+        fake._invalidate_status_clear.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.no_voice_path"))
 
     def test_start_cloud_tts_deletes_thread_on_normal_finish(self, tmp_path):
         cfg = Config.load(tmp_path / "config.json")
@@ -459,18 +559,95 @@ class TestCloudTtsConsentGate:
         input_wav = tmp_path / "input.wav"
         input_wav.write_bytes(b"RIFF\x00WAVE")
         fake = SimpleNamespace(
-            _status_label=MagicMock(),
-            _btn_speak=MagicMock(),
-            _btn_pause=MagicMock(),
-            _update_speak_button_state=MagicMock(),
             _pending_export_path=str(tmp_path / "out.ogg"),
-            _cleanup_export_temp=MagicMock(),
-            _cleanup_active_wav=MagicMock(),
+            _abort_export=MagicMock(),
         )
         with patch.object(tts_window, "_find_ffmpeg", return_value=None):
             tts_window.TtsWindow._start_export_process(fake, str(input_wav))
+        fake._abort_export.assert_called_once_with(tts_window.t("tts.status.export_ffmpeg_missing"))
+
+    def test_on_export_clicked_missing_ffmpeg_invalidates_and_schedules_clear(self):
+        fake = SimpleNamespace(
+            _is_speaking=lambda: False,
+            _current_tts_text=lambda: "Hallo",
+            _invalidate_status_clear=MagicMock(),
+            _schedule_status_clear=MagicMock(),
+            _status_label=MagicMock(),
+        )
+
+        with patch.object(tts_window, "_find_ffmpeg", return_value=None):
+            tts_window.TtsWindow._on_export_clicked(fake)
+
+        fake._invalidate_status_clear.assert_called_once()
+        fake._schedule_status_clear.assert_called_once_with(2500)
         fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_ffmpeg_missing"))
-        fake._btn_speak.setText.assert_called_once()
+
+    def test_start_tts_without_text_invalidates_status_clear(self):
+        fake = SimpleNamespace(
+            _current_tts_text=lambda: "",
+            _invalidate_status_clear=MagicMock(),
+            _status_label=MagicMock(),
+        )
+
+        tts_window.TtsWindow._start_tts(fake)
+
+        fake._invalidate_status_clear.assert_called_once()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.no_text"))
+
+    def test_start_export_process_uses_abort_export_for_unsupported_format(self, tmp_path):
+        input_wav = tmp_path / "input.wav"
+        input_wav.write_bytes(b"RIFF\x00WAVE")
+        export_temp_path = tmp_path / ".out.blitztext-temp.wav"
+        export_temp_path.write_bytes(b"temp")
+        fake = SimpleNamespace(
+            _pending_export_path=str(tmp_path / "out.wav"),
+            _abort_export=MagicMock(),
+            _cleanup_export_temp=MagicMock(),
+        )
+        with patch.object(tts_window, "_find_ffmpeg", return_value="/usr/bin/ffmpeg"), \
+                patch.object(tts_window, "_make_export_temp_path", return_value=str(export_temp_path)):
+            tts_window.TtsWindow._start_export_process(fake, str(input_wav))
+        fake._abort_export.assert_called_once_with(tts_window.t("tts.status.export_format_unsupported"))
+        assert not export_temp_path.exists()
+
+    def test_start_export_process_uses_abort_export_for_oserror(self, tmp_path):
+        input_wav = tmp_path / "input.wav"
+        input_wav.write_bytes(b"RIFF\x00WAVE")
+        fake = SimpleNamespace(
+            _pending_export_path=str(tmp_path / "out.ogg"),
+            _abort_export=MagicMock(),
+        )
+        with patch.object(tts_window, "_find_ffmpeg", return_value="/usr/bin/ffmpeg"), \
+                patch.object(tts_window, "_make_export_temp_path", side_effect=OSError("disk full")):
+            tts_window.TtsWindow._start_export_process(fake, str(input_wav))
+        fake._abort_export.assert_called_once_with(tts_window.t("tts.status.error").format(message="disk full"))
+
+    def test_abort_export_resets_cleanup_and_ui_state(self):
+        fake = SimpleNamespace(
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _pending_export_path="/tmp/out.ogg",
+            _status_label=MagicMock(),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _is_paused=True,
+            _update_speak_button_state=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+            _schedule_status_clear=MagicMock(),
+        )
+        tts_window.TtsWindow._abort_export(fake, "Export fehlgeschlagen")
+        fake._invalidate_status_clear.assert_called_once()
+        fake._schedule_status_clear.assert_called_once_with(2500)
+        fake._cleanup_export_temp.assert_called_once()
+        fake._cleanup_active_wav.assert_called_once()
+        assert fake._pending_export_path is None
+        fake._status_label.setText.assert_called_once_with("Export fehlgeschlagen")
+        fake._status_label.setStyleSheet.assert_called_once_with("color: #f44336;")
+        fake._btn_speak.setText.assert_called_once_with(tts_window.t("tts.button.speak"))
+        fake._btn_pause.setEnabled.assert_called_once_with(False)
+        assert fake._is_paused is False
+        fake._btn_pause.setText.assert_called_once_with(tts_window.t("tts.button.pause"))
+        fake._update_speak_button_state.assert_called_once()
 
     def test_on_tts_error_uses_export_message_for_failed_export_start(self):
         fake = SimpleNamespace(
@@ -484,9 +661,11 @@ class TestCloudTtsConsentGate:
             _pending_export_path="/tmp/out.ogg",
             _cleanup_export_temp=MagicMock(),
             _cleanup_active_wav=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
         )
         fake._current_provider = lambda: "piper"
         tts_window.TtsWindow._on_tts_error(fake, tts_window.QProcess.ProcessError.FailedToStart)
+        fake._invalidate_status_clear.assert_called_once()
         fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_ffmpeg_missing"))
         assert fake._export_proc is None
         assert fake._pending_export_path is None
@@ -518,11 +697,13 @@ class TestCloudTtsConsentGate:
             _cleanup_active_wav=MagicMock(),
             _cleanup_export_temp=MagicMock(),
             _clear_status=MagicMock(),
+            _schedule_status_clear=MagicMock(),
             _is_paused=False,
         )
         with patch.object(tts_window.os, "replace") as replace_mock:
             tts_window.TtsWindow._on_export_finished(fake, 0, tts_window.QProcess.ExitStatus.NormalExit)
         replace_mock.assert_called_once_with(str(temp_path), str(final_path))
+        fake._schedule_status_clear.assert_called_once_with(2500)
         assert fake._export_temp_path is None
         fake._cleanup_active_wav.assert_called_once()
         fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.export_done"))
@@ -540,15 +721,83 @@ class TestCloudTtsConsentGate:
             _status_label=MagicMock(),
             _cleanup_active_wav=MagicMock(),
             _clear_status=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+            _schedule_status_clear=MagicMock(),
             _is_paused=False,
         )
         fake._cleanup_export_temp = lambda: (tts_window._safe_unlink(fake._export_temp_path), setattr(fake, "_export_temp_path", None))
         fake._export_proc.readAllStandardError.return_value = b"ffmpeg failed"
         tts_window.TtsWindow._on_export_finished(fake, 1, tts_window.QProcess.ExitStatus.NormalExit)
+        fake._invalidate_status_clear.assert_called_once()
+        fake._schedule_status_clear.assert_not_called()
         assert fake._export_temp_path is None
         assert not temp_path.exists()
         fake._cleanup_active_wav.assert_called_once()
         fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.error").format(message="ffmpeg failed"))
+
+    def test_on_export_finished_replace_error_keeps_error_status(self, tmp_path):
+        temp_path = tmp_path / "temp.ogg"
+        temp_path.write_bytes(b"ogg")
+        fake = SimpleNamespace(
+            _export_proc=MagicMock(),
+            _export_temp_path=str(temp_path),
+            _pending_export_path=str(tmp_path / "final.ogg"),
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _status_label=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+            _schedule_status_clear=MagicMock(),
+            _clear_status=MagicMock(),
+            _is_paused=False,
+        )
+        fake._cleanup_export_temp = lambda: (tts_window._safe_unlink(fake._export_temp_path), setattr(fake, "_export_temp_path", None))
+        with patch.object(tts_window.os, "replace", side_effect=OSError("rename failed")):
+            tts_window.TtsWindow._on_export_finished(fake, 0, tts_window.QProcess.ExitStatus.NormalExit)
+        fake._invalidate_status_clear.assert_called_once()
+        fake._schedule_status_clear.assert_not_called()
+        assert fake._export_temp_path is None
+        assert not temp_path.exists()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.error").format(message="rename failed"))
+
+    def test_on_aplay_finished_failure_keeps_error_status(self):
+        proc = MagicMock()
+        proc.readAllStandardError.return_value = b"aplay failed"
+        fake = SimpleNamespace(
+            _aplay_proc=proc,
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _status_label=MagicMock(),
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _clear_status=MagicMock(),
+            _invalidate_status_clear=MagicMock(),
+            _schedule_status_clear=MagicMock(),
+            _is_paused=True,
+        )
+        tts_window.TtsWindow._on_aplay_finished(fake, 1, tts_window.QProcess.ExitStatus.NormalExit)
+        fake._invalidate_status_clear.assert_called_once()
+        fake._schedule_status_clear.assert_not_called()
+        fake._status_label.setText.assert_called_once_with(tts_window.t("tts.status.error").format(message="aplay failed"))
+
+    def test_on_aplay_finished_success_still_clears_status_later(self):
+        proc = MagicMock()
+        fake = SimpleNamespace(
+            _aplay_proc=proc,
+            _btn_speak=MagicMock(),
+            _btn_pause=MagicMock(),
+            _status_label=MagicMock(),
+            _cleanup_export_temp=MagicMock(),
+            _cleanup_active_wav=MagicMock(),
+            _update_speak_button_state=MagicMock(),
+            _clear_status=MagicMock(),
+            _schedule_status_clear=MagicMock(),
+            _is_paused=False,
+        )
+        tts_window.TtsWindow._on_aplay_finished(fake, 0, tts_window.QProcess.ExitStatus.NormalExit)
+        fake._schedule_status_clear.assert_called_once_with(2500)
 
     def test_start_piper_tts_uses_generated_wav_path(self, tmp_path):
         wav_path = str(tmp_path / "job.wav")
@@ -587,11 +836,13 @@ class TestCloudTtsConsentGate:
             _pending_export_path="/tmp/out.ogg",
             _is_paused=False,
             _clear_status=MagicMock(),
+            _schedule_status_clear=MagicMock(),
         )
         tts_window.TtsWindow._stop_tts(fake)
         fake._cleanup_export_temp.assert_called_once()
         fake._cleanup_active_wav.assert_called_once()
         assert fake._pending_export_path is None
+        fake._schedule_status_clear.assert_called_once_with(2000)
 
 
 class TestDetachCloudThread:
