@@ -145,8 +145,9 @@ def _fake_save_self(config_dir, preset_key, ui_language="de"):
         combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
         edit_base_url=_Edit("https://openrouter.ai/api/v1"),
         edit_llm_model=_Edit("openai/gpt-4o"),
-        combo_tone=_Combo("neutral"),
+        combo_tone=_Combo(text="neutral", data="neutral"),
         combo_writing_preset=_Combo(text="E-Mail – formell", data=preset_key),
+        edit_compose_custom_preset=_Edit(""),
         combo_emoji=_Combo("mittel"),
         edit_dampf_prompt=_Edit(""),
         _collect_custom_terms=lambda: [],
@@ -318,6 +319,31 @@ def test_save_settings_keeps_standard_preset(tmp_path):
     SettingsDialog.save_settings(fake)
 
     assert fake.config.writing_preset == "standard"
+
+
+def test_save_settings_persists_tone_via_data(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+    # Anzeige "professionell" → interner Wert "formal" (currentData).
+    fake.combo_tone = _Combo(text="professionell", data="formal")
+
+    SettingsDialog.save_settings(fake)
+
+    assert fake.config.text_improver_tone == "formal"
+    reloaded = BlitztextConfig(config_dir=config_dir)
+    assert reloaded.text_improver_tone == "formal"
+
+
+def test_save_settings_persists_compose_custom_preset(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+    fake.edit_compose_custom_preset = _Edit("Freier Compose-Prompt.")
+
+    SettingsDialog.save_settings(fake)
+
+    assert fake.config.compose_custom_preset_text == "Freier Compose-Prompt."
+    reloaded = BlitztextConfig(config_dir=config_dir)
+    assert reloaded.compose_custom_preset_text == "Freier Compose-Prompt."
 
 
 def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
