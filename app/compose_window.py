@@ -23,10 +23,10 @@ from PyQt6.QtWidgets import (
 
 from app.i18n import t
 from app.llm_service import LLMService
-from app.config import Config
+from app.config import Config, VALID_TONES
 from app.paste_service import PasteService, PasteServiceError
 from app.workflows import WorkflowType
-from app.writing_presets import WRITING_PRESET_KEYS, preset_index
+from app.writing_presets import DEFAULT_PRESET_KEY, WRITING_PRESET_KEYS, preset_index
 
 logger = logging.getLogger("blitztext.compose")
 
@@ -35,6 +35,15 @@ COMPOSE_WORKFLOW_ORDER: tuple[WorkflowType, ...] = (
     WorkflowType.DAMPF_ABLASSEN,
     WorkflowType.EMOJI_TEXT,
 )
+
+# Reihenfolge des Tonfall-Selektors im Compose-Fenster. Die Werte bleiben intern
+# unverändert (formal/neutral/locker); nur die Anzeige erfolgt über i18n-Labels
+# (z. B. "professionell" für "formal").
+COMPOSE_TONE_ORDER: tuple[str, ...] = ("locker", "neutral", "formal")
+
+# Sentinel-Schlüssel für den zusätzlichen Compose-Eintrag „Eigene Vorlage…“.
+# Bewusst kein echtes Writing-Preset, damit Hauptfenster/Tray unberührt bleiben.
+COMPOSE_CUSTOM_PRESET_KEY = "__compose_custom__"
 
 # In-memory ring buffer of successful generations for the current window
 # session. Oldest variants are trimmed once the cap is exceeded.
@@ -73,12 +82,16 @@ class _ComposeWorker(QObject):
         workflow: WorkflowType,
         text: str,
         writing_preset: str,
+        tone: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._workflow = workflow
         self._text = text
         self._writing_preset = writing_preset
+        self._tone = tone
+        self._custom_prompt = custom_prompt
         self._cancelled = False
 
     def request_cancel(self) -> None:
@@ -93,6 +106,8 @@ class _ComposeWorker(QObject):
                 self._workflow,
                 self._text,
                 writing_preset=self._writing_preset,
+                tone=self._tone,
+                custom_prompt=self._custom_prompt,
             )
             if self._cancelled or QThread.currentThread().isInterruptionRequested():
                 return
@@ -156,6 +171,13 @@ class ComposeWindow(QDialog):
         self.cmbPreset = QComboBox()
         self.cmbPreset.setMinimumWidth(180)
         header_row.addWidget(self.cmbPreset, 1)
+
+        self.lblTone = QLabel()
+        header_row.addWidget(self.lblTone)
+
+        self.cmbTone = QComboBox()
+        self.cmbTone.setMinimumWidth(130)
+        header_row.addWidget(self.cmbTone, 1)
 
         self.chkVoiceRouting = QCheckBox()
         self.chkVoiceRouting.setEnabled(False)
@@ -259,6 +281,10 @@ class ComposeWindow(QDialog):
         self._install_shortcuts()
         self._populate_workflow_combo()
         self._populate_preset_combo()
+        self._populate_tone_combo()
+        self.cmbWorkflow.currentIndexChanged.connect(self._on_selectors_changed)
+        self.cmbPreset.currentIndexChanged.connect(self._on_selectors_changed)
+        self._update_tone_state()
 
     def _install_shortcuts(self) -> None:
         self._add_shortcut(self.txtInput, "Ctrl+Return", self._on_improve_clicked)
@@ -292,6 +318,8 @@ class ComposeWindow(QDialog):
         self.cmbPreset.clear()
         for key in WRITING_PRESET_KEYS:
             self.cmbPreset.addItem(t(f"preset.{key}.name"), key)
+        # Zusätzlicher, nur im Compose-Fenster sichtbarer Freitext-Eintrag.
+        self.cmbPreset.addItem(t("compose.preset.custom"), COMPOSE_CUSTOM_PRESET_KEY)
         target = selected or preset_index(self._llm_service.writing_preset)
         if isinstance(target, str):
             index = self.cmbPreset.findData(target)
@@ -309,6 +337,54 @@ class ComposeWindow(QDialog):
         if isinstance(preset, str) and preset:
             return preset
         return self._llm_service.writing_preset
+
+    def _populate_tone_combo(self, selected: Optional[str] = None) -> None:
+        if selected is None and hasattr(self, "cmbTone"):
+            selected = self._selected_tone()
+        self.cmbTone.blockSignals(True)
+        self.cmbTone.clear()
+        for value in COMPOSE_TONE_ORDER:
+            self.cmbTone.addItem(t(f"tone.{value}"), value)
+        target = selected or self._config.text_improver_tone
+        index = self.cmbTone.findData(target)
+        if index < 0:
+            index = self.cmbTone.findData("neutral")
+        self.cmbTone.setCurrentIndex(index if index >= 0 else 0)
+        self.cmbTone.blockSignals(False)
+
+    def _selected_tone(self) -> str:
+        tone = self.cmbTone.currentData()
+        if isinstance(tone, str) and tone in VALID_TONES:
+            return tone
+        return self._config.text_improver_tone
+
+    def _is_custom_preset(self) -> bool:
+        return self._selected_preset() == COMPOSE_CUSTOM_PRESET_KEY
+
+    @pyqtSlot()
+    def _on_selectors_changed(self) -> None:
+        self._update_tone_state()
+
+    def _update_tone_state(self) -> None:
+        """Sichtbarkeit/Aktivierung des Tonfall-Selektors je nach Workflow+Vorlage.
+
+        Tonfall ist nur sinnvoll im Text-Verbesserer (Blitztext+) mit der Vorlage
+        „Standard“. Bei anderen Vorlagen bestimmt die Vorlage den Stil selbst, der
+        Selektor bleibt sichtbar, aber ausgegraut. Bei Dampf/Emoji entfällt er.
+        """
+        workflow = self._selected_workflow()
+        is_text_improver = workflow == WorkflowType.TEXT_IMPROVER
+        self.lblTone.setVisible(is_text_improver)
+        self.cmbTone.setVisible(is_text_improver)
+        if not is_text_improver:
+            return
+        is_standard = self._selected_preset() == DEFAULT_PRESET_KEY
+        self.cmbTone.setEnabled(is_standard)
+        self.cmbTone.setToolTip(
+            t("compose.tone.tooltip_active")
+            if is_standard
+            else t("compose.tone.tooltip_preset_overrides")
+        )
 
     def _has_input(self) -> bool:
         return bool(self.txtInput.toPlainText().strip())
@@ -475,10 +551,12 @@ class ComposeWindow(QDialog):
         """Refresh visible text to the active UI language."""
         current_workflow = self._selected_workflow()
         current_preset = self._selected_preset()
+        current_tone = self._selected_tone()
 
         self.setWindowTitle(t("compose.window_title"))
         self.lblWorkflow.setText(t("compose.workflow.label"))
         self.lblPreset.setText(t("compose.preset.label"))
+        self.lblTone.setText(t("compose.tone.label"))
         self.chkVoiceRouting.setText(t("compose.voice_routing.label"))
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
         self.lblInput.setText(t("compose.input.label"))
@@ -494,6 +572,8 @@ class ComposeWindow(QDialog):
 
         self._populate_workflow_combo(current_workflow)
         self._populate_preset_combo(current_preset)
+        self._populate_tone_combo(current_tone)
+        self._update_tone_state()
 
         if self._busy:
             self._show_status(t("compose.status.processing"))
@@ -504,10 +584,25 @@ class ComposeWindow(QDialog):
 
     def _start_worker(self, text: str) -> None:
         workflow = self._selected_workflow()
-        writing_preset = self._selected_preset()
+        tone = self._selected_tone()
+        custom_prompt: Optional[str] = None
+        if self._is_custom_preset():
+            # Freitext-Vorlage: Basis bleibt „Standard“, der freie System-Prompt
+            # wird separat durchgereicht (greift nur im Text-Verbesserer).
+            writing_preset = DEFAULT_PRESET_KEY
+            custom_prompt = self._config.compose_custom_preset_text
+        else:
+            writing_preset = self._selected_preset()
 
         thread = QThread(self)
-        worker = _ComposeWorker(self._llm_service, workflow, text, writing_preset)
+        worker = _ComposeWorker(
+            self._llm_service,
+            workflow,
+            text,
+            writing_preset,
+            tone=tone,
+            custom_prompt=custom_prompt,
+        )
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(self._on_worker_result)

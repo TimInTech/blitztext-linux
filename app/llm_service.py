@@ -147,6 +147,8 @@ class LLMService:
         workflow: WorkflowType,
         text: str,
         writing_preset: Optional[str] = None,
+        tone: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> str:
         if workflow not in LLM_WORKFLOWS:
             raise LLMServiceError(f"rewrite() only allowed for LLM workflows, got {workflow!r}")
@@ -157,8 +159,15 @@ class LLMService:
             if workflow == WorkflowType.DAMPF_ABLASSEN:
                 return self.dampf_ablassen(text, custom_system_prompt=self.dampf_system_prompt)
             if workflow == WorkflowType.TEXT_IMPROVER:
-                preset = get_preset(writing_preset or self.writing_preset)
-                return self.text_improver(text, tone=self.tone, custom_prompt=preset.system_prompt)
+                # Ein expliziter Freitext-Prompt (z. B. „Eigene Vorlage…“) hat
+                # Vorrang vor der gewählten Vorlage. Sonst gilt die Vorlage; nur
+                # bei „Standard“ (leerer Preset-Prompt) greift der Tonfall.
+                effective_tone = tone if tone is not None else self.tone
+                if custom_prompt is not None and custom_prompt.strip():
+                    system_prompt = custom_prompt
+                else:
+                    system_prompt = get_preset(writing_preset or self.writing_preset).system_prompt
+                return self.text_improver(text, tone=effective_tone, custom_prompt=system_prompt)
             if workflow == WorkflowType.EMOJI_TEXT:
                 return self.emoji_text(text, density=self.emoji_density)
             raise LLMServiceError(f"Unsupported workflow: {workflow}")
@@ -244,6 +253,19 @@ class LLMService:
         workflow: WorkflowType,
         text: str,
         writing_preset: Optional[str] = None,
+        tone: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
     ) -> str:
-        """Direct text entry point for the compose window."""
-        return self._rewrite_for_workflow(workflow, text, writing_preset=writing_preset)
+        """Direct text entry point for the compose window.
+
+        ``tone`` und ``custom_prompt`` sind optional und rückwärtskompatibel:
+        ``tone=None`` nutzt weiterhin den global konfigurierten Ton des Service,
+        ``custom_prompt=None`` lässt die gewählte Vorlage unverändert greifen.
+        """
+        return self._rewrite_for_workflow(
+            workflow,
+            text,
+            writing_preset=writing_preset,
+            tone=tone,
+            custom_prompt=custom_prompt,
+        )

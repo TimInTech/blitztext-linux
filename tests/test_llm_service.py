@@ -228,3 +228,75 @@ class TestWritingPreset:
         user_message = next(m["content"] for m in messages if m["role"] == "user")
         assert RAW_TRANSCRIPT in user_message
         assert RAW_TRANSCRIPT not in system_message
+
+
+class TestComposeTonePlumbing:
+    """Paket J: tone- und custom_prompt-Durchreichung über rewrite_text."""
+
+    def _system_message(self, mock_client):
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        return next(m["content"] for m in messages if m["role"] == "system")
+
+    def test_tone_override_used_for_standard_preset(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
+        service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            writing_preset="standard",
+            tone="formal",
+        )
+        assert "Ton: formal" in self._system_message(mock_client)
+        # Service-State bleibt unverändert (rückwärtskompatibel).
+        assert service.tone == "neutral"
+
+    def test_tone_none_falls_back_to_service_tone(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="locker")
+        service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            writing_preset="standard",
+            tone=None,
+        )
+        assert "Ton: locker" in self._system_message(mock_client)
+
+    def test_custom_prompt_override_used_as_system(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            writing_preset="standard",
+            custom_prompt="Schreibe als sachliche Pressemitteilung.",
+        )
+        system_message = self._system_message(mock_client)
+        assert "Schreibe als sachliche Pressemitteilung." in system_message
+        assert "Formuliere es zu einem sauberen" not in system_message
+
+    def test_empty_custom_prompt_falls_back_to_preset(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            writing_preset="standard",
+            custom_prompt="   ",
+        )
+        assert "Formuliere es zu einem sauberen" in self._system_message(mock_client)
+
+    def test_custom_terms_still_applied_with_custom_prompt(self, mock_client):
+        service = LLMService(
+            api_key=DUMMY_API_KEY,
+            client=mock_client,
+            custom_terms=CUSTOM_TERMS,
+        )
+        service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            RAW_TRANSCRIPT,
+            custom_prompt="Freier Prompt.",
+        )
+        system_message = self._system_message(mock_client)
+        assert "Freier Prompt." in system_message
+        assert ", ".join(CUSTOM_TERMS) in system_message
+
+    def test_tone_and_custom_prompt_default_none_keeps_legacy_behavior(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
+        service.rewrite_text(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
+        assert "Ton: neutral" in self._system_message(mock_client)

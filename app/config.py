@@ -51,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
     "ui_language": I18N_DEFAULT_LANGUAGE,
     "compose_signature_text": "",
     "compose_signature_auto_append": False,
+    "compose_custom_preset_text": "",
 }
 
 VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
@@ -418,6 +419,15 @@ class BlitztextConfig:
     def compose_signature_auto_append(self, value: bool) -> None:
         self._data["compose_signature_auto_append"] = bool(value)
 
+    @property
+    def compose_custom_preset_text(self) -> str:
+        value = self._data.get("compose_custom_preset_text", "")
+        return value if isinstance(value, str) else ""
+
+    @compose_custom_preset_text.setter
+    def compose_custom_preset_text(self, value: str) -> None:
+        self._data["compose_custom_preset_text"] = value if isinstance(value, str) else ""
+
     def as_dict(self) -> dict[str, Any]:
         return copy.deepcopy(self._data)
 
@@ -456,6 +466,8 @@ class BlitztextConfig:
         if not isinstance(self._data.get("compose_signature_text", ""), str):
             self._data["compose_signature_text"] = ""
         self._data["compose_signature_auto_append"] = bool(self._data.get("compose_signature_auto_append", False))
+        if not isinstance(self._data.get("compose_custom_preset_text", ""), str):
+            self._data["compose_custom_preset_text"] = ""
 
         self._data["openai_api_key_env"] = _normalize_env_var_name(
             self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])

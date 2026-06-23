@@ -395,3 +395,36 @@ class TestComposeSignature:
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.compose_signature_text == ""
         assert loaded.compose_signature_auto_append is False
+
+
+class TestComposeCustomPreset:
+    """Tests für das Config-Feld compose_custom_preset_text (Paket J)."""
+
+    def test_custom_preset_default_is_empty(self, config):
+        assert config.compose_custom_preset_text == ""
+
+    def test_custom_preset_persists_on_save_load(self, config, config_dir):
+        config.compose_custom_preset_text = "Schreibe als sachliche Pressemitteilung."
+        config.save()
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.compose_custom_preset_text == "Schreibe als sachliche Pressemitteilung."
+
+    def test_custom_preset_sanitized_fallback(self, config_dir):
+        """Ungültige Typen fallen auf den sicheren Default zurück."""
+        config_dir.mkdir(parents=True, exist_ok=True)
+        import json
+        (config_dir / "config.json").write_text(
+            json.dumps({
+                "model": "base",
+                "compose_custom_preset_text": {"not": "a string"},
+            }),
+            encoding="utf-8",
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.compose_custom_preset_text == ""
+
+    def test_custom_preset_setter_rejects_non_string(self, config):
+        config.compose_custom_preset_text = 123  # type: ignore[arg-type]
+        assert config.compose_custom_preset_text == ""

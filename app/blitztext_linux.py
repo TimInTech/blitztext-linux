@@ -277,13 +277,23 @@ class SettingsDialog(QDialog):
         self.edit_llm_model.setPlaceholderText(DEFAULTS["llm_model"])
 
         self.combo_tone = QComboBox()
-        self.combo_tone.addItems(["formal", "neutral", "locker"])
-        self.combo_tone.setCurrentText(self.config.text_improver_tone)
+        for value in ("locker", "neutral", "formal"):
+            self.combo_tone.addItem(t(f"tone.{value}"), value)
+        tone_index = self.combo_tone.findData(self.config.text_improver_tone)
+        if tone_index < 0:
+            tone_index = self.combo_tone.findData("neutral")
+        self.combo_tone.setCurrentIndex(tone_index if tone_index >= 0 else 0)
 
         self.combo_writing_preset = QComboBox()
         for key in WRITING_PRESET_KEYS:
             self.combo_writing_preset.addItem(t(f"preset.{key}.name"), key)
         self.combo_writing_preset.setCurrentIndex(preset_index(self.config.writing_preset))
+
+        self.edit_compose_custom_preset = QPlainTextEdit()
+        self.edit_compose_custom_preset.setPlainText(self.config.compose_custom_preset_text)
+        self.edit_compose_custom_preset.setPlaceholderText(t("settings.compose_custom_preset.placeholder"))
+        self.edit_compose_custom_preset.setMinimumHeight(60)
+        self.edit_compose_custom_preset.setMaximumHeight(110)
 
         self.combo_emoji = QComboBox()
         self.combo_emoji.addItems(["wenig", "mittel", "viel"])
@@ -332,6 +342,8 @@ class SettingsDialog(QDialog):
         form_llm.addRow(t("settings.tone.label"), self.combo_tone)
         form_llm.addRow(t("settings.writing_preset.label"), self.combo_writing_preset)
         form_llm.addRow(create_help_label(t("settings.writing_preset.help")))
+        form_llm.addRow(t("settings.compose_custom_preset.label"), self.edit_compose_custom_preset)
+        form_llm.addRow(create_help_label(t("settings.compose_custom_preset.help")))
         form_llm.addRow(t("settings.emoji_density.label"), self.combo_emoji)
 
         form_llm.addRow(t("settings.dampf_prompt.label"), self.edit_dampf_prompt)
@@ -495,8 +507,9 @@ class SettingsDialog(QDialog):
             self.config.llm_provider = self.combo_llm_provider.currentData()
             self.config.llm_base_url = self.edit_base_url.text().strip()
             self.config.llm_model = self.edit_llm_model.text().strip()
-            self.config.text_improver_tone = self.combo_tone.currentText()
+            self.config.text_improver_tone = self.combo_tone.currentData()
             self.config.writing_preset = self.combo_writing_preset.currentData()
+            self.config.compose_custom_preset_text = self.edit_compose_custom_preset.toPlainText()
             self.config.emoji_density = self.combo_emoji.currentText()
             self.config.dampf_system_prompt = self.edit_dampf_prompt.toPlainText().strip()
             self.config.custom_terms = self._collect_custom_terms()

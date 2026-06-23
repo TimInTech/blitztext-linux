@@ -20,6 +20,10 @@ class _FakeLLMService:
         self.result = result
         self.error = error
         self.calls: list[tuple[WorkflowType, str, str | None]] = []
+        # Separate records keep the legacy 3-tuple ``calls`` assertions intact
+        # while still exposing the new tone/custom_prompt plumbing.
+        self.tone_calls: list[str | None] = []
+        self.custom_prompt_calls: list[str | None] = []
         self.api_key = "DUMMY_COMPOSE_SECRET_TOKEN_123"
         self.writing_preset = "standard"
 
@@ -28,11 +32,23 @@ class _FakeLLMService:
         workflow: WorkflowType,
         text: str,
         writing_preset: str | None = None,
+        tone: str | None = None,
+        custom_prompt: str | None = None,
     ) -> str:
         self.calls.append((workflow, text, writing_preset))
+        self.tone_calls.append(tone)
+        self.custom_prompt_calls.append(custom_prompt)
         if self.error is not None:
             raise self.error
         return self.result
+
+    @property
+    def last_tone(self) -> str | None:
+        return self.tone_calls[-1] if self.tone_calls else None
+
+    @property
+    def last_custom_prompt(self) -> str | None:
+        return self.custom_prompt_calls[-1] if self.custom_prompt_calls else None
 
 
 class _FakePasteService:
@@ -56,6 +72,20 @@ def reset_language():
     set_language(DEFAULT_LANGUAGE)
     yield
     set_language(DEFAULT_LANGUAGE)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_config_home(tmp_path, monkeypatch):
+    """Keep the developer's real ~/.config/blitztext-linux out of these tests.
+
+    ``ComposeWindow`` reads the live ``Config`` (signature, auto-append, custom
+    preset text). Pointing ``HOME`` at a temp dir guarantees clean defaults, so
+    assertions like ``output == "OK"`` stay deterministic regardless of locally
+    saved settings. CI already runs against a clean home; this makes local runs
+    match it.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    yield
 
 
 @pytest.fixture
@@ -450,8 +480,10 @@ def test_navigation_disabled_while_busy(qapp):
     release = threading.Event()
 
     class _BlockingLLM(_FakeLLMService):
-        def rewrite_text(self, workflow, text, writing_preset=None):
+        def rewrite_text(self, workflow, text, writing_preset=None, tone=None, custom_prompt=None):
             self.calls.append((workflow, text, writing_preset))
+            self.tone_calls.append(tone)
+            self.custom_prompt_calls.append(custom_prompt)
             release.wait(2.0)
             return self.result
 
@@ -664,3 +696,184 @@ def test_compose_signature_leaves_unrelated_brackets(compose_window, qapp):
 
     # Unrelated bracketed tokens are never treated as a signature placeholder.
     assert window.txtOutput.toPlainText() == "Siehe [Anhang] und [Datum].\n\nTim Baumann"
+
+
+# --- Paket J: Tonfall-Selektor & Eigene Vorlage im Compose-Fenster ----------
+
+from app.compose_window import COMPOSE_CUSTOM_PRESET_KEY  # noqa: E402
+
+
+def _select_workflow(window, workflow: WorkflowType) -> None:
+    window.cmbWorkflow.setCurrentIndex(window.cmbWorkflow.findData(workflow))
+
+
+def _select_preset(window, preset_key: str) -> None:
+    window.cmbPreset.setCurrentIndex(window.cmbPreset.findData(preset_key))
+
+
+@gui_only
+def test_tone_selector_visible_and_enabled_for_standard(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, "standard")
+        qapp.processEvents()
+        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isEnabled() is True
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_tone_selector_disabled_for_nonstandard_preset(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, "email_formal")
+        qapp.processEvents()
+        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isEnabled() is False
+        assert window.cmbTone.toolTip() == t("compose.tone.tooltip_preset_overrides")
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_tone_selector_disabled_for_custom_preset(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        qapp.processEvents()
+        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isEnabled() is False
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+@pytest.mark.parametrize("workflow", [WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT])
+def test_tone_selector_hidden_for_non_text_improver(qapp, workflow):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, workflow)
+        qapp.processEvents()
+        assert window.cmbTone.isVisible() is False
+        assert window.lblTone.isVisible() is False
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_tone_default_comes_from_config(qapp):
+    config = Config()
+    config.text_improver_tone = "formal"
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
+    try:
+        assert window.cmbTone.currentData() == "formal"
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_tone_labels_show_professionell_not_formal(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    try:
+        labels = [window.cmbTone.itemText(i) for i in range(window.cmbTone.count())]
+        assert "professionell" in labels
+        assert "formal" not in labels
+        # Internal value stays "formal" for backward compatibility.
+        idx = window.cmbTone.findText("professionell")
+        assert window.cmbTone.itemData(idx) == "formal"
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_selected_tone_is_passed_to_worker(qapp):
+    llm = _FakeLLMService()
+    window = ComposeWindow(llm, _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, "standard")
+        window.cmbTone.setCurrentIndex(window.cmbTone.findData("formal"))
+        window.txtInput.setPlainText("Hallo Welt")
+        window.btnAction.click()
+        _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
+        assert llm.last_tone == "formal"
+        assert llm.last_custom_prompt is None
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_custom_preset_passes_config_prompt_to_worker(qapp):
+    config = Config()
+    config.compose_custom_preset_text = "FREITEXT-PROMPT"
+    llm = _FakeLLMService()
+    window = ComposeWindow(llm, _FakePasteService(), config)
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        window.txtInput.setPlainText("Hallo Welt")
+        window.btnAction.click()
+        _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
+        # Base preset falls back to "standard"; the free prompt is plumbed separately.
+        assert llm.calls[-1][2] == "standard"
+        assert llm.last_custom_prompt == "FREITEXT-PROMPT"
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_custom_preset_entry_present_in_combo(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    try:
+        assert window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY) >= 0
+        idx = window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY)
+        assert window.cmbPreset.itemText(idx) == t("compose.preset.custom")
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_tone_i18n_keys_present_and_complete(qapp, language):
+    set_language(language)
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    try:
+        for key in (
+            "compose.tone.label",
+            "compose.tone.tooltip_active",
+            "compose.tone.tooltip_preset_overrides",
+            "compose.preset.custom",
+            "tone.locker",
+            "tone.neutral",
+            "tone.formal",
+        ):
+            assert t(key) != key
+        assert not missing_keys()
+    finally:
+        window.close()
+        qapp.processEvents()
