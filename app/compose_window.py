@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QThread, Qt, pyqtSignal, pyqtSlot
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
 
 from app.i18n import t
 from app.llm_service import LLMService
+from app.config import Config
 from app.paste_service import PasteService, PasteServiceError
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESET_KEYS, preset_index
@@ -95,11 +97,13 @@ class ComposeWindow(QDialog):
         self,
         llm_service: LLMService,
         paste_service: PasteService,
+        config: Config,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._llm_service = llm_service
         self._paste_service = paste_service
+        self._config = config
         self._worker_thread: Optional[QThread] = None
         self._worker: Optional[_ComposeWorker] = None
         self._detached_threads: list[QThread] = []
@@ -221,6 +225,10 @@ class ComposeWindow(QDialog):
         self.btnPaste.clicked.connect(self._on_paste_clicked)
         footer_row.addWidget(self.btnPaste)
 
+        self.btnSignature = QPushButton()
+        self.btnSignature.clicked.connect(self._on_append_signature_clicked)
+        footer_row.addWidget(self.btnSignature)
+
         self.btnClose = QPushButton()
         self.btnClose.clicked.connect(self.close)
         footer_row.addWidget(self.btnClose)
@@ -332,6 +340,15 @@ class ComposeWindow(QDialog):
         self.btnCopy.setEnabled(has_output)
         self.btnPaste.setEnabled(has_output)
 
+        sig = self._config.compose_signature_text
+        if has_output and sig.strip():
+            text = self.txtOutput.toPlainText()
+            self.btnSignature.setEnabled(not text.endswith(sig))
+            self.btnSignature.setVisible(True)
+        else:
+            self.btnSignature.setEnabled(False)
+            self.btnSignature.setVisible(not not sig.strip())
+
     def _update_variant_nav(self) -> None:
         total = len(self._variants)
         has_variants = total > 0
@@ -394,6 +411,41 @@ class ComposeWindow(QDialog):
             self._variants[self._variant_index] = self.txtOutput.toPlainText()
         self._sync_state()
 
+    def _append_signature(self) -> None:
+        raw_sig = self._config.compose_signature_text
+        if not raw_sig.strip():
+            return
+            
+        sig = raw_sig.rstrip() # Entferne versehentliche Zeilenumbrüche/Tabs am Ende
+        text = self.txtOutput.toPlainText()
+        
+        # Falls die KI einen Platzhalter wie [Dein Name] oder [Ihr Name] eingebaut hat,
+        # ersetzen wir diesen direkt mit der Signatur, statt sie nur anzuhängen.
+        # Wir matchen auch ein optionales Komma danach, um hängende Kommas zu vermeiden.
+        placeholder_pattern = r'\[(?:Dein\s+|Ihr\s+)?Name\]\,?'
+        if re.search(placeholder_pattern, text, flags=re.IGNORECASE):
+            text = re.sub(placeholder_pattern, sig, text, flags=re.IGNORECASE)
+        else:
+            # Falls kein Platzhalter existiert, klassisch unten anhängen
+            if text.endswith(sig) or text.endswith(raw_sig):
+                return
+
+            if text and not text.endswith("\n\n"):
+                if text.endswith("\n"):
+                    text += "\n"
+                else:
+                    text += "\n\n"
+            text += sig
+
+        if 0 <= self._variant_index < len(self._variants):
+            self._variants[self._variant_index] = text
+            self._set_output_guarded(text)
+            self._sync_state()
+
+    @pyqtSlot()
+    def _on_append_signature_clicked(self) -> None:
+        self._append_signature()
+
     def set_input_text(self, text: str) -> None:
         self.txtInput.setPlainText(text)
         self._variants = []
@@ -418,6 +470,8 @@ class ComposeWindow(QDialog):
         self.btnCopy.setText(t("compose.button.copy"))
         self.btnPaste.setText(t("compose.button.insert_close"))
         self.btnClose.setText(t("compose.button.close"))
+        self.btnSignature.setText(t("compose.btn_append_signature"))
+        self.btnSignature.setToolTip(t("compose.tooltip_append_signature"))
         self.btnPrev.setToolTip(t("compose.variant.prev"))
         self.btnNext.setToolTip(t("compose.variant.next"))
 
@@ -491,6 +545,8 @@ class ComposeWindow(QDialog):
     def _on_worker_result(self, result_text: str) -> None:
         logger.info("Compose rewrite success (%d chars)", len(result_text))
         self._append_variant(result_text)
+        if self._config.compose_signature_auto_append:
+            self._append_signature()
         self._set_busy(False)
 
     @pyqtSlot(str)

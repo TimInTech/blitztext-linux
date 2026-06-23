@@ -49,6 +49,8 @@ DEFAULTS: dict[str, Any] = {
         "writing_preset": DEFAULT_PRESET_KEY,
     },
     "ui_language": I18N_DEFAULT_LANGUAGE,
+    "compose_signature_text": "",
+    "compose_signature_auto_append": False,
 }
 
 VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
@@ -400,6 +402,22 @@ class BlitztextConfig:
     def custom_terms(self, value: list[str]) -> None:
         self._data["workflows"]["custom_terms"] = _sanitize_terms(value)
 
+    @property
+    def compose_signature_text(self) -> str:
+        return self._data.get("compose_signature_text", "")
+
+    @compose_signature_text.setter
+    def compose_signature_text(self, value: str) -> None:
+        self._data["compose_signature_text"] = value
+
+    @property
+    def compose_signature_auto_append(self) -> bool:
+        return bool(self._data.get("compose_signature_auto_append", False))
+
+    @compose_signature_auto_append.setter
+    def compose_signature_auto_append(self, value: bool) -> None:
+        self._data["compose_signature_auto_append"] = bool(value)
+
     def as_dict(self) -> dict[str, Any]:
         return copy.deepcopy(self._data)
 
@@ -434,6 +452,10 @@ class BlitztextConfig:
         if self._data.get("tts_openai_voice") not in VALID_OPENAI_TTS_VOICES:
             self._data["tts_openai_voice"] = DEFAULTS["tts_openai_voice"]
         self._data["tts_openai_consent"] = bool(self._data.get("tts_openai_consent", False))
+
+        if not isinstance(self._data.get("compose_signature_text", ""), str):
+            self._data["compose_signature_text"] = ""
+        self._data["compose_signature_auto_append"] = bool(self._data.get("compose_signature_auto_append", False))
 
         self._data["openai_api_key_env"] = _normalize_env_var_name(
             self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])

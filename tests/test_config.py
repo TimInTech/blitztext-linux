@@ -359,3 +359,39 @@ class TestUILanguage:
 
         loaded = BlitztextConfig(config_dir=config_dir)
         assert loaded.ui_language == "de"
+
+
+class TestComposeSignature:
+    """Tests für compose_signature_text und compose_signature_auto_append Config-Properties."""
+
+    def test_signature_defaults(self, config):
+        """Defaults sind leerer Text und False."""
+        assert config.compose_signature_text == ""
+        assert config.compose_signature_auto_append is False
+
+    def test_signature_persists_on_save_load(self, config, config_dir):
+        """Gesetzter Signaturtext und Auto-Append werden gespeichert und geladen."""
+        config.compose_signature_text = "Best,\nTim"
+        config.compose_signature_auto_append = True
+        config.save()
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.compose_signature_text == "Best,\nTim"
+        assert loaded.compose_signature_auto_append is True
+
+    def test_signature_sanitized_fallback(self, config_dir):
+        """Ungültige Typen fallen auf sichere Defaults zurück."""
+        config_dir.mkdir(parents=True, exist_ok=True)
+        import json
+        (config_dir / "config.json").write_text(
+            json.dumps({
+                "model": "base",
+                "compose_signature_text": ["Not", "a", "string"],
+                "compose_signature_auto_append": None
+            }),
+            encoding="utf-8"
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+        assert loaded.compose_signature_text == ""
+        assert loaded.compose_signature_auto_append is False
