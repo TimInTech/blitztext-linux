@@ -34,6 +34,10 @@ COMPOSE_WORKFLOW_ORDER: tuple[WorkflowType, ...] = (
     WorkflowType.EMOJI_TEXT,
 )
 
+# In-memory ring buffer of successful generations for the current window
+# session. Oldest variants are trimmed once the cap is exceeded.
+MAX_COMPOSE_VARIANTS = 10
+
 
 def _scrub_secret(text: str, secret: str) -> str:
     if secret and text:
@@ -101,6 +105,9 @@ class ComposeWindow(QDialog):
         self._detached_threads: list[QThread] = []
         self._busy = False
         self._shortcuts: list[QShortcut] = []
+        # In-memory variant history (one entry per successful generation).
+        self._variants: list[str] = []
+        self._variant_index: int = -1
 
         self.setWindowTitle(t("compose.window_title"))
         self.setMinimumSize(600, 500)
@@ -175,11 +182,31 @@ class ComposeWindow(QDialog):
         output_layout.setContentsMargins(0, 0, 0, 0)
         output_layout.setSpacing(6)
 
+        output_header = QHBoxLayout()
+        output_header.setSpacing(8)
+
         self.lblOutput = QLabel()
-        output_layout.addWidget(self.lblOutput)
+        output_header.addWidget(self.lblOutput)
+
+        output_header.addStretch(1)
+
+        self.btnPrev = QPushButton("◀")
+        self.btnPrev.setMaximumWidth(40)
+        self.btnPrev.clicked.connect(self._on_prev_variant)
+        output_header.addWidget(self.btnPrev)
+
+        self.lblVariantCounter = QLabel()
+        output_header.addWidget(self.lblVariantCounter)
+
+        self.btnNext = QPushButton("▶")
+        self.btnNext.setMaximumWidth(40)
+        self.btnNext.clicked.connect(self._on_next_variant)
+        output_header.addWidget(self.btnNext)
+
+        output_layout.addLayout(output_header)
 
         self.txtOutput = QPlainTextEdit()
-        self.txtOutput.textChanged.connect(self._sync_state)
+        self.txtOutput.textChanged.connect(self._on_output_text_changed)
         output_layout.addWidget(self.txtOutput, 1)
 
         footer_row = QHBoxLayout()
@@ -294,6 +321,7 @@ class ComposeWindow(QDialog):
         self._sync_state()
 
     def _sync_state(self) -> None:
+        self._update_variant_nav()
         if self._busy:
             self.btnAction.setEnabled(False)
             self.btnCopy.setEnabled(False)
@@ -304,9 +332,73 @@ class ComposeWindow(QDialog):
         self.btnCopy.setEnabled(has_output)
         self.btnPaste.setEnabled(has_output)
 
+    def _update_variant_nav(self) -> None:
+        total = len(self._variants)
+        has_variants = total > 0
+        self.btnPrev.setVisible(has_variants)
+        self.btnNext.setVisible(has_variants)
+        self.lblVariantCounter.setVisible(has_variants)
+        if not has_variants:
+            self.lblVariantCounter.setText(t("compose.variant.none"))
+            self.btnPrev.setEnabled(False)
+            self.btnNext.setEnabled(False)
+            return
+        self.lblVariantCounter.setText(
+            t("compose.variant.counter").format(
+                current=self._variant_index + 1, total=total
+            )
+        )
+        at_border_start = self._variant_index <= 0
+        at_border_end = self._variant_index >= total - 1
+        self.btnPrev.setEnabled(not self._busy and not at_border_start)
+        self.btnNext.setEnabled(not self._busy and not at_border_end)
+
+    def _set_output_guarded(self, text: str) -> None:
+        """Set the output field without registering it as a manual edit."""
+        self.txtOutput.blockSignals(True)
+        try:
+            self.txtOutput.setPlainText(text)
+        finally:
+            self.txtOutput.blockSignals(False)
+
+    def _append_variant(self, text: str) -> None:
+        self._variants.append(text)
+        if len(self._variants) > MAX_COMPOSE_VARIANTS:
+            self._variants.pop(0)
+        self._variant_index = len(self._variants) - 1
+        self._set_output_guarded(text)
+
+    def _show_current_variant(self) -> None:
+        self._set_output_guarded(self._variants[self._variant_index])
+        self._sync_state()
+
+    @pyqtSlot()
+    def _on_prev_variant(self) -> None:
+        if self._busy or self._variant_index <= 0:
+            return
+        self._variant_index -= 1
+        self._show_current_variant()
+
+    @pyqtSlot()
+    def _on_next_variant(self) -> None:
+        if self._busy or self._variant_index >= len(self._variants) - 1:
+            return
+        self._variant_index += 1
+        self._show_current_variant()
+
+    @pyqtSlot()
+    def _on_output_text_changed(self) -> None:
+        # A genuine manual edit updates the active variant in place; guarded
+        # programmatic updates (navigation/generation) never reach this slot.
+        if 0 <= self._variant_index < len(self._variants):
+            self._variants[self._variant_index] = self.txtOutput.toPlainText()
+        self._sync_state()
+
     def set_input_text(self, text: str) -> None:
         self.txtInput.setPlainText(text)
-        self.txtOutput.clear()
+        self._variants = []
+        self._variant_index = -1
+        self._set_output_guarded("")
         self._hide_status()
         self._sync_state()
 
@@ -326,6 +418,8 @@ class ComposeWindow(QDialog):
         self.btnCopy.setText(t("compose.button.copy"))
         self.btnPaste.setText(t("compose.button.insert_close"))
         self.btnClose.setText(t("compose.button.close"))
+        self.btnPrev.setToolTip(t("compose.variant.prev"))
+        self.btnNext.setToolTip(t("compose.variant.next"))
 
         self._populate_workflow_combo(current_workflow)
         self._populate_preset_combo(current_preset)
@@ -396,9 +490,7 @@ class ComposeWindow(QDialog):
     @pyqtSlot(str)
     def _on_worker_result(self, result_text: str) -> None:
         logger.info("Compose rewrite success (%d chars)", len(result_text))
-        self.txtOutput.blockSignals(True)
-        self.txtOutput.setPlainText(result_text)
-        self.txtOutput.blockSignals(False)
+        self._append_variant(result_text)
         self._set_busy(False)
 
     @pyqtSlot(str)
