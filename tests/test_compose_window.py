@@ -508,6 +508,7 @@ def test_compose_manual_append(compose_window, qapp):
     window._config.compose_signature_text = "Best,\nTim"
     window.txtOutput.setPlainText("Hello world")
     window._append_variant("Hello world")
+    window._sync_state()
 
     # Simulate button click
     window.btnSignature.click()
@@ -522,6 +523,7 @@ def test_compose_double_append_prevention(compose_window, qapp):
     window._config.compose_signature_text = "Best,\nTim"
     window.txtOutput.setPlainText("Hello world\n\nBest,\nTim")
     window._append_variant("Hello world\n\nBest,\nTim")
+    window._sync_state()
 
     # Sync state will disable the button if it ends with the signature
     window._sync_state()
@@ -560,9 +562,105 @@ def test_compose_empty_signature_noop(compose_window, qapp):
     window.txtOutput.setPlainText("Hello")
     window._append_variant("Hello")
     window._sync_state()
+    window._sync_state()
 
     assert window.btnSignature.isVisible() is False
 
     # Even if clicked manually
     window.btnSignature.click()
     assert window.txtOutput.toPlainText() == "Hello"
+
+
+@gui_only
+def test_compose_signature_replaces_german_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    body = "Vielen Dank.\n\nMit freundlichen Grüßen,\n[Ihr Name]"
+    window._append_variant(body)
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    expected = "Vielen Dank.\n\nMit freundlichen Grüßen,\nTim Baumann"
+    assert window.txtOutput.toPlainText() == expected
+    assert window._variants[window._variant_index] == expected
+
+
+@gui_only
+def test_compose_signature_replaces_placeholder_trailing_comma(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Grüße,\n[Dein Name],")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # The dangling comma after the placeholder is swallowed.
+    assert window.txtOutput.toPlainText() == "Grüße,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_replaces_english_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Best regards,\n[Your Name]")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # English placeholder is replaced, not left behind with a second signature.
+    assert window.txtOutput.toPlainText() == "Best regards,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_replaces_vorname_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim"
+    window._append_variant("Liebe Grüße\n[Dein Vorname]")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    assert window.txtOutput.toPlainText() == "Liebe Grüße\nTim"
+
+
+@gui_only
+def test_compose_signature_no_double_after_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Mit freundlichen Grüßen,\n[Ihr Name]")
+    window._sync_state()
+
+    window.btnSignature.click()
+    # After replacement the signature is in place; the button must disable
+    # and a second click must not append a duplicate signature.
+    window._sync_state()
+    assert window.btnSignature.isEnabled() is False
+    window.btnSignature.click()
+    assert window.txtOutput.toPlainText() == "Mit freundlichen Grüßen,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_strips_saved_whitespace(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    # Signature saved with accidental trailing newline/tab.
+    window._config.compose_signature_text = "Tim Baumann\t\n"
+    window._append_variant("Hallo")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    assert window.txtOutput.toPlainText() == "Hallo\n\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_leaves_unrelated_brackets(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Siehe [Anhang] und [Datum].")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # Unrelated bracketed tokens are never treated as a signature placeholder.
+    assert window.txtOutput.toPlainText() == "Siehe [Anhang] und [Datum].\n\nTim Baumann"

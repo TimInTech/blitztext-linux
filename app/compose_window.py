@@ -40,6 +40,20 @@ COMPOSE_WORKFLOW_ORDER: tuple[WorkflowType, ...] = (
 # session. Oldest variants are trimmed once the cap is exceeded.
 MAX_COMPOSE_VARIANTS = 10
 
+# Curated signature placeholders an LLM commonly emits at the end of an email,
+# in German and English. We deliberately anchor on the known closing tokens
+# (Name / Vorname / Nachname / Absender / Sender / Signature) rather than any
+# bracketed text, so unrelated bracketed content is never replaced. An optional
+# trailing comma is swallowed to avoid a dangling comma after substitution.
+SIGNATURE_PLACEHOLDER_PATTERN = re.compile(
+    r"\[\s*"
+    r"(?:(?:dein[er]?|deine|ihr[er]?|ihre|mein[er]?|meine|your|my)\s+)?"
+    r"(?:vorname|nachname|full\s+name|name|absender|sender|signature|unterschrift)"
+    r"(?:\s+nachname)?"
+    r"\s*\]\s*,?",
+    re.IGNORECASE,
+)
+
 
 def _scrub_secret(text: str, secret: str) -> str:
     if secret and text:
@@ -340,14 +354,18 @@ class ComposeWindow(QDialog):
         self.btnCopy.setEnabled(has_output)
         self.btnPaste.setEnabled(has_output)
 
-        sig = self._config.compose_signature_text
-        if has_output and sig.strip():
+        raw_sig = self._config.compose_signature_text
+        if has_output and raw_sig.strip():
+            sig = raw_sig.rstrip()
             text = self.txtOutput.toPlainText()
-            self.btnSignature.setEnabled(not text.endswith(sig))
+            # Enable only while appending would actually change something:
+            # a placeholder is still present, or the signature isn't there yet.
+            has_placeholder = SIGNATURE_PLACEHOLDER_PATTERN.search(text) is not None
+            self.btnSignature.setEnabled(has_placeholder or not text.endswith(sig))
             self.btnSignature.setVisible(True)
         else:
             self.btnSignature.setEnabled(False)
-            self.btnSignature.setVisible(not not sig.strip())
+            self.btnSignature.setVisible(bool(raw_sig.strip()))
 
     def _update_variant_nav(self) -> None:
         total = len(self._variants)
@@ -415,32 +433,31 @@ class ComposeWindow(QDialog):
         raw_sig = self._config.compose_signature_text
         if not raw_sig.strip():
             return
-            
-        sig = raw_sig.rstrip() # Entferne versehentliche Zeilenumbrüche/Tabs am Ende
-        text = self.txtOutput.toPlainText()
-        
-        # Falls die KI einen Platzhalter wie [Dein Name] oder [Ihr Name] eingebaut hat,
-        # ersetzen wir diesen direkt mit der Signatur, statt sie nur anzuhängen.
-        # Wir matchen auch ein optionales Komma danach, um hängende Kommas zu vermeiden.
-        placeholder_pattern = r'\[(?:Dein\s+|Ihr\s+)?Name\]\,?'
-        if re.search(placeholder_pattern, text, flags=re.IGNORECASE):
-            text = re.sub(placeholder_pattern, sig, text, flags=re.IGNORECASE)
-        else:
-            # Falls kein Platzhalter existiert, klassisch unten anhängen
-            if text.endswith(sig) or text.endswith(raw_sig):
-                return
 
+        # Strip trailing whitespace/newlines/tabs the user may have saved by
+        # accident, so substitution never leaves dangling blank lines.
+        sig = raw_sig.rstrip()
+        original = self.txtOutput.toPlainText()
+
+        # If the LLM left a closing placeholder like [Ihr Name] or [Your Name],
+        # replace it in place (incl. an optional trailing comma) instead of
+        # appending a second signature below it.
+        text, replaced = SIGNATURE_PLACEHOLDER_PATTERN.subn(sig, original)
+        if not replaced:
+            # No placeholder: append classically at the bottom.
+            if text.endswith(sig):
+                return
             if text and not text.endswith("\n\n"):
-                if text.endswith("\n"):
-                    text += "\n"
-                else:
-                    text += "\n\n"
+                text += "\n" if text.endswith("\n") else "\n\n"
             text += sig
 
+        if text == original:
+            return
+
+        self._set_output_guarded(text)
         if 0 <= self._variant_index < len(self._variants):
             self._variants[self._variant_index] = text
-            self._set_output_guarded(text)
-            self._sync_state()
+        self._sync_state()
 
     @pyqtSlot()
     def _on_append_signature_clicked(self) -> None:
