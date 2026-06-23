@@ -157,6 +157,8 @@ def _fake_save_self(config_dir, preset_key, ui_language="de"):
             text="English" if ui_language == "en" else "Deutsch",
             data=ui_language,
         ),
+        edit_compose_signature=_Edit(""),
+        check_compose_signature_auto_append=_Check(False),
         accept=lambda: None,
     )
 

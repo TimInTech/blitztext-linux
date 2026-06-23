@@ -7,6 +7,7 @@ import time
 import pytest
 
 from app.compose_window import MAX_COMPOSE_VARIANTS, ComposeWindow
+from app.config import Config
 from app.i18n import DEFAULT_LANGUAGE, missing_keys, set_language, t
 from app.workflows import WorkflowType
 
@@ -68,7 +69,7 @@ def qapp():
 def compose_window(qapp):
     llm = _FakeLLMService()
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
     yield window, llm, paste
@@ -97,7 +98,7 @@ def _wait_until(qapp, predicate, timeout_ms: int = 2500) -> None:
 )
 def test_window_texts_follow_language(qapp, language, title):
     set_language(language)
-    window = ComposeWindow(_FakeLLMService(), _FakePasteService())
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
         assert window.windowTitle() == title
         assert window.btnAction.text() == t("compose.button.improve")
@@ -162,7 +163,7 @@ def test_copy_writes_result_to_clipboard(compose_window, monkeypatch, qapp):
 def test_insert_calls_paste_service_and_closes(qapp):
     llm = _FakeLLMService()
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
 
@@ -193,7 +194,7 @@ def test_empty_input_disables_improve(compose_window):
 def test_errors_are_visible_and_scrubbed(qapp):
     llm = _FakeLLMService(error=RuntimeError("boom DUMMY_COMPOSE_SECRET_TOKEN_123"))
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
 
@@ -350,7 +351,7 @@ def test_copy_and_paste_use_displayed_variant_after_navigation(qapp, monkeypatch
 
     llm = _FakeLLMService()
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
     clipboard = _FakeClipboard()
@@ -398,7 +399,7 @@ def test_set_input_text_clears_variant_history(compose_window, qapp):
 def test_error_run_creates_no_variant(qapp):
     llm = _FakeLLMService(error=RuntimeError("boom"))
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
 
@@ -456,7 +457,7 @@ def test_navigation_disabled_while_busy(qapp):
 
     llm = _BlockingLLM(result="Var 2")
     paste = _FakePasteService()
-    window = ComposeWindow(llm, paste)
+    window = ComposeWindow(llm, paste, Config())
     window.show()
     qapp.processEvents()
 
@@ -489,7 +490,7 @@ def test_navigation_disabled_while_busy(qapp):
 @pytest.mark.parametrize("language", ["de", "en"])
 def test_variant_i18n_keys_present_and_complete(qapp, language):
     set_language(language)
-    window = ComposeWindow(_FakeLLMService(), _FakePasteService())
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
         assert missing_keys() == set()
         counter = t("compose.variant.counter").format(current=1, total=2)
@@ -499,3 +500,167 @@ def test_variant_i18n_keys_present_and_complete(qapp, language):
     finally:
         window.close()
         qapp.processEvents()
+
+
+@gui_only
+def test_compose_manual_append(compose_window, qapp):
+    window, llm, _paste = compose_window
+    window._config.compose_signature_text = "Best,\nTim"
+    window.txtOutput.setPlainText("Hello world")
+    window._append_variant("Hello world")
+    window._sync_state()
+
+    # Simulate button click
+    window.btnSignature.click()
+
+    assert window.txtOutput.toPlainText() == "Hello world\n\nBest,\nTim"
+    assert window._variants[window._variant_index] == "Hello world\n\nBest,\nTim"
+
+
+@gui_only
+def test_compose_double_append_prevention(compose_window, qapp):
+    window, llm, _paste = compose_window
+    window._config.compose_signature_text = "Best,\nTim"
+    window.txtOutput.setPlainText("Hello world\n\nBest,\nTim")
+    window._append_variant("Hello world\n\nBest,\nTim")
+    window._sync_state()
+
+    # Sync state will disable the button if it ends with the signature
+    window._sync_state()
+    assert window.btnSignature.isEnabled() is False
+
+    # Clicking it shouldn't append anything
+    window.btnSignature.click()
+    assert window.txtOutput.toPlainText() == "Hello world\n\nBest,\nTim"
+
+
+@gui_only
+def test_compose_auto_append(compose_window, qapp):
+    window, llm, _paste = compose_window
+    window._config.compose_signature_text = "Best,\nTim"
+    window._config.compose_signature_auto_append = True
+
+    window.txtInput.setPlainText("Hallo Welt")
+    window.btnAction.click()
+
+    _wait_until(
+        qapp,
+        lambda: not window._busy and window._worker_thread is None,
+    )
+
+    # Result from fake LLM is "OK", so it should auto-append
+    assert window.txtOutput.toPlainText() == "OK\n\nBest,\nTim"
+    assert window._variants[window._variant_index] == "OK\n\nBest,\nTim"
+
+
+@gui_only
+def test_compose_empty_signature_noop(compose_window, qapp):
+    window, llm, _paste = compose_window
+    window._config.compose_signature_text = "   "
+    window._config.compose_signature_auto_append = True
+
+    window.txtOutput.setPlainText("Hello")
+    window._append_variant("Hello")
+    window._sync_state()
+    window._sync_state()
+
+    assert window.btnSignature.isVisible() is False
+
+    # Even if clicked manually
+    window.btnSignature.click()
+    assert window.txtOutput.toPlainText() == "Hello"
+
+
+@gui_only
+def test_compose_signature_replaces_german_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    body = "Vielen Dank.\n\nMit freundlichen Grüßen,\n[Ihr Name]"
+    window._append_variant(body)
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    expected = "Vielen Dank.\n\nMit freundlichen Grüßen,\nTim Baumann"
+    assert window.txtOutput.toPlainText() == expected
+    assert window._variants[window._variant_index] == expected
+
+
+@gui_only
+def test_compose_signature_replaces_placeholder_trailing_comma(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Grüße,\n[Dein Name],")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # The dangling comma after the placeholder is swallowed.
+    assert window.txtOutput.toPlainText() == "Grüße,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_replaces_english_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Best regards,\n[Your Name]")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # English placeholder is replaced, not left behind with a second signature.
+    assert window.txtOutput.toPlainText() == "Best regards,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_replaces_vorname_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim"
+    window._append_variant("Liebe Grüße\n[Dein Vorname]")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    assert window.txtOutput.toPlainText() == "Liebe Grüße\nTim"
+
+
+@gui_only
+def test_compose_signature_no_double_after_placeholder(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Mit freundlichen Grüßen,\n[Ihr Name]")
+    window._sync_state()
+
+    window.btnSignature.click()
+    # After replacement the signature is in place; the button must disable
+    # and a second click must not append a duplicate signature.
+    window._sync_state()
+    assert window.btnSignature.isEnabled() is False
+    window.btnSignature.click()
+    assert window.txtOutput.toPlainText() == "Mit freundlichen Grüßen,\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_strips_saved_whitespace(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    # Signature saved with accidental trailing newline/tab.
+    window._config.compose_signature_text = "Tim Baumann\t\n"
+    window._append_variant("Hallo")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    assert window.txtOutput.toPlainText() == "Hallo\n\nTim Baumann"
+
+
+@gui_only
+def test_compose_signature_leaves_unrelated_brackets(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window._config.compose_signature_text = "Tim Baumann"
+    window._append_variant("Siehe [Anhang] und [Datum].")
+    window._sync_state()
+
+    window.btnSignature.click()
+
+    # Unrelated bracketed tokens are never treated as a signature placeholder.
+    assert window.txtOutput.toPlainText() == "Siehe [Anhang] und [Datum].\n\nTim Baumann"

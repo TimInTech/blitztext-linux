@@ -372,6 +372,15 @@ class SettingsDialog(QDialog):
         form_general.addRow(t("settings.ui_language.label"), self.combo_ui_language)
         form_general.addRow(create_help_label(t("settings.ui_language.help")))
 
+        self.edit_compose_signature = QPlainTextEdit()
+        self.edit_compose_signature.setPlainText(self.config.compose_signature_text)
+        self.edit_compose_signature.setMaximumHeight(80)
+        form_general.addRow(t("settings.general.signature_label"), self.edit_compose_signature)
+
+        self.check_compose_signature_auto_append = QCheckBox(t("settings.general.signature_auto_append"))
+        self.check_compose_signature_auto_append.setChecked(self.config.compose_signature_auto_append)
+        form_general.addRow(self.check_compose_signature_auto_append)
+
         self.btn_open_config = QPushButton(t("settings.open_config.button"))
         self.btn_open_config.clicked.connect(self._open_config_file)
         form_general.addRow(self.btn_open_config)
@@ -496,6 +505,8 @@ class SettingsDialog(QDialog):
             self.config.notes_folder = self.edit_notes_folder.text().strip()
             self.config.history_size = int(self.spin_history_size.currentText())
             self.config.ui_language = self.combo_ui_language.currentData()
+            self.config.compose_signature_text = self.edit_compose_signature.toPlainText()
+            self.config.compose_signature_auto_append = self.check_compose_signature_auto_append.isChecked()
 
             self.config.save()
             set_language(self.config.ui_language)
@@ -1103,7 +1114,7 @@ class BlitztextApp(QObject):
 
     def _ensure_compose_window(self) -> ComposeWindow:
         if self._compose_window is None:
-            window = ComposeWindow(self.llm_service, self.paste_service)
+            window = ComposeWindow(self.llm_service, self.paste_service, self.config)
             try:
                 from app import theme
                 window.setWindowIcon(theme.create_app_icon())
