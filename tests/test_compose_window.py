@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from app.compose_window import ComposeWindow
-from app.i18n import DEFAULT_LANGUAGE, set_language, t
+from app.compose_window import MAX_COMPOSE_VARIANTS, ComposeWindow
+from app.i18n import DEFAULT_LANGUAGE, missing_keys, set_language, t
 from app.workflows import WorkflowType
 
 _GUI = os.environ.get("WHISPER_GUI_TESTS") == "1"
@@ -246,3 +246,256 @@ def test_voice_routing_checkbox_visible_and_disabled(compose_window, qapp):
     assert chk.isVisible() is True
     assert chk.isEnabled() is False
     assert chk.text() == t("compose.voice_routing.label")
+
+
+# ---------------------------------------------------------------------------
+# Paket I-2: Varianten-Verlauf
+# ---------------------------------------------------------------------------
+
+
+def _run_generation(window, llm, qapp, text: str, result: str) -> None:
+    """Trigger one successful LLM generation and wait for completion."""
+    before = len(llm.calls)
+    llm.result = result
+    window.txtInput.setPlainText(text)
+    window.btnAction.click()
+    _wait_until(
+        qapp,
+        lambda: len(llm.calls) > before
+        and not window._busy
+        and window._worker_thread is None,
+    )
+    _wait_until(qapp, lambda: window.txtOutput.toPlainText() == result)
+
+
+def _counter(current: int, total: int) -> str:
+    return t("compose.variant.counter").format(current=current, total=total)
+
+
+@gui_only
+def test_first_generation_creates_single_variant(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "Eingabe", "Erstes Ergebnis")
+
+    assert window._variants == ["Erstes Ergebnis"]
+    assert window._variant_index == 0
+    assert window.txtOutput.toPlainText() == "Erstes Ergebnis"
+    assert window.lblVariantCounter.isVisible() is True
+    assert window.lblVariantCounter.text() == _counter(1, 1)
+    assert window.btnPrev.isEnabled() is False
+    assert window.btnNext.isEnabled() is False
+
+
+@gui_only
+def test_second_generation_appends_and_moves_index_to_end(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "A", "Var 1")
+    _run_generation(window, llm, qapp, "B", "Var 2")
+
+    assert window._variants == ["Var 1", "Var 2"]
+    assert window._variant_index == 1
+    assert window.txtOutput.toPlainText() == "Var 2"
+    assert window.lblVariantCounter.text() == _counter(2, 2)
+
+
+@gui_only
+def test_navigation_updates_output_counter_and_button_state(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "A", "Var 1")
+    _run_generation(window, llm, qapp, "B", "Var 2")
+
+    # At the end: next disabled, prev enabled.
+    assert window.btnNext.isEnabled() is False
+    assert window.btnPrev.isEnabled() is True
+
+    window.btnPrev.click()
+    qapp.processEvents()
+    assert window._variant_index == 0
+    assert window.txtOutput.toPlainText() == "Var 1"
+    assert window.lblVariantCounter.text() == _counter(1, 2)
+    assert window.btnPrev.isEnabled() is False
+    assert window.btnNext.isEnabled() is True
+
+    window.btnNext.click()
+    qapp.processEvents()
+    assert window._variant_index == 1
+    assert window.txtOutput.toPlainText() == "Var 2"
+    assert window.lblVariantCounter.text() == _counter(2, 2)
+    assert window.btnNext.isEnabled() is False
+
+
+@gui_only
+def test_ring_buffer_trims_oldest_variant(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    for i in range(MAX_COMPOSE_VARIANTS + 1):
+        _run_generation(window, llm, qapp, f"In {i}", f"V{i}")
+
+    assert len(window._variants) == MAX_COMPOSE_VARIANTS
+    # Oldest ("V0") trimmed, newest at the end.
+    assert window._variants[0] == "V1"
+    assert window._variants[-1] == f"V{MAX_COMPOSE_VARIANTS}"
+    assert window._variant_index == MAX_COMPOSE_VARIANTS - 1
+    assert window.lblVariantCounter.text() == _counter(
+        MAX_COMPOSE_VARIANTS, MAX_COMPOSE_VARIANTS
+    )
+
+
+@gui_only
+def test_copy_and_paste_use_displayed_variant_after_navigation(qapp, monkeypatch):
+    from PyQt6.QtWidgets import QApplication
+
+    llm = _FakeLLMService()
+    paste = _FakePasteService()
+    window = ComposeWindow(llm, paste)
+    window.show()
+    qapp.processEvents()
+    clipboard = _FakeClipboard()
+    monkeypatch.setattr(QApplication, "clipboard", lambda: clipboard)
+
+    try:
+        _run_generation(window, llm, qapp, "A", "Var 1")
+        _run_generation(window, llm, qapp, "B", "Var 2")
+
+        window.btnPrev.click()
+        qapp.processEvents()
+        assert window.txtOutput.toPlainText() == "Var 1"
+
+        window.btnCopy.click()
+        qapp.processEvents()
+        assert clipboard.text == "Var 1"
+
+        window.btnPaste.click()
+        qapp.processEvents()
+        assert paste.calls[-1] == ("Var 1", True)
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_set_input_text_clears_variant_history(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "A", "Var 1")
+    _run_generation(window, llm, qapp, "B", "Var 2")
+    assert len(window._variants) == 2
+
+    window.set_input_text("Neuer Kontext")
+
+    assert window._variants == []
+    assert window._variant_index == -1
+    assert window.txtOutput.toPlainText() == ""
+    assert window.lblVariantCounter.isVisible() is False
+    assert window.btnPrev.isVisible() is False
+    assert window.btnNext.isVisible() is False
+
+
+@gui_only
+def test_error_run_creates_no_variant(qapp):
+    llm = _FakeLLMService(error=RuntimeError("boom"))
+    paste = _FakePasteService()
+    window = ComposeWindow(llm, paste)
+    window.show()
+    qapp.processEvents()
+
+    try:
+        window.txtInput.setPlainText("Bitte umschreiben")
+        window.btnAction.click()
+        _wait_until(
+            qapp,
+            lambda: not window._busy
+            and window._worker_thread is None
+            and bool(window.lblStatus.text()),
+        )
+
+        assert window._variants == []
+        assert window._variant_index == -1
+        assert window.lblVariantCounter.isVisible() is False
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_manual_edit_persists_in_place_across_navigation(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "A", "Var 1")
+    _run_generation(window, llm, qapp, "B", "Var 2")
+
+    # Manual edit of the currently displayed (second) variant.
+    window.txtOutput.setPlainText("Var 2 editiert")
+    qapp.processEvents()
+    assert window._variants[1] == "Var 2 editiert"
+
+    window.btnPrev.click()
+    qapp.processEvents()
+    assert window.txtOutput.toPlainText() == "Var 1"
+
+    window.btnNext.click()
+    qapp.processEvents()
+    assert window.txtOutput.toPlainText() == "Var 2 editiert"
+    assert window._variants[0] == "Var 1"
+
+
+@gui_only
+def test_navigation_disabled_while_busy(qapp):
+    import threading
+
+    release = threading.Event()
+
+    class _BlockingLLM(_FakeLLMService):
+        def rewrite_text(self, workflow, text, writing_preset=None):
+            self.calls.append((workflow, text, writing_preset))
+            release.wait(2.0)
+            return self.result
+
+    llm = _BlockingLLM(result="Var 2")
+    paste = _FakePasteService()
+    window = ComposeWindow(llm, paste)
+    window.show()
+    qapp.processEvents()
+
+    try:
+        _run_generation(window, llm, qapp, "A", "Var 1")
+        assert window.btnPrev.isEnabled() is False  # single variant border
+
+        # Start a second, blocking generation.
+        release.clear()
+        window.txtInput.setPlainText("B")
+        window.btnAction.click()
+        _wait_until(qapp, lambda: window._busy)
+
+        assert window._busy is True
+        assert window.btnPrev.isEnabled() is False
+        assert window.btnNext.isEnabled() is False
+
+        release.set()
+        _wait_until(
+            qapp,
+            lambda: not window._busy and window._worker_thread is None,
+        )
+    finally:
+        release.set()
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_variant_i18n_keys_present_and_complete(qapp, language):
+    set_language(language)
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService())
+    try:
+        assert missing_keys() == set()
+        counter = t("compose.variant.counter").format(current=1, total=2)
+        assert "1" in counter and "2" in counter
+        assert t("compose.variant.prev") != "compose.variant.prev"
+        assert t("compose.variant.next") != "compose.variant.next"
+    finally:
+        window.close()
+        qapp.processEvents()
