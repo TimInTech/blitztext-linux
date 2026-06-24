@@ -300,3 +300,119 @@ class TestComposeTonePlumbing:
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
         service.rewrite_text(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         assert "Ton: neutral" in self._system_message(mock_client)
+
+
+class TestBuildSystemPrompt:
+    """Paket J: build_system_prompt() gibt den aufgelösten Prompt zurück ohne API-Call."""
+
+    def test_standard_preset_with_tone_uses_template(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="formal")
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="standard")
+        assert "Ton: formal" in prompt
+        assert "Formuliere es zu einem sauberen" in prompt
+
+    def test_tone_override_reflected_in_prompt(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
+        prompt = service.build_system_prompt(
+            WorkflowType.TEXT_IMPROVER, writing_preset="standard", tone="locker"
+        )
+        assert "Ton: locker" in prompt
+
+    def test_non_standard_preset_uses_preset_prompt(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="email_formal")
+        from app.writing_presets import WRITING_PRESETS
+        assert WRITING_PRESETS["email_formal"].system_prompt in prompt
+
+    def test_custom_prompt_overrides_preset(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        prompt = service.build_system_prompt(
+            WorkflowType.TEXT_IMPROVER,
+            writing_preset="email_formal",
+            custom_prompt="Schreibe als Pressemitteilung.",
+        )
+        assert "Schreibe als Pressemitteilung." in prompt
+        from app.writing_presets import WRITING_PRESETS
+        assert WRITING_PRESETS["email_formal"].system_prompt not in prompt
+
+    def test_empty_custom_prompt_falls_back_to_preset(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
+        prompt = service.build_system_prompt(
+            WorkflowType.TEXT_IMPROVER, writing_preset="standard", custom_prompt="   "
+        )
+        assert "Formuliere es zu einem sauberen" in prompt
+
+    def test_custom_terms_appended(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, custom_terms=CUSTOM_TERMS)
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        assert ", ".join(CUSTOM_TERMS) in prompt
+
+    def test_dampf_ablassen_uses_dampf_system(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        prompt = service.build_system_prompt(WorkflowType.DAMPF_ABLASSEN)
+        assert "respektvolle" in prompt
+
+    def test_dampf_ablassen_custom_system_prompt_attribute(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, dampf_system_prompt="Mein Custom.")
+        prompt = service.build_system_prompt(WorkflowType.DAMPF_ABLASSEN)
+        assert "Mein Custom." in prompt
+
+    def test_emoji_text_uses_density(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, emoji_density="viel")
+        prompt = service.build_system_prompt(WorkflowType.EMOJI_TEXT)
+        assert "viel" in prompt
+
+    def test_no_api_call_made(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        mock_client.chat.completions.create.assert_not_called()
+
+    def test_prompt_matches_actual_api_call(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
+        preview = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="standard")
+        service.rewrite_text(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT, writing_preset="standard")
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        actual_system = next(m["content"] for m in messages if m["role"] == "system")
+        assert preview == actual_system
+
+
+class TestRewriteRaw:
+    """Paket J: rewrite_raw() sendet die Prompts direkt ohne Preset-Logik."""
+
+    def test_sends_provided_system_and_user_message(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        service.rewrite_raw("Mein System-Prompt.", "Meine Nutzernachricht.")
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        messages = kwargs["messages"]
+        assert messages[0] == {"role": "system", "content": "Mein System-Prompt."}
+        assert messages[1] == {"role": "user", "content": "Meine Nutzernachricht."}
+
+    def test_returns_api_response(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        result = service.rewrite_raw("System.", "User.")
+        assert result == "OK"
+
+    def test_empty_user_message_raises(self, mock_client):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        with pytest.raises(ValueError, match="user_message"):
+            service.rewrite_raw("System.", "   ")
+
+    def test_no_custom_terms_added(self, mock_client):
+        service = LLMService(
+            api_key=DUMMY_API_KEY, client=mock_client, custom_terms=CUSTOM_TERMS
+        )
+        service.rewrite_raw("System.", "User.")
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        system = next(m["content"] for m in kwargs["messages"] if m["role"] == "system")
+        assert "muessen exakt so geschrieben werden" not in system
+
+    def test_api_error_wrapped_as_llm_service_error(self, mock_client):
+        mock_client.chat.completions.create.side_effect = RuntimeError("Verbindungsfehler")
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
+        with pytest.raises(LLMServiceError, match="OpenAI API-Fehler"):
+            service.rewrite_raw("System.", "User.")
+
+    def test_unavailable_service_raises(self, mock_client):
+        service = LLMService(api_key="", client=mock_client)
+        with pytest.raises(LLMServiceError):
+            service.rewrite_raw("System.", "User.")

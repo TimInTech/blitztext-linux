@@ -42,6 +42,23 @@ class _FakeLLMService:
             raise self.error
         return self.result
 
+    def build_system_prompt(
+        self,
+        workflow: WorkflowType,
+        writing_preset: str | None = None,
+        tone: str | None = None,
+        custom_prompt: str | None = None,
+    ) -> str:
+        return f"[FAKE_SYSTEM:{workflow.value}]"
+
+    def rewrite_raw(self, system_prompt: str, user_message: str) -> str:
+        self.calls.append((WorkflowType.TEXT_IMPROVER, user_message, None))
+        self.tone_calls.append(None)
+        self.custom_prompt_calls.append(system_prompt)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
     @property
     def last_tone(self) -> str | None:
         return self.tone_calls[-1] if self.tone_calls else None
