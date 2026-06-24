@@ -20,9 +20,11 @@
 
 ## Features
 
-- **NEU: Mehrsprachige Oberfläche (EN/DE):** Schalte die App-Oberfläche zwischen Deutsch und Englisch um – unter **Einstellungen → Allgemein → „Sprache"** (die Änderung greift nach einem Neustart der App).
+- **Mehrsprachige Oberfläche (EN/DE):** Schalte die App-Oberfläche zwischen Deutsch und Englisch um – unter **Einstellungen → Allgemein → „Sprache der Oberfläche"** (die Änderung greift nach einem Neustart der App).
+- **Compose-Fenster:** Text eintippen oder einfügen, einen Workflow und Schreibstil wählen und von der KI umschreiben lassen — ganz ohne Mikrofon. Mit Tonfall-Auswahl, eigenem Preset, Varianten-Verlauf und Signatur-Unterstützung.
+- **OpenRouter & eigene LLM-Endpunkte:** Nutze OpenRouter oder eine beliebige OpenAI-kompatible API als Alternative zu OpenAI für alle KI-Workflows.
+- **Audio-Export:** Speichere die Ausgabe der Vorlesefunktion direkt als Audiodatei.
 - **Eigennamen / Begriffe:** Erweitere das Vokabular der KI um eigene Begriffe, Namen oder Fachwörter für perfekte Transkriptionen.
-
 - **Globale Hotkeys:** Jederzeit von überall im System aufnehmen.
 - **Auto-Paste:** Erkennt Sprache und fügt sie direkt dort ein, wo der Cursor ist.
 - **LLM-gestützte Workflows:** Lass die KI deine Sätze professionell umformulieren, emotional filtern oder mit passenden Emojis anreichern.
@@ -146,7 +148,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 | **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Ergänzt deine Nachricht passend mit Emojis. |
 
 > [!NOTE]
-> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **OpenAI API-Key** voraus. Lege ihn am einfachsten in `~/.config/blitztext-linux/secrets.env` ab, indem du dort die Variable `OPENAI_API_KEY` mit deinem Key als Wert setzt (Zeilenformat `NAME=WERT`). `./run.sh` und der systemd-Service laden diese Datei automatisch. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
+> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **API-Key** voraus. Lege ihn am einfachsten in `~/.config/blitztext-linux/secrets.env` ab, indem du dort die Variable mit deinem Key als Wert setzt (Zeilenformat `NAME=WERT`, z. B. `OPENAI_API_KEY=sk-…`). `./run.sh` und der systemd-Service laden diese Datei automatisch. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
 
 ## KI-Workflows
 
@@ -157,9 +159,21 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
   <br><br>
 </div>
 
+### LLM-Anbieter
+
+Blitztext unterstützt drei Anbieter-Modi, wählbar unter **Einstellungen → KI-Workflows → „LLM-Anbieter"**:
+
+| Anbieter | Wann verwenden |
+| :--- | :--- |
+| **OpenAI** (Standard) | Standard-OpenAI-API mit `gpt-4o-mini` oder einem anderen Modell. |
+| **OpenRouter** | Zugriff auf hunderte Modelle über einen einzigen API-Key (`OPENROUTER_API_KEY`). Base-URL: `https://openrouter.ai/api/v1`. |
+| **Eigener Endpunkt** | Jede OpenAI-kompatible API — „Base-URL" und „LLM-Modell" auf den Anbieter anpassen. |
+
+Für OpenRouter `base_url` auf `https://openrouter.ai/api/v1` setzen und Modell wählen (z. B. `openai/gpt-4o`). Der Name der API-Key-Umgebungsvariable wird unter „API-Key-Umgebung" eingestellt.
+
 ### Schreibstil-Vorlagen
 
-Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schreibstil-Vorlagen, die du unter **Einstellungen → KI-Workflows → „Schreibstil-Vorlage"** auswählst:
+Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schreibstil-Vorlagen, die du unter **Einstellungen → KI-Workflows → „Schreibstil-Vorlage"** oder direkt im **Compose-Fenster** auswählst:
 
 | Vorlage | Wirkung |
 | --- | --- |
@@ -171,8 +185,34 @@ Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schrei
 | **Persönlich (Du-Form)** | Klarer Text in der persönlichen Du-Form. |
 | **Höflich (Sie-Form)** | Klarer Text in der höflichen Sie-Form. |
 | **Kurz & präzise** | Maximal knapp, ohne Füllwörter und Wiederholungen. |
+| **Eigenes Preset…** | Ein freier System-Prompt, den du selbst unter **Einstellungen → Allgemein → „Eigenes Preset (Compose)"** festlegst. |
 
-> Bei **Standard** wird zusätzlich der eingestellte **Tonfall** angewendet. Jede andere Vorlage bringt ihren eigenen Schreibstil mit und ersetzt den Tonfall. Eigennamen/Begriffe bleiben in allen Vorlagen erhalten.
+> Bei **Standard** wird zusätzlich der eingestellte **Tonfall** angewendet. Jede andere Vorlage bringt ihren eigenen Schreibstil mit und überschreibt den Tonfall. Eigennamen/Begriffe bleiben in allen Vorlagen erhalten.
+
+---
+
+## Compose-Fenster
+
+Das **Compose-Fenster** (`✍ Compose…` im Tray-Kontextmenü) ermöglicht das Umschreiben beliebiger Texte mit der KI — ganz ohne Sprachaufnahme. Es eignet sich ideal zum Überarbeiten fertiger Entwürfe, E-Mails oder Notizen.
+
+**Öffnen:** Klick auf das Tray-Icon → **✍ Compose…**
+
+**Was du im Compose-Fenster tun kannst:**
+
+| Element | Beschreibung |
+| :--- | :--- |
+| **Entwurf (linkes Feld)** | Text eintippen oder einfügen, der umgeschrieben werden soll. |
+| **Workflow** | Wähle zwischen Blitztext+ (Text-Verbesserer), Blitztext $%&! (Dampfablassen) oder Blitztext :) (Emojis). |
+| **Schreibstil-Vorlage** | Vorlage auswählen oder **Eigenes Preset…** für einen vollständig freien System-Prompt. |
+| **Tonfall** | Locker, neutral oder professionell. Aktiv nur bei **Standard**-Preset + **Blitztext+**; bei allen anderen Vorlagen ausgegraut (Tooltip erklärt warum). |
+| **Verbessern** | Sendet den Entwurf an die KI und zeigt das Ergebnis im rechten Feld. |
+| **Varianten-Verlauf** | Die letzten 10 generierten Ergebnisse der aktuellen Sitzung werden als scrollbare Liste gespeichert — Klick auf einen Eintrag stellt ihn wieder her. |
+| **Signatur** | Hängt deine gespeicherte Signatur an (konfiguriert unter **Einstellungen → Allgemein**). Ersetzt automatisch gängige KI-generierte Platzhalter wie `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]` u. Ä. — kein verlorener Platzhalter bleibt zurück. |
+| **Kopieren** | Kopiert das Ergebnis in die Zwischenablage. |
+| **Einfügen & Schließen** | Fügt das Ergebnis direkt in die aktive Anwendung ein und schließt das Fenster. |
+
+> [!NOTE]
+> Signatur und eigener Preset-Text werden unter **Einstellungen → Allgemein** konfiguriert. Setze dort „Signatur für das Compose-Fenster" und aktiviere „Nach jeder Generierung automatisch anhängen", wenn die Signatur bei jedem Ergebnis ergänzt werden soll.
 
 ---
 
@@ -220,9 +260,9 @@ Das Tray-Kontextmenü gibt dir schnellen Zugriff auf alle Workflows, das Compose
 
 ---
 
-## Hauptfenster (grafischer Fallback)
+## Hauptfenster
 
-Falls du keine Tastatur parat hast oder Hotkeys blockiert sind:
+Das Hauptfenster ist dein grafisches Kontrollzentrum — nützlich, wenn Hotkeys blockiert sind oder du lieber mit der Maus arbeitest:
 
 <div align="center">
   <br>
@@ -230,10 +270,11 @@ Falls du keine Tastatur parat hast oder Hotkeys blockiert sind:
   <br><br>
 </div>
 
-- **Maus-Steuerung:** Start/Stopp-Button für die Aufnahme.
-- **Workflow-Menü:** Dropdown für alle 5 Modi.
-- **Abbruch:** Verwirft eine Aufnahme sofort ohne Transkription.
-- **Schnellzugriffe:** Diktat, Verlauf, Vorlesen und Einstellungen.
+- **Workflow-Dropdown:** Alle 5 Aufnahmemodi zur Auswahl.
+- **Start/Stopp-Button:** Klick zum Starten oder Beenden einer Aufnahme.
+- **Abbruch:** Bricht die aktuelle Aufnahme ohne Transkription ab.
+- **Diktat / Verlauf:** Schnellzugriff auf den Diktat-Modus und den Transkript-Verlauf.
+- **Vorlesen / Einstellungen:** Öffnet das Vorlese-Fenster oder den Einstellungs-Dialog.
 
 *Das Fenster öffnet sich beim Start sowie über den Tray-Eintrag **Fenster anzeigen** oder einen Klick auf das Tray-Icon. Schließen versteckt das Fenster nur — die App läuft im Tray weiter.*
 
@@ -254,7 +295,7 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 | :--- | :--- |
 | **Diktat-Modus** | Umschalter. Ist er aktiv, werden alle Transkripte als Diktat-Einträge gesammelt und einzeln als Markdown-Datei gespeichert. Im Verlauf erscheint dann eine Schaltfläche **Zusammenführen**, die alle Einträge kombiniert und in die Zwischenablage kopiert. |
 | **Verlauf…** | Öffnet ein Fenster mit den letzten Transkripten. Pro Eintrag: In Zwischenablage kopieren oder löschen. |
-| **Vorlesen…** | Lässt dir beliebigen Text vorlesen — lokal per **Piper TTS** (Standard) oder optional über **OpenAI Cloud-TTS** (inklusive Anbieter-, Stimmen- und Modellauswahl)! |
+| **Vorlesen…** | Lässt dir beliebigen Text vorlesen — lokal per **Piper TTS** (Standard) oder optional über **OpenAI Cloud-TTS** (inklusive Anbieter-, Stimmen- und Modellauswahl). Nutze die Schaltfläche **Exportieren**, um die Audioausgabe als Datei zu speichern. |
 
 > [!NOTE]
 > **Diktat-Notizen** werden ausschließlich in einen Ordner **innerhalb des Home-Verzeichnisses** geschrieben (Schutz gegen Pfad-Ausbruch), mit Berechtigungen `0o600`.
@@ -303,9 +344,16 @@ Der Einstellungs-Dialog hat drei Tabs:
   "openai_api_key_env": "OPENAI_API_KEY",
   "autopaste": true,
   "audio_device": "@DEFAULT_SOURCE@",
+  "llm_provider": "openai",
+  "base_url": "",
+  "llm_model": "gpt-4o-mini",
+  "compose_signature": "",
+  "compose_signature_auto_append": false,
+  "compose_custom_preset_text": "",
   "workflows": {
     "text_improver_tone": "neutral",
-    "emoji_density": "mittel",
+    "writing_preset": "standard",
+    "emoji_density": "medium",
     "dampf_system_prompt": ""
   }
 }
@@ -318,12 +366,17 @@ Der Einstellungs-Dialog hat drei Tabs:
 - **hotkey_mode**: 
   - `toggle`: Einmal drücken startet, erneutes Drücken beendet.
   - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird.
-- **openai_api_key_env**: Name der Umgebungsvariable für den OpenAI API-Key. Standard: `OPENAI_API_KEY`.
-- Der eigentliche Key liegt nicht in `config.json`, sondern in `~/.config/blitztext-linux/secrets.env` oder einer bereits gesetzten Umgebungsvariable.
+- **openai_api_key_env**: Name der Umgebungsvariable für den API-Key. Standard: `OPENAI_API_KEY`. Für OpenRouter: `OPENROUTER_API_KEY`.
+- **llm_provider**: `openai` (Standard), `openrouter` oder `custom`.
+- **base_url**: Eigene API-Base-URL. Leer = OpenAI-Standard. Für OpenRouter: `https://openrouter.ai/api/v1`.
+- **llm_model**: Modellname beim Anbieter, z. B. `gpt-4o-mini` (OpenAI) oder `openai/gpt-4o` (OpenRouter).
 - **autopaste**: Fügt per `ydotool` ein.
 - **audio_device**: Name der Audioquelle.
+- **compose_signature**: Signaturtext, der im Compose-Fenster angehängt wird.
+- **compose_signature_auto_append**: Signatur nach jeder Generierung im Compose-Fenster automatisch anhängen (`true`/`false`).
+- **compose_custom_preset_text**: Freier System-Prompt für die Option „Eigenes Preset…" im Compose-Fenster.
 - **tts_provider**: TTS-Anbieter für „Vorlesen" — `piper` (lokal, Standard) oder `openai` (Cloud).
-- **tts_openai_model** / **tts_openai_voice**: Modell und Stimme für OpenAI Cloud-TTS (Standard: `gpt-4o-mini-tts`, `marin`).
+- **tts_openai_model** / **tts_openai_voice**: Modell und Stimme für OpenAI Cloud-TTS (Standard: `gpt-4o-mini-tts`, `nova`).
 - **tts_openai_consent**: `true`, sobald die einmalige Datenschutz-Bestätigung für Cloud-TTS erteilt wurde. Standard: `false`.
 - **workflows**: Feintuning von Tonalität (`text_improver_tone`), Schreibstil-Vorlage (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
 </details>
@@ -338,7 +391,7 @@ Wir lieben Stabilität! Führe die Tests lokal aus:
 pytest
 ```
 
-Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich die GUI-Tests des Hauptfensters.
+Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich die GUI-Tests (Hauptfenster, Compose-Fenster).
 
 <details>
 <summary><b>Verzeichnisüberblick</b></summary>
@@ -349,15 +402,20 @@ Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich di
 │   ├── __init__.py
 │   ├── audio_recorder.py   # PulseAudio/PipeWire-Aufnahme via parec
 │   ├── blitztext_linux.py  # PyQt6-Hauptanwendung (System-Tray)
+│   ├── compose_window.py   # Compose-Fenster für textbasiertes KI-Umschreiben
 │   ├── config.py           # Konfigurations-Manager
+│   ├── history_panel.py    # Transkript-Verlauf-Panel
 │   ├── hotkey_service.py   # evdev-basierter Hotkey-Daemon
 │   ├── i18n.py             # Übersetzungen (DE/EN) für die Oberfläche
-│   ├── llm_service.py      # OpenAI API Schnittstelle
+│   ├── llm_service.py      # OpenAI / OpenRouter / eigene Endpunkte
+│   ├── main_window.py      # Hauptanwendungsfenster
 │   ├── paste_service.py    # Wayland-Clipboard-Integration
 │   ├── transcribe.py       # Whisper-Transkription
-│   └── workflows.py        # Workflows Definition
+│   ├── tts_window.py       # Vorlese-Fenster mit Audio-Export
+│   ├── workflows.py        # Workflow-Definitionen
+│   └── writing_presets.py  # Schreibstil-Vorlagen-Definitionen
 ├── tests/                  # Test-Suite
-└── README.md               # Dieses Dokument (englische Fassung)
+└── README.md               # Englische Fassung (diese Datei: README.de.md)
 ```
 </details>
 
@@ -367,7 +425,7 @@ Mit `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest` laufen zusätzlich di
 
 - **Linux Exclusive:** Nur für Linux-Systeme.
 - **Wayland Fokus:** Entwickelt für Wayland (`wl-clipboard`, `ydotool`).
-- **Datenschutz:** Lokale Workflows bleiben zu 100% auf deinem Rechner. OpenAI wird nur bei Bedarf für LLM-Aufgaben kontaktiert.
+- **Datenschutz:** Lokale Workflows bleiben zu 100% auf deinem Rechner. OpenAI oder OpenRouter wird nur bei Bedarf für LLM- oder Cloud-TTS-Aufgaben kontaktiert.
 - **Sicherheit (`evdev` & `input` Gruppe):** Das Tool liest Input global über `/dev/input/event*`. Auf System-Ebene bedeutet dies, dass alle Prozesse des Benutzers Eingaben mitlesen könnten (Trade-off unter Wayland ohne XDG GlobalShortcuts). Nutzen Sie Blitztext nur in Umgebungen, denen Sie vertrauen!
 - **Entwickler-Hinweis:** Dieses Projekt wurde mit Unterstützung künstlicher Intelligenz (AI-assisted) entworfen. Architektur, Code und Tests wurden manuell gesichtet und auf Funktion/Sicherheit lokal verifiziert.
 
