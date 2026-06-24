@@ -1,4 +1,6 @@
 <div align="center">
+  <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
+
   <h1>Blitztext Linux</h1>
   <p><strong>Your local AI voice assistant for KDE Plasma & Wayland</strong></p>
 
