@@ -1,4 +1,6 @@
 <div align="center">
+  <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
+
   <h1>Blitztext Linux</h1>
   <p><strong>Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland</strong></p>
 
@@ -148,7 +150,12 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 
 ## KI-Workflows
 
-Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du direkt in der App.
+Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du unter **Einstellungen → KI-Workflows**:
+
+<div align="center">
+  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="KI-Workflow-Einstellungen" width="480">
+  <br><br>
+</div>
 
 ### Schreibstil-Vorlagen
 
@@ -200,6 +207,14 @@ Das Mikrofon im System-Tray ist dein Indikator für den aktuellen Zustand:
   </table>
 </div>
 
+Das Tray-Kontextmenü gibt dir schnellen Zugriff auf alle Workflows, das Compose-Fenster, Schreibstil-Vorlagen, Diktat-Modus, Verlauf und Einstellungen:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/en/tray-menu.png" alt="Tray-Kontextmenü" width="280">
+  <br><br>
+</div>
+
 > [!NOTE]
 > Steht im Desktop-Environment kein Tray-Bereich zur Verfügung, fällt das Icon auf das System-Theme `audio-input-microphone` zurück; die Farbkodierung greift dann ggf. nicht.
 
@@ -208,6 +223,12 @@ Das Mikrofon im System-Tray ist dein Indikator für den aktuellen Zustand:
 ## Hauptfenster (grafischer Fallback)
 
 Falls du keine Tastatur parat hast oder Hotkeys blockiert sind:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/en/blitztext-ready.png" alt="Hauptfenster" width="300">
+  <br><br>
+</div>
 
 - **Maus-Steuerung:** Start/Stopp-Button für die Aufnahme.
 - **Workflow-Menü:** Dropdown für alle 5 Modi.
@@ -221,6 +242,13 @@ Falls du keine Tastatur parat hast oder Hotkeys blockiert sind:
 ## Diktat, Verlauf und Vorlesen
 
 Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/history.png" alt="Verlauf" width="340">
+  <img src="docs/screenshots/linux/en/read-aloud.png" alt="Vorlesen" width="340">
+  <br><br>
+</div>
 
 | Menüpunkt | Beschreibung |
 | :--- | :--- |
@@ -247,6 +275,17 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 ## Konfiguration
 
 Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespeichert. Der OpenAI-Schlüssel wird nicht mehr in dieser Datei abgelegt, sondern aus einer Umgebungsvariable gelesen. Die Konfigurationsdatei lässt sich für erweiterte Prompt- und Workflow-Anpassungen direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
+
+Der Einstellungs-Dialog hat drei Tabs:
+
+<div align="center">
+  <img src="docs/screenshots/linux/en/settings-speech-recognition.png" alt="Einstellungen: Spracherkennung" width="480">
+  <br><i>Spracherkennung — Whisper-Modell, Backend, Sprache, Hotkey-Modus und Aufnahmetaste.</i><br><br>
+  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="Einstellungen: KI-Workflows" width="480">
+  <br><i>KI-Workflows — LLM-Anbieter, API-Key, Base-URL, Modell, Tonfall und Schreibstil-Vorlage.</i><br><br>
+  <img src="docs/screenshots/linux/en/settings-general.png" alt="Einstellungen: Allgemein" width="480">
+  <br><i>Allgemein — Auto-Paste, Diktat-Ordner, Verlaufsgröße, Sprache der Oberfläche und Signatur.</i><br><br>
+</div>
 
 > [!IMPORTANT]
 > Die Konfigurationsdatei wird automatisch mit restriktiven Dateiberechtigungen (**`0o600` / `chmod 600`**) gespeichert. Der echte OpenAI-Key liegt stattdessen in `~/.config/blitztext-linux/secrets.env` oder wird als Umgebungsvariable bereitgestellt.
