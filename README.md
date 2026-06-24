@@ -157,7 +157,7 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → AI Workflows**:
 
 <div align="center">
-  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="AI workflow settings" width="480">
+  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="AI workflow settings" width="480">
   <br><br>
 </div>
 
@@ -196,6 +196,12 @@ For the **Blitztext+** workflow (text improver) there are ready-made writing-sty
 ## Compose window
 
 The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/compose-en.png" alt="Compose window" width="480">
+  <br><br>
+</div>
 
 **How to open:** Click the tray icon → **✍ Compose…**
 
@@ -253,7 +259,7 @@ The tray context menu gives you quick access to all workflows, the compose windo
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/en/tray-menu.png" alt="Tray context menu" width="280">
+  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray context menu" width="280">
   <br><br>
 </div>
 
@@ -268,11 +274,12 @@ The main window is your graphical control center — useful when hotkeys are blo
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/en/blitztext-ready.png" alt="Main window" width="300">
+  <img src="docs/screenshots/linux/main-window-en.png" alt="Main window" width="300">
   <br><br>
 </div>
 
 - **Workflow dropdown:** Select from all 5 recording modes.
+- **Writing-style preset:** Visible when **Blitztext+** is selected — pick your preset directly in the main window. Changes sync to the tray instantly.
 - **Start/Stop button:** Click to begin or end a recording.
 - **Discard:** Cancels the current recording without transcription.
 - **Dictation / History:** Quick access to dictation mode and the transcript history.
@@ -288,8 +295,8 @@ In addition to the workflows, the tool offers three convenience functions:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/history.png" alt="History" width="340">
-  <img src="docs/screenshots/linux/en/read-aloud.png" alt="Read aloud" width="340">
+  <img src="docs/screenshots/linux/history-en.png" alt="History" width="340">
+  <img src="docs/screenshots/linux/tts-en.png" alt="Read aloud" width="340">
   <br><br>
 </div>
 
@@ -323,11 +330,11 @@ Everything is stored locally and securely under `~/.config/blitztext-linux/confi
 The settings dialog has three tabs:
 
 <div align="center">
-  <img src="docs/screenshots/linux/en/settings-speech-recognition.png" alt="Settings: Speech Recognition" width="480">
+  <img src="docs/screenshots/linux/settings-speech-en.png" alt="Settings: Speech Recognition" width="480">
   <br><i>Speech Recognition — Whisper model, backend, language, hotkey mode, and recording key.</i><br><br>
-  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="Settings: AI Workflows" width="480">
+  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="Settings: AI Workflows" width="480">
   <br><i>AI Workflows — LLM provider, API key, base URL, model, tone, and writing-style preset.</i><br><br>
-  <img src="docs/screenshots/linux/en/settings-general.png" alt="Settings: General" width="480">
+  <img src="docs/screenshots/linux/settings-general-en.png" alt="Settings: General" width="480">
   <br><i>General — Auto-Paste, dictation folder, history size, interface language, and signature.</i><br><br>
 </div>
 
