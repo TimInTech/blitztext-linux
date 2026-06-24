@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 from app.llm_service import WorkflowType, LLM_WORKFLOWS
 from app.i18n import t
 from app import theme
+from app.writing_presets import WRITING_PRESET_KEYS
 
 # Reihenfolge der Workflows in der Auswahl
 _WORKFLOW_ORDER = [
@@ -180,7 +181,17 @@ class MainWindow(QWidget):
         self._workflow_combo.setMinimumHeight(28)
         for wf in _WORKFLOW_ORDER:
             self._workflow_combo.addItem(t(f"workflow.{wf.value}.name"), userData=wf)
+        self._workflow_combo.currentIndexChanged.connect(self._on_workflow_changed)
         layout.addWidget(self._workflow_combo)
+
+        # Schreibstil-Preset-Auswahl (nur sichtbar bei Blitztext+)
+        self._preset_combo = QComboBox()
+        self._preset_combo.setMinimumHeight(28)
+        for key in WRITING_PRESET_KEYS:
+            self._preset_combo.addItem(t(f"preset.{key}.name"), userData=key)
+        self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        self._preset_combo.setVisible(False)
+        layout.addWidget(self._preset_combo)
 
         # Hero: runder Record-Shutter
         self._btn_toggle = RecordButton()
@@ -265,6 +276,18 @@ class MainWindow(QWidget):
         return wf if isinstance(wf, WorkflowType) else WorkflowType.TRANSCRIPTION
 
     @pyqtSlot()
+    def _on_workflow_changed(self) -> None:
+        is_text_improver = self._selected_workflow() == WorkflowType.TEXT_IMPROVER
+        self._preset_combo.setVisible(is_text_improver)
+        self.adjustSize()
+
+    @pyqtSlot()
+    def _on_preset_changed(self) -> None:
+        key = self._preset_combo.currentData()
+        if key:
+            self._controller.main_window_preset_changed(key)
+
+    @pyqtSlot()
     def _on_toggle_clicked(self) -> None:
         self._controller.gui_toggle_recording(self._selected_workflow())
 
@@ -293,6 +316,7 @@ class MainWindow(QWidget):
         )
         self._btn_discard.setEnabled(recording)
         self._workflow_combo.setEnabled(state == "IDLE")
+        self._preset_combo.setEnabled(state == "IDLE")
 
         if error:
             self._set_status(t("mainwindow.status.error"), theme.STATE_ERROR)
@@ -342,6 +366,15 @@ class MainWindow(QWidget):
         self._btn_dictation.blockSignals(True)
         self._btn_dictation.setChecked(checked)
         self._btn_dictation.blockSignals(False)
+
+    def set_preset(self, key: str) -> None:
+        """Setzt den Preset-Combo auf ``key`` ohne Signal auszulösen."""
+        self._preset_combo.blockSignals(True)
+        for i in range(self._preset_combo.count()):
+            if self._preset_combo.itemData(i) == key:
+                self._preset_combo.setCurrentIndex(i)
+                break
+        self._preset_combo.blockSignals(False)
 
     def _update_timer_label(self) -> None:
         if self._rec_start is None:

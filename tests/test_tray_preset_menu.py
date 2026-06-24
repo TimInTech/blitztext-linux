@@ -1,4 +1,5 @@
-"""Tests für das Tray-Submenu „Schreibstil-Vorlage" (Paket F).
+"""Tests für das Tray-Submenu „Schreibstil-Vorlage" (Paket F) und die
+bidirektionale Sync Tray ↔ Hauptfenster (Paket K).
 
 Deckt das Zusammenspiel von Preset-Auswahl im Tray, Config-Persistenz und
 LLM-Service-Neuaufbau ab:
@@ -6,6 +7,7 @@ LLM-Service-Neuaufbau ab:
 * Auswahl im Submenu persistiert den Preset und baut den LLMService neu.
 * Das Menü spiegelt jederzeit die ``config.writing_preset`` (Häkchen).
 * Ein Settings-Save mit geändertem Preset gleicht das Häkchen wieder an.
+* Tray-Auswahl spiegelt sich im Hauptfenster-Combo (und umgekehrt).
 
 GUI-gated über ``WHISPER_GUI_TESTS=1``: die echte ``BlitztextApp`` baut Tray +
 QActionGroup auf und benötigt eine (Offscreen-)QApplication, analog zu
@@ -136,3 +138,88 @@ class TestPresetMenu:
         tray_app.update_menu_availability()
 
         assert tray_app.menu_preset.isEnabled() is True
+
+
+@gui_only
+class TestMainWindowPresetSync:
+    """Bidirektionale Sync Tray ↔ Hauptfenster-Preset-Combo (Paket K)."""
+
+    def _open_window(self, tray_app):
+        """Öffnet das Hauptfenster und gibt es zurück."""
+        tray_app.show_main_window()
+        return tray_app._main_window
+
+    def test_window_init_syncs_config_preset(self, tray_app):
+        """Beim Öffnen spiegelt der Combo den gespeicherten Preset."""
+        target = _other_key(tray_app.config.writing_preset)
+        tray_app.config.writing_preset = target
+
+        window = self._open_window(tray_app)
+
+        assert window._preset_combo.currentData() == target
+
+    def test_tray_change_updates_main_window(self, tray_app):
+        """Tray-Auswahl aktualisiert den Preset-Combo im Hauptfenster."""
+        window = self._open_window(tray_app)
+        target = _other_key(tray_app.config.writing_preset)
+
+        tray_app._on_writing_preset_selected(target)
+
+        assert window._preset_combo.currentData() == target
+
+    def test_main_window_change_updates_tray(self, tray_app):
+        """Preset-Änderung im Hauptfenster setzt das Tray-Häkchen."""
+        self._open_window(tray_app)
+        target = _other_key(tray_app.config.writing_preset)
+
+        tray_app.main_window_preset_changed(target)
+
+        assert tray_app.preset_actions[target].isChecked() is True
+        assert tray_app.config.writing_preset == target
+
+    def test_main_window_change_noop_on_same_preset(self, tray_app):
+        """Erneutes Setzen desselben Presets aus dem Hauptfenster ist No-Op."""
+        self._open_window(tray_app)
+        current = tray_app.config.writing_preset
+        old_service = tray_app.llm_service
+
+        tray_app.main_window_preset_changed(current)
+
+        assert tray_app.llm_service is old_service
+        assert not tray_app.config.config_file.is_file()
+
+    def test_settings_save_syncs_main_window_combo(self, tray_app, monkeypatch):
+        """Settings-Save mit geändertem Preset gleicht auch den Combo an."""
+        from PyQt6.QtWidgets import QDialog
+        import app.blitztext_linux as mod
+
+        window = self._open_window(tray_app)
+        target = _other_key(tray_app.config.writing_preset)
+
+        class _FakeDialog:
+            def __init__(self, config):
+                config.writing_preset = target
+
+            def exec(self):
+                return QDialog.DialogCode.Accepted
+
+        monkeypatch.setattr(mod, "SettingsDialog", _FakeDialog)
+        tray_app.show_settings_dialog()
+
+        assert window._preset_combo.currentData() == target
+
+    def test_preset_combo_visible_only_for_text_improver(self, tray_app):
+        """Preset-Combo im Hauptfenster ist nur bei Blitztext+ sichtbar."""
+        from app.workflows import WorkflowType
+
+        window = self._open_window(tray_app)
+
+        # Standard-Workflow ist TRANSCRIPTION → Combo unsichtbar
+        for i in range(window._workflow_combo.count()):
+            wf = window._workflow_combo.itemData(i)
+            window._workflow_combo.setCurrentIndex(i)
+            expected = wf == WorkflowType.TEXT_IMPROVER
+            assert window._preset_combo.isVisible() == expected, (
+                f"Workflow {wf}: Combo sichtbar={window._preset_combo.isVisible()}, "
+                f"erwartet={expected}"
+            )

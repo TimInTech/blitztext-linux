@@ -869,7 +869,20 @@ class BlitztextApp(QObject):
         self.config.save()
         self.llm_service = self._build_llm_service()
         self.update_menu_availability()
+        if self._main_window is not None:
+            self._main_window.set_preset(key)
         logger.info("Writing preset changed via tray: %s", key)
+
+    def main_window_preset_changed(self, key: str) -> None:
+        """Vom Hauptfenster aufgerufen, wenn die Preset-Combo geändert wird."""
+        if key == self.config.writing_preset:
+            return
+        self.config.writing_preset = key
+        self.config.save()
+        self.llm_service = self._build_llm_service()
+        self.update_menu_availability()
+        self._refresh_preset_menu()
+        logger.info("Writing preset changed via main window: %s", key)
 
     def start_hotkey_worker(self) -> None:
         self.stop_hotkey_worker()
@@ -904,8 +917,10 @@ class BlitztextApp(QObject):
             self.llm_service = self._build_llm_service()
             self._refresh_i18n_texts()
             self.update_menu_availability()
-            # Preset kann im Dialog geändert worden sein -> Häkchen angleichen.
+            # Preset kann im Dialog geändert worden sein -> Häkchen + Combo angleichen.
             self._refresh_preset_menu()
+            if self._main_window is not None:
+                self._main_window.set_preset(self.config.writing_preset)
 
             # Restart hotkey listener if mode or key changed
             if self.hotkey_worker and (
@@ -1167,6 +1182,7 @@ class BlitztextApp(QObject):
             if self._history_panel is not None:
                 window.set_history_count(self._history_panel.entry_count)
             window.update_state(self.state, self.current_workflow, self._tray_error_message)
+            window.set_preset(self.config.writing_preset)
             self._main_window = window
         return self._main_window
 
