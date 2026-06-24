@@ -70,6 +70,51 @@ def _scrub_secret(text: str, secret: str) -> str:
     return text
 
 
+class PromptEditorDialog(QDialog):
+    """Shows the resolved system prompt + user message and allows editing before sending."""
+
+    def __init__(
+        self,
+        system_prompt: str,
+        user_message: str,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(t("compose.prompt_preview.title"))
+        self.setModal(True)
+        self.resize(640, 500)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel(t("compose.prompt_preview.system_label")))
+        self._system_edit = QPlainTextEdit(system_prompt)
+        self._system_edit.setMinimumHeight(160)
+        layout.addWidget(self._system_edit, 2)
+
+        layout.addWidget(QLabel(t("compose.prompt_preview.user_label")))
+        self._user_edit = QPlainTextEdit(user_message)
+        self._user_edit.setMinimumHeight(80)
+        layout.addWidget(self._user_edit, 1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        btn_send = QPushButton(t("compose.prompt_preview.send_btn"))
+        btn_send.setDefault(True)
+        btn_send.clicked.connect(self.accept)
+        btn_row.addWidget(btn_send)
+        btn_cancel = QPushButton(t("compose.prompt_preview.cancel_btn"))
+        btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(btn_cancel)
+        layout.addLayout(btn_row)
+
+    def get_system_prompt(self) -> str:
+        return self._system_edit.toPlainText()
+
+    def get_user_message(self) -> str:
+        return self._user_edit.toPlainText()
+
+
 class _ComposeWorker(QObject):
     """Background worker for manual text rewriting."""
 
@@ -84,6 +129,8 @@ class _ComposeWorker(QObject):
         writing_preset: str,
         tone: Optional[str] = None,
         custom_prompt: Optional[str] = None,
+        raw_system_prompt: Optional[str] = None,
+        raw_user_message: Optional[str] = None,
     ) -> None:
         super().__init__()
         self._service = service
@@ -92,6 +139,8 @@ class _ComposeWorker(QObject):
         self._writing_preset = writing_preset
         self._tone = tone
         self._custom_prompt = custom_prompt
+        self._raw_system_prompt = raw_system_prompt
+        self._raw_user_message = raw_user_message
         self._cancelled = False
 
     def request_cancel(self) -> None:
@@ -102,13 +151,17 @@ class _ComposeWorker(QObject):
         try:
             if self._cancelled or QThread.currentThread().isInterruptionRequested():
                 return
-            result = self._service.rewrite_text(
-                self._workflow,
-                self._text,
-                writing_preset=self._writing_preset,
-                tone=self._tone,
-                custom_prompt=self._custom_prompt,
-            )
+            if self._raw_system_prompt is not None:
+                user_msg = self._raw_user_message if self._raw_user_message is not None else self._text
+                result = self._service.rewrite_raw(self._raw_system_prompt, user_msg)
+            else:
+                result = self._service.rewrite_text(
+                    self._workflow,
+                    self._text,
+                    writing_preset=self._writing_preset,
+                    tone=self._tone,
+                    custom_prompt=self._custom_prompt,
+                )
             if self._cancelled or QThread.currentThread().isInterruptionRequested():
                 return
             self.finished.emit(result)
@@ -210,6 +263,10 @@ class ComposeWindow(QDialog):
         self.btnAction.setMinimumWidth(140)
         self.btnAction.clicked.connect(self._on_improve_clicked)
         action_row.addWidget(self.btnAction)
+
+        self.btnShowPrompt = QPushButton()
+        self.btnShowPrompt.clicked.connect(self._on_show_prompt_clicked)
+        action_row.addWidget(self.btnShowPrompt)
 
         self.lblStatus = QLabel()
         self.lblStatus.setVisible(False)
@@ -410,6 +467,7 @@ class ComposeWindow(QDialog):
         self.txtInput.setReadOnly(busy)
         if busy:
             self.btnAction.setEnabled(False)
+            self.btnShowPrompt.setEnabled(False)
             self.btnCopy.setEnabled(False)
             self.btnPaste.setEnabled(False)
             self._show_status(t("compose.status.processing"))
@@ -426,6 +484,7 @@ class ComposeWindow(QDialog):
             self.btnPaste.setEnabled(False)
             return
         self.btnAction.setEnabled(self._has_input())
+        self.btnShowPrompt.setEnabled(self._has_input())
         has_output = self._has_output()
         self.btnCopy.setEnabled(has_output)
         self.btnPaste.setEnabled(has_output)
@@ -562,6 +621,8 @@ class ComposeWindow(QDialog):
         self.lblInput.setText(t("compose.input.label"))
         self.lblOutput.setText(t("compose.output.label"))
         self.btnAction.setText(t("compose.button.improve"))
+        self.btnShowPrompt.setText(t("compose.btn.show_prompt"))
+        self.btnShowPrompt.setToolTip(t("compose.prompt_preview.tooltip"))
         self.btnCopy.setText(t("compose.button.copy"))
         self.btnPaste.setText(t("compose.button.insert_close"))
         self.btnClose.setText(t("compose.button.close"))
@@ -652,6 +713,54 @@ class ComposeWindow(QDialog):
             self._show_status(t("compose.status.empty_input"), error=True)
             return
         self._start_worker(text)
+
+    @pyqtSlot()
+    def _on_show_prompt_clicked(self) -> None:
+        if self._busy:
+            return
+        text = self.txtInput.toPlainText()
+        if not text.strip():
+            self._show_status(t("compose.status.empty_input"), error=True)
+            return
+
+        workflow = self._selected_workflow()
+        tone = self._selected_tone()
+        custom_prompt: Optional[str] = None
+        writing_preset = self._selected_preset()
+        if self._is_custom_preset():
+            writing_preset = DEFAULT_PRESET_KEY
+            custom_prompt = self._config.compose_custom_preset_text
+
+        system_prompt = self._llm_service.build_system_prompt(
+            workflow, writing_preset=writing_preset, tone=tone, custom_prompt=custom_prompt
+        )
+        dialog = PromptEditorDialog(system_prompt, text.strip(), parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._start_worker_raw(dialog.get_system_prompt(), dialog.get_user_message())
+
+    def _start_worker_raw(self, system_prompt: str, user_message: str) -> None:
+        thread = QThread(self)
+        worker = _ComposeWorker(
+            self._llm_service,
+            self._selected_workflow(),
+            user_message,
+            self._selected_preset(),
+            raw_system_prompt=system_prompt,
+            raw_user_message=user_message,
+        )
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_worker_result)
+        worker.error.connect(self._on_worker_error)
+        worker.finished.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_worker_thread_finished)
+        self._worker_thread = thread
+        self._worker = worker
+        self._set_busy(True)
+        thread.start()
 
     @pyqtSlot(str)
     def _on_worker_result(self, result_text: str) -> None:

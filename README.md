@@ -148,7 +148,7 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 | **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
 
 > [!NOTE]
-> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` using the format `NAME=VALUE` (e.g. `OPENAI_API_KEY=sk-…`). `./run.sh` and the systemd service load this file automatically. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
+> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` using the format `NAME=VALUE` (e.g. `OPENAI_API_KEY` set to your key). `./run.sh` and the systemd service load this file automatically. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
 
 ---
 

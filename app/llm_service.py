@@ -269,3 +269,56 @@ class LLMService:
             tone=tone,
             custom_prompt=custom_prompt,
         )
+
+    def build_system_prompt(
+        self,
+        workflow: WorkflowType,
+        writing_preset: Optional[str] = None,
+        tone: Optional[str] = None,
+        custom_prompt: Optional[str] = None,
+    ) -> str:
+        """Return the effective system prompt for the given parameters without making an API call.
+
+        Mirrors the logic of ``_rewrite_for_workflow`` so the caller can preview
+        exactly what would be sent to the LLM.
+        """
+        if workflow == WorkflowType.DAMPF_ABLASSEN:
+            return (self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
+        if workflow == WorkflowType.TEXT_IMPROVER:
+            effective_tone = tone if tone is not None else self.tone
+            if custom_prompt is not None and custom_prompt.strip():
+                effective_system = custom_prompt.strip()
+            else:
+                preset_system = get_preset(writing_preset or self.writing_preset).system_prompt
+                effective_system = preset_system or _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(tone=effective_tone)
+            return effective_system + self._custom_terms_instruction()
+        if workflow == WorkflowType.EMOJI_TEXT:
+            return _EMOJI_SYSTEM_TEMPLATE.format(density=self.emoji_density) + self._custom_terms_instruction()
+        raise LLMServiceError(f"Unsupported workflow: {workflow}")
+
+    def rewrite_raw(self, system_prompt: str, user_message: str) -> str:
+        """Make an API call with explicitly provided prompts, bypassing all preset logic.
+
+        Used by the prompt-preview dialog after the user has reviewed and
+        optionally edited both the system prompt and the user message.
+        """
+        self._check_openai()
+        if not user_message or not user_message.strip():
+            raise ValueError("user_message must not be empty")
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message.strip()},
+                ],
+                temperature=0.7,
+            )
+            content = response.choices[0].message.content
+            if content is None:
+                raise LLMServiceError("OpenAI hat eine leere Antwort zurückgegeben.")
+            return content.strip()
+        except Exception as exc:
+            if isinstance(exc, LLMServiceError):
+                raise
+            raise LLMServiceError(f"OpenAI API-Fehler: {exc}") from exc
