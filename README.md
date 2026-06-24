@@ -18,9 +18,11 @@
 
 ## Features
 
-- **NEW: Multilingual interface (EN/DE):** Switch the app interface between German and English under **Settings → General → "Language"** (the change takes effect after restarting the app).
+- **Multilingual interface (EN/DE):** Switch the app interface between German and English under **Settings → General → "Interface language"** (takes effect after restarting the app).
+- **Compose window:** Type or paste any text, select a workflow and writing style, and let the AI rewrite it — no microphone needed. Includes tone selector, custom preset, variant history, and signature support.
+- **OpenRouter & custom LLM endpoints:** Use OpenRouter or any OpenAI-compatible API as an alternative to OpenAI for all AI workflows.
+- **Audio export:** Save read-aloud output as an audio file directly from the Read Aloud window.
 - **Custom names / terms:** Extend the AI's vocabulary with your own terms, names, or technical words for perfect transcriptions.
-
 - **Global hotkeys:** Record from anywhere in the system at any time.
 - **Auto-paste:** Detects speech and pastes it right where your cursor is.
 - **LLM-powered workflows:** Let the AI rephrase your sentences professionally, filter them emotionally, or enrich them with fitting emojis.
@@ -144,15 +146,34 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 | **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
 
 > [!NOTE]
-> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **OpenAI API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` by setting the variable `OPENAI_API_KEY` there with your key as the value (line format `NAME=VALUE`). `./run.sh` and the systemd service load this file automatically. Without this key, these functions are disabled in the menu and via the hotkeys, or result in an error message.
+> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` using the format `NAME=VALUE` (e.g. `OPENAI_API_KEY=sk-…`). `./run.sh` and the systemd service load this file automatically. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
+
+---
 
 ## AI workflows
 
-The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings directly in the app.
+The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → AI Workflows**:
+
+<div align="center">
+  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="AI workflow settings" width="480">
+  <br><br>
+</div>
+
+### LLM providers
+
+Blitztext supports three provider modes, selectable under **Settings → AI Workflows → "LLM provider"**:
+
+| Provider | When to use |
+| :--- | :--- |
+| **OpenAI** (default) | Standard OpenAI API with `gpt-4o-mini` or any other model. |
+| **OpenRouter** | Access hundreds of models via a single API key (`OPENROUTER_API_KEY`). Base URL: `https://openrouter.ai/api/v1`. |
+| **Custom endpoint** | Any OpenAI-compatible API — set "Base URL" and "LLM model" to match your provider. |
+
+For OpenRouter, set `base_url` to `https://openrouter.ai/api/v1` and choose your model (e.g. `openai/gpt-4o`). The API key environment variable name is configured under "API key environment".
 
 ### Writing-style presets
 
-For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"**:
+For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"** or directly in the **Compose window**:
 
 | Preset | Effect |
 | --- | --- |
@@ -164,12 +185,38 @@ For the **Blitztext+** workflow (text improver) there are ready-made writing-sty
 | **Personal (informal)** | Clear text in a personal, informal tone. |
 | **Polite (formal)** | Clear text in a polite, formal tone. |
 | **Short & precise** | As concise as possible, without filler words and repetitions. |
+| **Custom preset…** | A free-form system prompt you define yourself under **Settings → General → "Custom preset (Compose)"**. |
 
-> With **Standard**, the configured **tone** is additionally applied. Every other preset brings its own writing style and replaces the tone. Custom names/terms are preserved in all presets.
+> With **Standard**, the configured **tone** (casual / neutral / professional) is additionally applied. Every other preset brings its own writing style and overrides the tone setting. Custom names/terms are preserved in all presets.
 
 ---
 
-## Tray icon: status colors
+## Compose window
+
+The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
+
+**How to open:** Click the tray icon → **✍ Compose…**
+
+**What you can do in the Compose window:**
+
+| Element | Description |
+| :--- | :--- |
+| **Draft (left pane)** | Type or paste the text you want to rewrite. |
+| **Workflow** | Choose between Blitztext+ (text improver), Blitztext $%&! (steam release), or Blitztext :) (emojis). |
+| **Writing-style preset** | Select a preset or **Custom preset…** for a fully custom system prompt. |
+| **Tone** | Choose casual, neutral, or professional. Active only when **Standard** preset + **Blitztext+** is selected; grayed out for all other presets (a tooltip explains why). |
+| **Improve** | Sends your draft to the AI and shows the result in the right pane. |
+| **Variant history** | The last 10 generated results within the current session are kept as a scrollable list — click any entry to restore it. |
+| **Signature** | Appends your saved signature (configured under **Settings → General**). Automatically replaces common AI-generated placeholders such as `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]`, and similar — so no stray placeholder is ever left behind. |
+| **Copy** | Copies the result to the clipboard. |
+| **Insert & Close** | Pastes the result directly into the active application and closes the window. |
+
+> [!NOTE]
+> The signature and custom preset text are configured under **Settings → General**. Set "Signature for Compose window" and toggle "Automatically append after generation" if you want the signature added to every result.
+
+---
+
+## Tray icon and context menu
 
 The microphone in the system tray is your indicator of the current state:
 
@@ -200,21 +247,36 @@ The microphone in the system tray is your indicator of the current state:
   </table>
 </div>
 
+The tray context menu gives you quick access to all workflows, the compose window, writing-style presets, dictation mode, history, and settings:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/en/tray-menu.png" alt="Tray context menu" width="280">
+  <br><br>
+</div>
+
 > [!NOTE]
 > If no tray area is available in the desktop environment, the icon falls back to the system theme `audio-input-microphone`; the color coding may then not apply.
 
 ---
 
-## Main window (graphical fallback)
+## Main window
 
-In case you don't have a keyboard handy or hotkeys are blocked:
+The main window is your graphical control center — useful when hotkeys are blocked or you prefer mouse control:
 
-- **Mouse control:** Start/stop button for recording.
-- **Workflow menu:** Dropdown for all 5 modes.
-- **Cancel:** Discards a recording immediately without transcription.
-- **Quick access:** Dictation, history, read-aloud, and settings.
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/en/blitztext-ready.png" alt="Main window" width="300">
+  <br><br>
+</div>
 
-*The window opens at startup as well as via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
+- **Workflow dropdown:** Select from all 5 recording modes.
+- **Start/Stop button:** Click to begin or end a recording.
+- **Discard:** Cancels the current recording without transcription.
+- **Dictation / History:** Quick access to dictation mode and the transcript history.
+- **Read aloud / Settings:** Open the read-aloud window or the settings dialog.
+
+*The window opens at startup and via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
 
 ---
 
@@ -222,11 +284,19 @@ In case you don't have a keyboard handy or hotkeys are blocked:
 
 In addition to the workflows, the tool offers three convenience functions:
 
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/history.png" alt="History" width="340">
+  <img src="docs/screenshots/linux/en/read-aloud.png" alt="Read aloud" width="340">
+  <br><br>
+</div>
+
+
 | Menu item | Description |
 | :--- | :--- |
 | **Dictation mode** | Toggle. When active, all transcripts are collected as dictation entries and each saved as a Markdown file. The history then shows a **Merge** button that combines all entries and copies them to the clipboard. |
 | **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. |
-| **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection)! |
+| **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection). Use the **Export** button to save the audio as a file. |
 
 > [!NOTE]
 > **Dictation notes** are written exclusively into a folder **inside the home directory** (protection against path traversal), with permissions `0o600`.
@@ -246,7 +316,19 @@ In addition to the workflows, the tool offers three convenience functions:
 
 ## Configuration
 
-Everything is stored locally and securely under `~/.config/blitztext-linux/config.json`. The OpenAI key is no longer stored in this file but read from an environment variable. The configuration file can be opened directly from the settings for advanced prompt and workflow adjustments: **Settings → General → "Open configuration file"**.
+Everything is stored locally and securely under `~/.config/blitztext-linux/config.json`. The OpenAI key is not stored in this file but read from an environment variable. The configuration file can be opened directly from the settings: **Settings → General → "Open configuration file"**.
+
+The settings dialog has three tabs:
+
+<div align="center">
+  <img src="docs/screenshots/linux/en/settings-speech-recognition.png" alt="Settings: Speech Recognition" width="480">
+  <br><i>Speech Recognition — Whisper model, backend, language, hotkey mode, and recording key.</i><br><br>
+  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="Settings: AI Workflows" width="480">
+  <br><i>AI Workflows — LLM provider, API key, base URL, model, tone, and writing-style preset.</i><br><br>
+  <img src="docs/screenshots/linux/en/settings-general.png" alt="Settings: General" width="480">
+  <br><i>General — Auto-Paste, dictation folder, history size, interface language, and signature.</i><br><br>
+</div>
+
 
 > [!IMPORTANT]
 > The configuration file is automatically saved with restrictive file permissions (**`0o600` / `chmod 600`**). The real OpenAI key instead lives in `~/.config/blitztext-linux/secrets.env` or is provided as an environment variable.
@@ -258,15 +340,22 @@ Everything is stored locally and securely under `~/.config/blitztext-linux/confi
 {
   "model": "base",
   "language": "de",
-  "ui_language": "de",
+  "ui_language": "en",
   "backend": "openai-whisper",
   "hotkey_mode": "toggle",
   "openai_api_key_env": "OPENAI_API_KEY",
   "autopaste": true,
   "audio_device": "@DEFAULT_SOURCE@",
+  "llm_provider": "openai",
+  "base_url": "",
+  "llm_model": "gpt-4o-mini",
+  "compose_signature": "",
+  "compose_signature_auto_append": false,
+  "compose_custom_preset_text": "",
   "workflows": {
     "text_improver_tone": "neutral",
-    "emoji_density": "mittel",
+    "writing_preset": "standard",
+    "emoji_density": "medium",
     "dampf_system_prompt": ""
   }
 }
@@ -279,13 +368,18 @@ Everything is stored locally and securely under `~/.config/blitztext-linux/confi
 - **hotkey_mode**: 
   - `toggle`: press once to start, press again to stop.
   - `hold`: recording runs as long as the hotkey is held.
-- **openai_api_key_env**: Name of the environment variable for the OpenAI API key. Default: `OPENAI_API_KEY`.
-- The actual key does not live in `config.json` but in `~/.config/blitztext-linux/secrets.env` or an already-set environment variable.
+- **openai_api_key_env**: Name of the environment variable for the API key. Default: `OPENAI_API_KEY`. For OpenRouter use `OPENROUTER_API_KEY`.
+- **llm_provider**: `openai` (default), `openrouter`, or `custom`.
+- **base_url**: Custom API base URL. Empty = OpenAI default. For OpenRouter: `https://openrouter.ai/api/v1`.
+- **llm_model**: Model name at the provider, e.g. `gpt-4o-mini` (OpenAI) or `openai/gpt-4o` (OpenRouter).
 - **autopaste**: Pastes via `ydotool`.
 - **audio_device**: Name of the audio source.
+- **compose_signature**: Signature text appended in the Compose window.
+- **compose_signature_auto_append**: Auto-append signature after every generation in Compose (`true`/`false`).
+- **compose_custom_preset_text**: Free-form system prompt for the "Custom preset…" option in the Compose window.
 - **tts_provider**: TTS provider for "Read aloud" — `piper` (local, default) or `openai` (cloud).
-- **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `marin`).
-- **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted. Default: `false`.
+- **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `nova`).
+- **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted.
 - **workflows**: Fine-tuning of tonality (`text_improver_tone`), writing-style preset (`writing_preset`), emojis (`emoji_density`), and the steam-release prompt (`dampf_system_prompt`).
 </details>
 
@@ -299,7 +393,7 @@ We love stability! Run the tests locally:
 pytest
 ```
 
-With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests of the main window run additionally.
+With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests (main window, compose window) run additionally.
 
 <details>
 <summary><b>Directory overview</b></summary>
@@ -310,13 +404,18 @@ With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests of th
 │   ├── __init__.py
 │   ├── audio_recorder.py   # PulseAudio/PipeWire recording via parec
 │   ├── blitztext_linux.py  # PyQt6 main application (system tray)
+│   ├── compose_window.py   # Compose window for text-only AI rewriting
 │   ├── config.py           # Configuration manager
+│   ├── history_panel.py    # Transcript history panel
 │   ├── hotkey_service.py   # evdev-based hotkey daemon
 │   ├── i18n.py             # Interface translations (DE/EN)
-│   ├── llm_service.py      # OpenAI API interface
+│   ├── llm_service.py      # OpenAI / OpenRouter / custom endpoint interface
+│   ├── main_window.py      # Main application window
 │   ├── paste_service.py    # Wayland clipboard integration
 │   ├── transcribe.py       # Whisper transcription
-│   └── workflows.py        # Workflow definitions
+│   ├── tts_window.py       # Read Aloud window with audio export
+│   ├── workflows.py        # Workflow definitions
+│   └── writing_presets.py  # Writing-style preset definitions
 ├── tests/                  # Test suite
 └── README.md               # This document (German version: README.de.md)
 ```
@@ -328,7 +427,7 @@ With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests of th
 
 - **Linux exclusive:** For Linux systems only.
 - **Wayland focus:** Developed for Wayland (`wl-clipboard`, `ydotool`).
-- **Privacy:** Local workflows stay 100% on your machine. OpenAI is only contacted when needed for LLM tasks.
+- **Privacy:** Local workflows stay 100% on your machine. OpenAI or OpenRouter is only contacted when needed for LLM or Cloud TTS tasks.
 - **Security (`evdev` & `input` group):** The tool reads input globally via `/dev/input/event*`. At the system level, this means all of the user's processes could read along with input (a trade-off under Wayland without XDG GlobalShortcuts). Only use Blitztext in environments you trust!
 - **Developer note:** This project was designed with the support of artificial intelligence (AI-assisted). Architecture, code, and tests were reviewed manually and verified locally for function/security.
 
