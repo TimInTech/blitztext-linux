@@ -155,7 +155,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du unter **Einstellungen → KI-Workflows**:
 
 <div align="center">
-  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="KI-Workflow-Einstellungen" width="480">
+  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="KI-Workflow-Einstellungen" width="480">
   <br><br>
 </div>
 
@@ -194,6 +194,12 @@ Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schrei
 ## Compose-Fenster
 
 Das **Compose-Fenster** (`✍ Compose…` im Tray-Kontextmenü) ermöglicht das Umschreiben beliebiger Texte mit der KI — ganz ohne Sprachaufnahme. Es eignet sich ideal zum Überarbeiten fertiger Entwürfe, E-Mails oder Notizen.
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/compose-en.png" alt="Compose-Fenster" width="480">
+  <br><br>
+</div>
 
 **Öffnen:** Klick auf das Tray-Icon → **✍ Compose…**
 
@@ -251,7 +257,7 @@ Das Tray-Kontextmenü gibt dir schnellen Zugriff auf alle Workflows, das Compose
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/en/tray-menu.png" alt="Tray-Kontextmenü" width="280">
+  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray-Kontextmenü" width="280">
   <br><br>
 </div>
 
@@ -266,11 +272,12 @@ Das Hauptfenster ist dein grafisches Kontrollzentrum — nützlich, wenn Hotkeys
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/en/blitztext-ready.png" alt="Hauptfenster" width="300">
+  <img src="docs/screenshots/linux/main-window-en.png" alt="Hauptfenster" width="300">
   <br><br>
 </div>
 
 - **Workflow-Dropdown:** Alle 5 Aufnahmemodi zur Auswahl.
+- **Schreibstil-Vorlage:** Sichtbar wenn **Blitztext+** gewählt ist — Preset direkt im Hauptfenster wählen. Änderungen werden sofort mit dem Tray synchronisiert.
 - **Start/Stopp-Button:** Klick zum Starten oder Beenden einer Aufnahme.
 - **Abbruch:** Bricht die aktuelle Aufnahme ohne Transkription ab.
 - **Diktat / Verlauf:** Schnellzugriff auf den Diktat-Modus und den Transkript-Verlauf.
@@ -286,8 +293,8 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/history.png" alt="Verlauf" width="340">
-  <img src="docs/screenshots/linux/en/read-aloud.png" alt="Vorlesen" width="340">
+  <img src="docs/screenshots/linux/history-en.png" alt="Verlauf" width="340">
+  <img src="docs/screenshots/linux/tts-en.png" alt="Vorlesen" width="340">
   <br><br>
 </div>
 
@@ -320,11 +327,11 @@ Alles wird lokal und sicher unter `~/.config/blitztext-linux/config.json` gespei
 Der Einstellungs-Dialog hat drei Tabs:
 
 <div align="center">
-  <img src="docs/screenshots/linux/en/settings-speech-recognition.png" alt="Einstellungen: Spracherkennung" width="480">
+  <img src="docs/screenshots/linux/settings-speech-en.png" alt="Einstellungen: Spracherkennung" width="480">
   <br><i>Spracherkennung — Whisper-Modell, Backend, Sprache, Hotkey-Modus und Aufnahmetaste.</i><br><br>
-  <img src="docs/screenshots/linux/en/settings-ai-workflows.png" alt="Einstellungen: KI-Workflows" width="480">
+  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="Einstellungen: KI-Workflows" width="480">
   <br><i>KI-Workflows — LLM-Anbieter, API-Key, Base-URL, Modell, Tonfall und Schreibstil-Vorlage.</i><br><br>
-  <img src="docs/screenshots/linux/en/settings-general.png" alt="Einstellungen: Allgemein" width="480">
+  <img src="docs/screenshots/linux/settings-general-en.png" alt="Einstellungen: Allgemein" width="480">
   <br><i>Allgemein — Auto-Paste, Diktat-Ordner, Verlaufsgröße, Sprache der Oberfläche und Signatur.</i><br><br>
 </div>
 

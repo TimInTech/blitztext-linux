@@ -22,12 +22,15 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
+from app.blitztext_linux import BlitztextApp, Config, SettingsDialog
+from app.compose_window import ComposeWindow
 from app.config import BlitztextConfig
 from app.history_panel import HistoryPanel
 from app.i18n import set_language, t
+from app.llm_service import LLMService, WorkflowType
 from app.main_window import MainWindow
+from app.paste_service import PasteService
 from app.tts_window import TtsWindow
-from app.blitztext_linux import BlitztextApp, Config, SettingsDialog
 
 SCREENSHOT_DIR = Path("docs/screenshots/linux")
 CANVAS_SIZE = (1280, 640)
@@ -47,20 +50,22 @@ LANG_COPY = {
         "hero": "Your local AI voice assistant for KDE Plasma & Wayland",
         "sub": "Record speech, transcribe locally or online, optionally rewrite it with AI, and paste it directly into the active app.",
         "flow": "Record  •  Transcribe  •  Rewrite  •  Paste",
-        "feature_title": "What is new in v0.4.0",
+        "feature_title": "What is new in v0.8.0",
         "tag_new": "NEW",
         "chips": [
-            ("Multilingual UI", "Switch the whole app between English and German."),
-            ("Writing-style presets", "Ready-made Blitztext+ presets for common writing tasks."),
-            ("Offline-ready", "Local Whisper and privacy-friendly workflows stay available."),
-            ("Global hotkeys", "Capture dictation from anywhere in KDE Plasma."),
+            ("Compose window", "Draft, refine and compare AI-rewritten text before pasting it anywhere."),
+            ("Preset in main window", "Pick your writing style in the main window — changes sync to the tray instantly."),
+            ("Tone & template control", "Choose tone and writing template directly inside the Compose window."),
+            ("Prompt transparency", "Inspect and edit the AI system prompt before running a rewrite."),
         ],
         "labels": {
             "main": "Main window",
-            "general": "Settings → General",
+            "compose": "Compose window",
             "workflows": "Settings → AI Workflows",
             "tray": "Tray presets",
         },
+        "compose_input": "Please help me write a concise follow-up email for our product meeting earlier today.",
+        "compose_output": "Hi team,\n\nThank you for the productive discussion today. Here are the key action items we agreed on:\n\n• Finalise the API contract by Friday\n• Schedule a follow-up review for next Tuesday\n• Share the updated roadmap with stakeholders\n\nLet me know if I missed anything.\n\nBest,",
         "history_entries": [
             ("Please move tomorrow's team sync to 10:00.", False),
             ("Could you send me the updated rollout plan afterwards?", True),
@@ -74,20 +79,22 @@ LANG_COPY = {
         "hero": "Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland",
         "sub": "Sprache aufnehmen, lokal oder online transkribieren, optional mit KI umformulieren und direkt in die aktive Anwendung einfügen.",
         "flow": "Aufnehmen  •  Transkribieren  •  Umformulieren  •  Direkt einfügen",
-        "feature_title": "Neu im Stand v0.4.0",
+        "feature_title": "Neu in v0.8.0",
         "tag_new": "NEU",
         "chips": [
-            ("Mehrsprachige Oberfläche", "Die komplette App lässt sich zwischen Deutsch und Englisch umschalten."),
-            ("Schreibstil-Vorlagen", "Vorgefertigte Blitztext+-Presets für typische Schreibaufgaben."),
-            ("Offline-fähig", "Lokale Whisper-Workflows bleiben für datensparsame Nutzung verfügbar."),
-            ("Globale Hotkeys", "Diktat direkt aus jeder Anwendung unter KDE Plasma starten."),
+            ("Entwurfsfenster", "Text entwerfen, verfeinern und KI-Varianten vergleichen, bevor du einfügst."),
+            ("Preset im Hauptfenster", "Schreibstil direkt im Hauptfenster wählen – Änderungen bleiben mit dem Tray synchron."),
+            ("Tonfall & Vorlage", "Tonfall und Schreibvorlage direkt im Entwurfsfenster steuern."),
+            ("Prompt-Transparenz", "KI-Systemprompt vor der Ausführung einsehen und anpassen."),
         ],
         "labels": {
             "main": "Hauptfenster",
-            "general": "Einstellungen → Allgemein",
+            "compose": "Entwurfsfenster",
             "workflows": "Einstellungen → KI-Workflows",
             "tray": "Tray-Presets",
         },
+        "compose_input": "Bitte hilf mir, eine knappe Nachfass-E-Mail zu unserem heutigen Produktmeeting zu schreiben.",
+        "compose_output": "Hallo zusammen,\n\nvielen Dank für die produktive Diskussion heute. Hier die vereinbarten Aufgaben:\n\n• API-Vertrag bis Freitag finalisieren\n• Review-Termin für nächsten Dienstag eintragen\n• Aktualisierte Roadmap an Stakeholder verteilen\n\nBitte meldet euch, falls ich etwas vergessen habe.\n\nViele Grüße,",
         "history_entries": [
             ("Bitte verschiebe das Team-Meeting morgen auf 10 Uhr.", False),
             ("Kannst du mir danach den aktualisierten Rollout-Plan schicken?", True),
@@ -277,14 +284,14 @@ def _make_banner(lang: str, out_dir: Path) -> None:
 
     screenshots = {
         "main": out_dir / f"main-window-{lang}.png",
-        "general": out_dir / f"settings-general-{lang}.png",
+        "compose": out_dir / f"compose-{lang}.png",
         "workflows": out_dir / f"settings-ai-workflows-{lang}.png",
         "tray": out_dir / f"tray-menu-{lang}.png",
     }
 
     placements = [
         (screenshots["main"], (824, 74), (220, 260), copy["labels"]["main"]),
-        (screenshots["general"], (1046, 74), (194, 260), copy["labels"]["general"]),
+        (screenshots["compose"], (1046, 74), (194, 260), copy["labels"]["compose"]),
         (screenshots["workflows"], (790, 350), (250, 236), copy["labels"]["workflows"]),
         (screenshots["tray"], (1054, 332), (186, 254), copy["labels"]["tray"]),
     ]
@@ -305,6 +312,36 @@ def _make_banner(lang: str, out_dir: Path) -> None:
         social_path = out_dir / copy["social"]
         canvas.convert("RGB").save(social_path, quality=95)
         print(f"  ✓ {social_path.name}")
+
+
+class _FakeLLMService(LLMService):
+    """Minimal LLMService stub for offscreen rendering — never calls any API."""
+
+    def __init__(self) -> None:
+        self.api_key = "SCREENSHOT_DUMMY_TOKEN"
+        self.writing_preset = "standard"
+
+    def is_configured(self) -> bool:
+        return True
+
+    def rewrite_text(self, *args, **kwargs) -> str:  # type: ignore[override]
+        return ""
+
+    def build_system_prompt(self, *args, **kwargs) -> str:  # type: ignore[override]
+        return ""
+
+    def rewrite_raw(self, *args, **kwargs) -> str:  # type: ignore[override]
+        return ""
+
+
+class _FakePasteService(PasteService):
+    """Minimal PasteService stub — suppresses all clipboard / xdotool calls."""
+
+    def __init__(self) -> None:
+        pass
+
+    def paste(self, text: str, force_autopaste=None) -> None:
+        pass
 
 
 def _tab_index(tabs, key: str) -> int:
@@ -336,9 +373,16 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
             show_history_panel=lambda *a, **k: None,
             show_settings_dialog=lambda *a, **k: None,
             show_tts_window=lambda *a, **k: None,
+            main_window_preset_changed=lambda *a, **k: None,
         )
 
         main_window = MainWindow(controller)
+        # Switch to TEXT_IMPROVER so the writing-style preset combo is visible
+        for i in range(main_window._workflow_combo.count()):
+            if main_window._workflow_combo.itemData(i) == WorkflowType.TEXT_IMPROVER:
+                main_window._workflow_combo.setCurrentIndex(i)
+                _process_events()
+                break
         _grab(main_window, out_dir / f"main-window-{lang}.png")
         main_window.update_state("RECORDING", None, None)
         _grab(main_window, out_dir / f"main-window-recording-{lang}.png")
@@ -347,6 +391,8 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
         settings = SettingsDialog(config)
         settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.general"))
         _grab(settings, out_dir / f"settings-general-{lang}.png")
+        settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.speech"))
+        _grab(settings, out_dir / f"settings-speech-{lang}.png")
         settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.workflows"))
         _grab(settings, out_dir / f"settings-ai-workflows-{lang}.png")
         settings.close()
@@ -365,6 +411,12 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
         tts.set_text(copy["tts_text"])
         _grab(tts, out_dir / f"tts-{lang}.png")
         tts.close()
+
+        compose = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
+        compose.set_input_text(copy["compose_input"])
+        compose.txtOutput.setPlainText(copy["compose_output"])
+        _grab(compose, out_dir / f"compose-{lang}.png")
+        compose.close()
 
         _capture_tray_menu(config, lang, out_dir / f"tray-menu-{lang}.png")
         _make_banner(lang, out_dir)
