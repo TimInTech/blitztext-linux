@@ -280,6 +280,10 @@ sed "s|%BLITZTEXT_DIR%|${BLITZTEXT_DIR}|g" "${SERVICE_SRC}" > "${SERVICE_DST}"
 done_add "blitztext-linux.service installiert nach ${SERVICE_DST}"
 ok "Service-Datei installiert."
 
+if systemctl --user is-active --quiet blitztext-linux 2>/dev/null; then
+    warn "blitztext-linux läuft gerade. daemon-reload kann die App unerwartet beenden."
+    warn "Empfehlung: App vorher stoppen:  systemctl --user stop blitztext-linux"
+fi
 systemctl --user daemon-reload
 
 if systemctl --user is-enabled --quiet blitztext-linux 2>/dev/null; then
