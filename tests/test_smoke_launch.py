@@ -89,6 +89,46 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
 
 
 @gui_only
+def test_secondary_windows_instantiate(tmp_path):
+    """Settings-, TTS- und History-Fenster lassen sich offscreen instanziieren."""
+    from PyQt6.QtWidgets import QApplication
+
+    from app.blitztext_linux import BlitztextApp, SettingsDialog
+    from app.config import Config
+
+    config = Config.load(tmp_path / "config.json")
+
+    qapp = QApplication.instance() or QApplication([])
+    app = None
+    try:
+        with patch("app.blitztext_linux.Config.load", return_value=config):
+            app = BlitztextApp(qapp)
+        app.stop_hotkey_worker()
+        qapp.processEvents()
+
+        # History-Panel: lazy-init via show_history_panel().
+        app.show_history_panel()
+        qapp.processEvents()
+        assert app._history_panel is not None
+
+        # TTS-Fenster: lazy-init via show_tts_window().
+        app.show_tts_window()
+        qapp.processEvents()
+        assert app._tts_window is not None
+
+        # Settings-Dialog: direkt instanziieren, da show_settings_dialog() exec() aufruft.
+        dlg = SettingsDialog(config)
+        qapp.processEvents()
+        assert dlg is not None
+        dlg.close()
+
+    finally:
+        if app is not None:
+            app.stop_hotkey_worker()
+        set_language(DEFAULT_LANGUAGE)
+
+
+@gui_only
 def test_compose_dialog_lifecycle(tmp_path):
     """Compose-Dialog öffnet sich, wird wiederverwendet und übersetzt sich neu."""
     from PyQt6.QtWidgets import QApplication
