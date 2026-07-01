@@ -64,6 +64,7 @@ class TestPasteTimeouts:
         svc = PasteService(autopaste=True, key_delay_ms=135)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
              patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             def side_effect(cmd, *args, **kwargs):
@@ -102,6 +103,7 @@ class TestPasteTimeouts:
         svc = PasteService(autopaste=False)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
              patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             def side_effect(cmd, *args, **kwargs):
@@ -117,6 +119,7 @@ class TestPasteTimeouts:
         """autopaste=False ohne force_autopaste: nur Clipboard-Write, kein ydotool."""
         svc = PasteService(autopaste=False)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             run_mock.return_value = subprocess.CompletedProcess([], 0, b"", b"")
             svc.paste("hallo welt")

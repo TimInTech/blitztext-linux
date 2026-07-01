@@ -145,6 +145,7 @@ class PasteService:
             # Kurze Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
             time.sleep(_PASTE_DELAY)
             self._restore_clipboard(previous_clipboard)
+            self._cleanup_copyq(text)
 
     def clipboard_only(self, text: str) -> None:
         """Nur Clipboard, kein ydotool -- fuer Faelle wo Auto-Paste unterwuenscht."""
@@ -216,6 +217,31 @@ class PasteService:
             raise PasteServiceError("Kein Clipboard-Backend fuer Restore verfuegbar.")
         except PasteServiceError:
             logger.warning("Originalzwischenablage konnte nicht wiederhergestellt werden")
+
+    def _cleanup_copyq(self, text: str) -> None:
+        if shutil.which("copyq") is None:
+            return
+        try:
+            result = subprocess.run(
+                ["copyq", "read", "0"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=_COPYQ_TIMEOUT,
+                text=True,
+            )
+            # "copyq read" haengt teils einen Zeilenumbruch an -- fuer den
+            # Vergleich unerheblich, das eigentliche Entfernen bezieht sich
+            # ohnehin auf den Index (Position 0), nicht auf den String.
+            if result.stdout.rstrip("\n") != text:
+                return
+            subprocess.run(
+                ["copyq", "remove", "0"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=_COPYQ_TIMEOUT,
+            )
+        except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
+            logger.debug("CopyQ-Cleanup uebersprungen: %s", exc)
 
     def _wl_copy(self, text: str) -> None:
         # WICHTIG: wl-copy forkt einen Hintergrund-Daemon, der die Auswahl
