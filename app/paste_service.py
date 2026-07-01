@@ -31,17 +31,75 @@ _KEY_DELAY_MS = 80
 # KEY_LEFTCTRL=29, KEY_V=47 (siehe /usr/include/linux/input-event-codes.h).
 # Sequenz: Strg down, V down, V up, Strg up.
 _CTRL_V_KEYCODES = ["29:1", "47:1", "47:0", "29:0"]
+# Strg+Shift+V fuer Terminals (dort ist Strg+V meist "nichts tun" oder Copy).
+# KEY_LEFTSHIFT=42 zusaetzlich zu KEY_LEFTCTRL=29, KEY_V=47.
+_CTRL_SHIFT_V_KEYCODES = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+# Bekannte Terminal-Emulator-Fensterklassen (lowercase-Vergleich). X11-only --
+# unter Wayland gibt es ohne Compositor-spezifische Erweiterung keine
+# generische "aktives Fenster"-Abfrage wie xdotool sie fuer X11 bietet.
+_KNOWN_TERMINAL_WINDOW_CLASSES = frozenset(
+    {
+        "gnome-terminal-server",
+        "xterm",
+        "konsole",
+        "kitty",
+        "alacritty",
+        "kgx",
+        "tilix",
+        "xfce4-terminal",
+        "terminator",
+        "mate-terminal",
+        "org.wezfurlong.wezterm",
+        "foot",
+        "footclient",
+        "lxterminal",
+        "ghostty",
+        "org.gnome.terminal",
+        "com.github.alacritty.alacritty",
+    }
+)
 # Subprocess-Timeouts: verhindern, dass ein haengendes wl-copy/ydotool den
 # Transkriptions-Worker dauerhaft blockiert (sonst bleibt der App-State auf
 # TRANSCRIBING/LLM_REWRITING haengen und kein neuer Hotkey-Toggle ist moeglich).
 _WL_COPY_TIMEOUT = 5.0
 _YDOTOOL_TIMEOUT = 5.0
+_WL_PASTE_TIMEOUT = 5.0
+_XCLIP_PASTE_TIMEOUT = 5.0
+_XDOTOOL_TIMEOUT = 2.0
+_COPYQ_TIMEOUT = 2.0
 _YDOTOOL_MISSING_DAEMON_MARKERS = (
     "failed to connect",
     "no such file or directory",
     ".ydotool_socket",
     "connection refused",
 )
+
+
+def _detect_active_window_class() -> Optional[str]:
+    # X11-only: xdotool benoetigt DISPLAY und kann unter Wayland ohne
+    # Compositor-spezifische Erweiterungen das aktive Fenster nicht generisch abfragen.
+    if not os.environ.get("DISPLAY"):
+        return None
+    if shutil.which("xdotool") is None:
+        return None
+    try:
+        result = subprocess.run(
+            ["xdotool", "getactivewindow", "getwindowclassname"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=_XDOTOOL_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError):
+        return None
+    window_class = result.stdout.strip().lower()
+    return window_class or None
+
+
+def _is_terminal_active() -> bool:
+    window_class = _detect_active_window_class()
+    return bool(window_class and window_class in _KNOWN_TERMINAL_WINDOW_CLASSES)
 
 
 class PasteServiceError(Exception):
@@ -156,9 +214,14 @@ class PasteService:
             return
         # Kurze Pause damit Clipboard-Inhalt sicher verfuegbar ist
         time.sleep(_PASTE_DELAY)
+        keycodes = _CTRL_SHIFT_V_KEYCODES if _is_terminal_active() else _CTRL_V_KEYCODES
+        if keycodes is _CTRL_SHIFT_V_KEYCODES:
+            logger.debug("Aktives Fenster ist ein Terminal -- sende Ctrl+Shift+V via ydotool.")
+        else:
+            logger.debug("Aktives Fenster ist kein Terminal -- sende Ctrl+V via ydotool.")
         try:
             result = subprocess.run(
-                ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *_CTRL_V_KEYCODES],
+                ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *keycodes],
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
