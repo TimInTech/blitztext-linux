@@ -142,6 +142,7 @@ class PasteService:
         self._copy_to_clipboard(text)
 
         if do_autopaste and self._ydotool_paste():
+            # Kurze Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
             time.sleep(_PASTE_DELAY)
             self._restore_clipboard(previous_clipboard)
 
@@ -182,8 +183,6 @@ class PasteService:
                 stderr=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
-            return None
-        except subprocess.CalledProcessError:
             return None
         except (OSError, ValueError) as exc:
             logger.debug("Clipboard-Inhalt konnte nicht gelesen werden: %s", exc)
@@ -266,7 +265,7 @@ class PasteService:
                 "Installieren: sudo apt install ydotool"
             )
             return False
-        # Kurze Pause damit Clipboard-Inhalt sicher verfuegbar ist
+        # Kurze Pause, damit der neue Clipboard-Inhalt vor Ctrl+V sicher anliegt
         time.sleep(_PASTE_DELAY)
         keycodes = _CTRL_SHIFT_V_KEYCODES if _is_terminal_active() else _CTRL_V_KEYCODES
         if keycodes is _CTRL_SHIFT_V_KEYCODES:

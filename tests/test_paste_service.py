@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from app.paste_service import (
     _CTRL_SHIFT_V_KEYCODES,
     _CTRL_V_KEYCODES,
+    _PASTE_DELAY,
     _XDOTOOL_TIMEOUT,
     _WL_PASTE_TIMEOUT,
     _XCLIP_PASTE_TIMEOUT,
@@ -197,6 +198,7 @@ class TestRestoreClipboard:
         with patch("app.paste_service._has_wayland_clipboard", return_value=False):
             with patch("app.paste_service._has_x11_clipboard", return_value=True):
                 with patch.object(service, "_xclip_copy") as xclip_copy_mock:
+                    # "" ist ein gueltiger alter Clipboard-Inhalt und darf nicht wie None behandelt werden.
                     service._restore_clipboard("")
         xclip_copy_mock.assert_called_once_with("")
 
@@ -252,6 +254,20 @@ class TestPasteClipboardRestore:
         paste_mock.assert_called_once_with()
         sleep_mock.assert_not_called()
         restore_mock.assert_not_called()
+
+    def test_paste_restores_empty_previous_clipboard_after_successful_autopaste(self):
+        service = PasteService(autopaste=True)
+        with patch.object(service, "_read_clipboard", return_value="") as read_mock:
+            with patch.object(service, "_copy_to_clipboard") as copy_mock:
+                with patch.object(service, "_ydotool_paste", return_value=True) as paste_mock:
+                    with patch("app.paste_service.time.sleep") as sleep_mock:
+                        with patch.object(service, "_restore_clipboard") as restore_mock:
+                            service.paste("neu", force_autopaste=True)
+        read_mock.assert_called_once_with()
+        copy_mock.assert_called_once_with("neu")
+        paste_mock.assert_called_once_with()
+        sleep_mock.assert_called_once_with(_PASTE_DELAY)
+        restore_mock.assert_called_once_with("")
 
     def test_clipboard_only_does_not_restore(self):
         service = PasteService(autopaste=True)
