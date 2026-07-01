@@ -104,6 +104,7 @@ class TestPasteTimeouts:
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
              patch("app.paste_service._is_terminal_active", return_value=False), \
              patch.object(PasteService, "_cleanup_copyq"), \
+             patch.object(PasteService, "_read_clipboard", return_value="alter text"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             def side_effect(cmd, *args, **kwargs):
