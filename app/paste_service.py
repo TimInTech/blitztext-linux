@@ -137,11 +137,13 @@ class PasteService:
             logger.debug("paste() mit leerem Text aufgerufen, uebersprungen.")
             return
 
+        do_autopaste = self.autopaste if force_autopaste is None else bool(force_autopaste)
+        previous_clipboard = self._read_clipboard() if do_autopaste else None
         self._copy_to_clipboard(text)
 
-        do_autopaste = self.autopaste if force_autopaste is None else bool(force_autopaste)
-        if do_autopaste:
-            self._ydotool_paste()
+        if do_autopaste and self._ydotool_paste():
+            time.sleep(_PASTE_DELAY)
+            self._restore_clipboard(previous_clipboard)
 
     def clipboard_only(self, text: str) -> None:
         """Nur Clipboard, kein ydotool -- fuer Faelle wo Auto-Paste unterwuenscht."""
@@ -163,6 +165,58 @@ class PasteService:
         raise PasteServiceError(
             "Kein nutzbares Clipboard-Backend gefunden. Installieren: sudo apt install wl-clipboard xclip"
         )
+
+    def _read_clipboard(self) -> Optional[str]:
+        if _has_wayland_clipboard():
+            command = ["wl-paste", "--no-newline"]
+            timeout = _WL_PASTE_TIMEOUT
+        elif _has_x11_clipboard():
+            command = ["xclip", "-selection", "clipboard", "-o"]
+            timeout = _XCLIP_PASTE_TIMEOUT
+        else:
+            return None
+        try:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+        except subprocess.CalledProcessError:
+            return None
+        except (OSError, ValueError) as exc:
+            logger.debug("Clipboard-Inhalt konnte nicht gelesen werden: %s", exc)
+            return None
+        try:
+            stdout, _ = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            return None
+        if process.returncode != 0:
+            return None
+        if isinstance(stdout, bytes):
+            try:
+                return stdout.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                logger.debug("Clipboard-Inhalt konnte nicht decodiert werden: %s", exc)
+                return None
+        return stdout
+
+    def _restore_clipboard(self, previous: Optional[str]) -> None:
+        if previous is None:
+            return
+        try:
+            if _has_wayland_clipboard():
+                self._wl_copy(previous)
+                return
+            if _has_x11_clipboard():
+                self._xclip_copy(previous)
+                return
+            raise PasteServiceError("Kein Clipboard-Backend fuer Restore verfuegbar.")
+        except PasteServiceError:
+            logger.warning("Originalzwischenablage konnte nicht wiederhergestellt werden")
 
     def _wl_copy(self, text: str) -> None:
         # WICHTIG: wl-copy forkt einen Hintergrund-Daemon, der die Auswahl
@@ -205,13 +259,13 @@ class PasteService:
         except subprocess.CalledProcessError as exc:
             raise PasteServiceError(f"xclip fehlgeschlagen (rc={exc.returncode})") from exc
 
-    def _ydotool_paste(self) -> None:
+    def _ydotool_paste(self) -> bool:
         if shutil.which("ydotool") is None:
             logger.warning(
                 "ydotool nicht gefunden -- Auto-Paste uebersprungen. "
                 "Installieren: sudo apt install ydotool"
             )
-            return
+            return False
         # Kurze Pause damit Clipboard-Inhalt sicher verfuegbar ist
         time.sleep(_PASTE_DELAY)
         keycodes = _CTRL_SHIFT_V_KEYCODES if _is_terminal_active() else _CTRL_V_KEYCODES
@@ -235,7 +289,7 @@ class PasteService:
                 "(Text liegt bereits im Clipboard).",
                 _YDOTOOL_TIMEOUT,
             )
-            return
+            return False
         if result.returncode != 0:
             stderr = result.stderr.decode(errors="replace").strip() if result.stderr else ""
             # Nicht fatal -- Clipboard-Inhalt ist bereits gesetzt
@@ -244,8 +298,10 @@ class PasteService:
                     "ydotoold nicht verfügbar -- Auto-Paste uebersprungen "
                     "(Text liegt bereits im Clipboard)."
                 )
-                return
+                return False
             logger.warning("ydotool Ctrl+V fehlgeschlagen (rc=%d): %s", result.returncode, stderr)
+            return False
+        return True
 
 
 def check_dependencies() -> list[str]:

@@ -108,7 +108,7 @@ class TestPasteTimeouts:
                 return subprocess.CompletedProcess(cmd, 0, b"", b"")
             run_mock.side_effect = side_effect
             svc.paste("hallo welt", force_autopaste=True)
-        assert run_mock.call_count == 2
+        assert run_mock.call_count == 3
         cmd_names = [call.args[0][0] for call in run_mock.call_args_list]
         assert any(name in ("wl-copy", "xclip") for name in cmd_names)
         assert "ydotool" in cmd_names
