@@ -63,6 +63,8 @@ class TestPasteTimeouts:
     def test_paste_uses_configured_key_delay_for_ydotool(self):
         svc = PasteService(autopaste=True, key_delay_ms=135)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             def side_effect(cmd, *args, **kwargs):
@@ -100,13 +102,16 @@ class TestPasteTimeouts:
         """force_autopaste=True überschreibt autopaste=False: Clipboard + ydotool."""
         svc = PasteService(autopaste=False)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch.object(PasteService, "_cleanup_copyq"), \
+             patch.object(PasteService, "_read_clipboard", return_value="alter text"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             def side_effect(cmd, *args, **kwargs):
                 return subprocess.CompletedProcess(cmd, 0, b"", b"")
             run_mock.side_effect = side_effect
             svc.paste("hallo welt", force_autopaste=True)
-        assert run_mock.call_count == 2
+        assert run_mock.call_count == 3
         cmd_names = [call.args[0][0] for call in run_mock.call_args_list]
         assert any(name in ("wl-copy", "xclip") for name in cmd_names)
         assert "ydotool" in cmd_names
@@ -115,6 +120,7 @@ class TestPasteTimeouts:
         """autopaste=False ohne force_autopaste: nur Clipboard-Write, kein ydotool."""
         svc = PasteService(autopaste=False)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
+             patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.subprocess.run") as run_mock:
             run_mock.return_value = subprocess.CompletedProcess([], 0, b"", b"")
             svc.paste("hallo welt")
