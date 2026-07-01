@@ -1,29 +1,45 @@
 # Blitztext Linux Roadmap
 
-This roadmap describes the Linux-focused direction of the repository.
+This roadmap tracks open work and near-term ideas for the Linux repo.
 It is a planning note, not a promise.
 
 ## Current scope
 
 - Linux desktop app for Ubuntu/Kubuntu on KDE Plasma and Wayland
 - PyQt6 tray application with a real window fallback
-- Global hotkeys via `evdev`
+- Global hotkeys via `evdev` (toggle and hold)
 - Local transcription via `openai-whisper` and optional `faster-whisper`
 - Optional OpenAI rewriting workflows
-- Diktat, Verlauf, Vorlesen, and notifications
+- Diktat, Verlauf, Vorlesen, Audio-Export, and notifications
 - Install / verify / autostart flow driven by `scripts/install.sh` and `scripts/verify.sh`
 
 ## Next useful work
 
+### Docs / repo hygiene
+
 - Keep the Linux README and `docs/` tree aligned with the actual app behavior
 - Tighten CI coverage for repo-root docs and scripts
 - Reduce stale local artifacts and improve repo hygiene
-- Improve the X11 fallback story or document the Wayland-only limitations more clearly
 - Keep the installer and verify script in sync with the dependencies they check
+
+### Core product work
+
 - Add more regression coverage around startup, config, and transcription edge cases
+- Improve the X11 fallback story or document the Wayland-only limitations more clearly
 - Replace the current `evdev`/`input` global-hotkey path with a desktop-native XDG GlobalShortcuts integration when it is practical for KDE/Wayland
 - Add a lightweight launch smoke test (boot the app offscreen and exit cleanly) so CI confirms the GUI actually starts, not just that mocked logic passes
-- Export transcribed text as a shareable audio file (e.g. OGG/Opus or MP3) so longer transcripts can be sent as a voice message via WhatsApp or similar (builds on the TTS pipeline)
+
+### Board ideas worth keeping
+
+- Harden `PasteService` with clipboard restore and a terminal-paste fallback
+- Research streaming / VAD to lower dictation latency
+- Research IBus / input-method integration as a long-term successor to the current paste flow
+- Add a context mode that can suggest the right preset or tone before rewriting
+
+## Already shipped / not open roadmap items
+
+- Audio export from Read Aloud is already implemented
+- Hold-to-talk is already available via the existing hotkey mode
 
 ## Paket H — Audit hardening (2026-06-21)
 
