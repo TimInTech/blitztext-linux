@@ -63,7 +63,7 @@ class TestPasteTimeouts:
     def test_paste_uses_configured_key_delay_for_ydotool(self):
         svc = PasteService(autopaste=True, key_delay_ms=135)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
-             patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch("app.paste_service._detect_active_window_class", return_value="firefox"), \
              patch.object(PasteService, "_cleanup_copyq"), \
              patch("app.paste_service.time.sleep"), \
              patch("app.paste_service.subprocess.run") as run_mock:
@@ -102,7 +102,7 @@ class TestPasteTimeouts:
         """force_autopaste=True überschreibt autopaste=False: Clipboard + ydotool."""
         svc = PasteService(autopaste=False)
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/tool"), \
-             patch("app.paste_service._is_terminal_active", return_value=False), \
+             patch("app.paste_service._detect_active_window_class", return_value="firefox"), \
              patch.object(PasteService, "_cleanup_copyq"), \
              patch.object(PasteService, "_read_clipboard", return_value="alter text"), \
              patch("app.paste_service.time.sleep"), \
