@@ -100,7 +100,7 @@ class TestYdotoolPaste:
         service = PasteService(autopaste=True, key_delay_ms=135)
         result = MagicMock(returncode=0, stderr=b"")
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
-            with patch("app.paste_service._is_terminal_active", return_value=True):
+            with patch("app.paste_service._detect_active_window_class", return_value="konsole"):
                 with patch("app.paste_service.time.sleep"):
                     with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
                         assert service._ydotool_paste() is True
@@ -116,7 +116,7 @@ class TestYdotoolPaste:
         service = PasteService(autopaste=True, key_delay_ms=246)
         result = MagicMock(returncode=0, stderr=b"")
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
-            with patch("app.paste_service._is_terminal_active", return_value=False):
+            with patch("app.paste_service._detect_active_window_class", return_value="firefox"):
                 with patch("app.paste_service.time.sleep"):
                     with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
                         assert service._ydotool_paste() is True
@@ -128,6 +128,22 @@ class TestYdotoolPaste:
             timeout=5.0,
         )
 
+    def test_wayland_unknown_sends_terminal_fallback_and_keeps_clipboard(self):
+        service = PasteService(autopaste=True, key_delay_ms=80)
+        result = MagicMock(returncode=0, stderr=b"")
+        with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}, clear=True):
+            with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
+                with patch("app.paste_service._detect_active_window_class", return_value=None):
+                    with patch("app.paste_service.time.sleep"):
+                        with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
+                            assert service._ydotool_paste() is False
+        run_mock.assert_called_once_with(
+            ["ydotool", "key", "--key-delay", "80", *_CTRL_SHIFT_V_KEYCODES],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=5.0,
+        )
 
 class TestReadClipboard:
     def test_reads_wayland_clipboard_with_wl_paste(self):

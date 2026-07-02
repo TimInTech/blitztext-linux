@@ -34,14 +34,15 @@ _CTRL_V_KEYCODES = ["29:1", "47:1", "47:0", "29:0"]
 # Strg+Shift+V fuer Terminals (dort ist Strg+V meist "nichts tun" oder Copy).
 # KEY_LEFTSHIFT=42 zusaetzlich zu KEY_LEFTCTRL=29, KEY_V=47.
 _CTRL_SHIFT_V_KEYCODES = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
-# Bekannte Terminal-Emulator-Fensterklassen (lowercase-Vergleich). X11-only --
-# unter Wayland gibt es ohne Compositor-spezifische Erweiterung keine
-# generische "aktives Fenster"-Abfrage wie xdotool sie fuer X11 bietet.
+# Bekannte Terminal-Emulator-Fensterklassen (lowercase-Vergleich).
+# Unter Wayland kann xdotool die aktive native Fensterklasse oft nicht erkennen;
+# dann nutzt Auto-Paste einen sicheren Terminal-Fallback und laesst das Clipboard stehen.
 _KNOWN_TERMINAL_WINDOW_CLASSES = frozenset(
     {
         "gnome-terminal-server",
         "xterm",
         "konsole",
+        "org.kde.konsole",
         "kitty",
         "alacritty",
         "kgx",
@@ -76,8 +77,7 @@ _YDOTOOL_MISSING_DAEMON_MARKERS = (
 
 
 def _detect_active_window_class() -> Optional[str]:
-    # X11-only: xdotool benoetigt DISPLAY und kann unter Wayland ohne
-    # Compositor-spezifische Erweiterungen das aktive Fenster nicht generisch abfragen.
+    """Return the active X11/XWayland window class if xdotool can see it."""
     if not os.environ.get("DISPLAY"):
         return None
     if shutil.which("xdotool") is None:
@@ -138,6 +138,7 @@ class PasteService:
             return
 
         do_autopaste = self.autopaste if force_autopaste is None else bool(force_autopaste)
+        logger.info("Paste request: %d chars, autopaste=%s", len(text), do_autopaste)
         previous_clipboard = self._read_clipboard() if do_autopaste else None
         self._copy_to_clipboard(text)
 
@@ -258,7 +259,7 @@ class PasteService:
                 stderr=subprocess.DEVNULL,
                 timeout=_WL_COPY_TIMEOUT,
             )
-            logger.debug("wl-copy: %d Zeichen ins Clipboard geschrieben.", len(text))
+            logger.info("Clipboard write completed via wl-copy (%d chars).", len(text))
         except subprocess.TimeoutExpired as exc:
             raise PasteServiceError(
                 f"wl-copy reagierte nicht innerhalb von {_WL_COPY_TIMEOUT:.0f}s"
@@ -276,7 +277,7 @@ class PasteService:
                 stderr=subprocess.DEVNULL,
                 timeout=_WL_COPY_TIMEOUT,
             )
-            logger.debug("xclip: %d Zeichen ins Clipboard geschrieben.", len(text))
+            logger.info("Clipboard write completed via xclip (%d chars).", len(text))
         except subprocess.TimeoutExpired as exc:
             raise PasteServiceError(
                 f"xclip reagierte nicht innerhalb von {_WL_COPY_TIMEOUT:.0f}s"
@@ -293,11 +294,24 @@ class PasteService:
             return False
         # Kurze Pause, damit der neue Clipboard-Inhalt vor Ctrl+V sicher anliegt
         time.sleep(_PASTE_DELAY)
-        keycodes = _CTRL_SHIFT_V_KEYCODES if _is_terminal_active() else _CTRL_V_KEYCODES
-        if keycodes is _CTRL_SHIFT_V_KEYCODES:
-            logger.debug("Aktives Fenster ist ein Terminal -- sende Ctrl+Shift+V via ydotool.")
+        window_class = _detect_active_window_class()
+        wayland_unknown = window_class is None and bool(os.environ.get("WAYLAND_DISPLAY"))
+        is_terminal = bool(window_class and window_class in _KNOWN_TERMINAL_WINDOW_CLASSES)
+        if wayland_unknown:
+            keycodes = _CTRL_SHIFT_V_KEYCODES
+            shortcut = "Ctrl+Shift+V"
+            logger.warning(
+                "Active window could not be detected under Wayland -- sending Ctrl+Shift+V "
+                "fallback and keeping the new text in the clipboard."
+            )
         else:
-            logger.debug("Aktives Fenster ist kein Terminal -- sende Ctrl+V via ydotool.")
+            keycodes = _CTRL_SHIFT_V_KEYCODES if is_terminal else _CTRL_V_KEYCODES
+            shortcut = "Ctrl+Shift+V" if is_terminal else "Ctrl+V"
+            logger.info(
+                "Auto-paste sending %s via ydotool (active_window_class=%s).",
+                shortcut,
+                window_class or "unknown",
+            )
         try:
             result = subprocess.run(
                 ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *keycodes],
@@ -324,9 +338,10 @@ class PasteService:
                     "(Text liegt bereits im Clipboard)."
                 )
                 return False
-            logger.warning("ydotool Ctrl+V fehlgeschlagen (rc=%d): %s", result.returncode, stderr)
+            logger.warning("ydotool %s fehlgeschlagen (rc=%d): %s", shortcut, result.returncode, stderr)
             return False
-        return True
+        logger.info("Auto-paste key injection completed with %s.", shortcut)
+        return not wayland_unknown
 
 
 def check_dependencies() -> list[str]:
