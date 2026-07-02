@@ -48,12 +48,13 @@ bash scripts/install.sh
 It is idempotent (safe to run repeatedly) and handles everything fully automatically:
 1. Checks your system (Ubuntu/Debian) & Python version.
 2. Installs missing system packages (incl. `pipx`).
-3. Sets up a `.venv` environment and installs `openai-whisper`/`faster-whisper`.
-4. Prepares `ydotool.service` and the systemd user service.
+3. Prompts for the operating mode: global hotkeys with `input` group, or window/tray only without global hotkeys.
+4. Sets up a `.venv` environment and installs `openai-whisper`/`faster-whisper`.
+5. Prepares `ydotool.service` and the systemd user service.
 
 ### After installation
 
-1. **Restart required** (or log out/in) so the `input` group becomes active. Then verify:
+1. **Restart required only if you chose hotkey mode** (or log out/in) so the `input` group becomes active. Then verify:
    ```bash
    bash scripts/verify.sh
    ```
@@ -102,9 +103,11 @@ sudo usermod -aG input $USER
 ```
 
 **3. Virtual environment & Python packages**
+Install the CPU-only PyTorch wheel first inside the venv to avoid accidentally downloading large CUDA wheels:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install --index-url https://download.pytorch.org/whl/cpu torch
 pip install PyQt6 evdev openai pytest openai-whisper faster-whisper
 ```
 
@@ -351,14 +354,23 @@ The settings dialog has three tabs:
   "language": "de",
   "ui_language": "en",
   "backend": "openai-whisper",
-  "hotkey_mode": "toggle",
+  "hotkey_mode": "hold",
+  "transcription_hotkey": "KEY_LEFTALT",
   "openai_api_key_env": "OPENAI_API_KEY",
   "autopaste": true,
+  "paste_key_delay_ms": 80,
   "audio_device": "@DEFAULT_SOURCE@",
+  "notes_folder": "~/Blitztext-Notizen",
+  "history_size": 50,
   "llm_provider": "openai",
-  "base_url": "",
+  "llm_base_url": "",
   "llm_model": "gpt-4o-mini",
-  "compose_signature": "",
+  "tts_provider": "piper",
+  "tts_voice": "",
+  "tts_openai_model": "gpt-4o-mini-tts",
+  "tts_openai_voice": "marin",
+  "tts_speed": 1.0,
+  "compose_signature_text": "",
   "compose_signature_auto_append": false,
   "compose_custom_preset_text": "",
   "workflows": {
@@ -377,18 +389,24 @@ The settings dialog has three tabs:
 - **hotkey_mode**: 
   - `toggle`: press once to start, press again to stop.
   - `hold`: recording runs as long as the hotkey is held.
+- **transcription_hotkey**: Recording key captured by the global hotkey daemon. Default: `KEY_LEFTALT`.
 - **openai_api_key_env**: Name of the environment variable for the API key. Default: `OPENAI_API_KEY`. For OpenRouter use `OPENROUTER_API_KEY`.
 - **llm_provider**: `openai` (default), `openrouter`, or `custom`.
-- **base_url**: Custom API base URL. Empty = OpenAI default. For OpenRouter: `https://openrouter.ai/api/v1`.
+- **llm_base_url**: Custom API base URL. Empty = OpenAI default. For OpenRouter: `https://openrouter.ai/api/v1`.
 - **llm_model**: Model name at the provider, e.g. `gpt-4o-mini` (OpenAI) or `openai/gpt-4o` (OpenRouter).
 - **autopaste**: Pastes via `ydotool`.
+- **paste_key_delay_ms**: Delay in milliseconds between synthetic key events for auto-paste. Default: `80`.
 - **audio_device**: Name of the audio source.
-- **compose_signature**: Signature text appended in the Compose window.
+- **notes_folder**: Folder for dictation notes; it must stay inside your home directory. Default: `~/Blitztext-Notizen`.
+- **history_size**: Number of recent transcripts kept in the History window. Clamped to 10-100. Default: `50`.
+- **compose_signature_text**: Signature text appended in the Compose window.
 - **compose_signature_auto_append**: Auto-append signature after every generation in Compose (`true`/`false`).
 - **compose_custom_preset_text**: Free-form system prompt for the "Custom preset…" option in the Compose window.
 - **tts_provider**: TTS provider for "Read aloud" — `piper` (local, default) or `openai` (cloud).
-- **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `nova`).
-- **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted.
+- **tts_voice**: Voice name used by the active TTS provider. Default: `""` = Piper default voice.
+- **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `marin`).
+- **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted. Default: `false`.
+- **tts_speed**: Speech speed multiplier for "Read aloud". Default: `1.0`.
 - **workflows**: Fine-tuning of tonality (`text_improver_tone`), writing-style preset (`writing_preset`), emojis (`emoji_density`), and the steam-release prompt (`dampf_system_prompt`).
 </details>
 
