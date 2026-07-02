@@ -37,6 +37,22 @@ systemctl --user disable blitztext-linux
 ```
 </details>
 
+## Desktop session notes
+
+BlitztextLinux is developed for KDE Plasma on Wayland, with X11 fallbacks where the
+underlying tools support them.
+
+- GUI startup needs a real desktop session: either a usable `WAYLAND_DISPLAY` socket
+  or `DISPLAY` must be available. In headless shells, `scripts/verify.sh` can report
+  a warning even when the installed dependencies are otherwise correct.
+- Qt prefers Wayland when `WAYLAND_DISPLAY` points to an existing socket. If that
+  variable is stale but `DISPLAY` is set, the launcher falls back to X11.
+- Clipboard support uses `wl-copy`/`wl-paste` on Wayland and `xclip` on X11.
+- Auto-paste uses `ydotool`; terminal windows may need `Ctrl+Shift+V` instead of
+  `Ctrl+V`, so the app detects known terminal window classes when possible.
+- Global hotkeys still use `evdev`/the `input` group. A future desktop-native XDG
+  GlobalShortcuts integration would be a larger replacement, not a small setup fix.
+
 ## Manual install
 
 If you want to debug the Linux setup path step by step:

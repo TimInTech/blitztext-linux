@@ -1,7 +1,5 @@
 """PasteService for BlitztextLinux.
 
-Kopiert/extrahiert aus whisper-dictation scripts/dictate_toggle.py v0.2.19.
-
 Zwei Schritte:
   1. wl-copy/xclip  -- Text in Clipboard schreiben
   2. ydotool       -- Ctrl+V simulieren (nur wenn autopaste=True)
@@ -20,9 +18,9 @@ from typing import Optional
 
 logger = logging.getLogger("blitztext.paste_service")
 
-# Verzoegerung zwischen wl-copy und ydotool key (identisch zu whisper-dictation)
+# Delay between clipboard write and simulated paste key.
 _PASTE_DELAY = 0.15
-# ydotool key-delay in ms (identisch zu whisper-dictation)
+# ydotool key-delay in ms.
 _KEY_DELAY_MS = 80
 # Strg+V als rohe Keycodes (`<keycode>:<pressed>`). ydotool >=1.0
 # interpretiert KEINE Tastennamen mehr wie "ctrl+v" -- solche Werte werden
