@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """Transcribe a WAV file with Whisper.
 
-Kopiert aus whisper-dictation app/transcribe.py v0.2.19.
-Aenderungen gegenueber Original:
-  - Logger-Name: blitztext.transcribe
-  - Neue oeffentliche Funktion transcribe() fuer direkten Python-Import
-    (BlitztextLinux ruft nicht per subprocess auf)
-  - main() und CLI-Interface bleiben unveraendert erhalten
-
 Supports both openai-whisper and faster-whisper backends.
 """
 from __future__ import annotations
@@ -33,7 +26,7 @@ class TranscribeError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Public API (neu gegenueber whisper-dictation)
+# Public API
 # ---------------------------------------------------------------------------
 
 def transcribe(
@@ -87,7 +80,7 @@ def transcribe(
 
 
 # ---------------------------------------------------------------------------
-# Backend-Implementierungen (unveraendert aus whisper-dictation)
+# Backend implementations
 # ---------------------------------------------------------------------------
 
 def _normalize_language(language: str) -> Optional[str]:
@@ -203,7 +196,7 @@ def _transcribe_faster(
 
 
 # ---------------------------------------------------------------------------
-# CLI (unveraendert aus whisper-dictation)
+# CLI
 # ---------------------------------------------------------------------------
 
 def main() -> int:

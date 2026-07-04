@@ -1,7 +1,6 @@
 """AudioRecorder for BlitztextLinux.
 
-Startet und stoppt Audioaufnahmen via parec (PulseAudio/PipeWire).
-Extrahiert aus whisper-dictation scripts/dictate_toggle.py v0.2.19.
+Starts and stops audio recordings via parec (PulseAudio/PipeWire).
 
 Design:
 - Synchron (kein Thread): der aufrufende Thread blockiert nicht,
@@ -23,7 +22,7 @@ from typing import Optional
 
 logger = logging.getLogger("blitztext.audio_recorder")
 
-# Aufnahme-Parameter (identisch zu whisper-dictation)
+# Recording parameters for Whisper-compatible 16 kHz mono WAV input.
 _RATE = 16000
 _CHANNELS = 1
 _LATENCY_MS = 100
@@ -102,7 +101,7 @@ class AudioRecorder:
                 "parec nicht gefunden. Bitte installieren: sudo apt install pulseaudio-utils"
             )
 
-        # Stale-PID-Schutz (aus whisper-dictation v0.2.19)
+        # Stale PID guard for interrupted recording processes.
         self._cleanup_stale_pid()
 
         if self._pid_file.is_file():

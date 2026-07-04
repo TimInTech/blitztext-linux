@@ -1,7 +1,4 @@
-"""Verlauf-/Diktat-Panel fuer BlitztextLinux.
-
-Portiert und an die monolithische Blitztext-Architektur angepasst aus
-whisper-dictation app/gui/history_panel.py.
+"""History window for Blitztext Linux.
 
 GUI-freie Logik (Notiz speichern, Diktat zusammenfuehren) liegt in
 Modulfunktionen, damit sie ohne Qt/Display testbar ist.

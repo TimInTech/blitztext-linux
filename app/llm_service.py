@@ -176,18 +176,13 @@ class LLMService:
                 raise
             raise LLMServiceError(f"OpenAI API-Fehler: {exc}") from exc
 
-    def dampf_ablassen(self, transcript: str, custom_system_prompt: str = "") -> str:
-        self._check_openai()
-        if not transcript or not transcript.strip():
-            raise ValueError("transcript must not be empty")
-
-        system = (custom_system_prompt.strip() or self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
-
+    def _chat_completion(self, system: str, user: str) -> str:
+        """Führt den Chat-Completion-Aufruf aus; gemeinsamer Pfad aller Workflows."""
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": transcript.strip()},
+                {"role": "user", "content": user.strip()},
             ],
             temperature=0.7,
         )
@@ -195,6 +190,14 @@ class LLMService:
         if content is None:
             raise LLMServiceError("OpenAI hat eine leere Antwort zurückgegeben.")
         return content.strip()
+
+    def dampf_ablassen(self, transcript: str, custom_system_prompt: str = "") -> str:
+        self._check_openai()
+        if not transcript or not transcript.strip():
+            raise ValueError("transcript must not be empty")
+
+        system = (custom_system_prompt.strip() or self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
+        return self._chat_completion(system, transcript)
 
     def text_improver(self, transcript: str, tone: str = "neutral", custom_prompt: str = "") -> str:
         self._check_openai()
@@ -204,19 +207,7 @@ class LLMService:
             raise ValueError(f"invalid tone: {tone}")
 
         system = (custom_prompt.strip() or _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(tone=tone)) + self._custom_terms_instruction()
-
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": transcript.strip()},
-            ],
-            temperature=0.7,
-        )
-        content = response.choices[0].message.content
-        if content is None:
-            raise LLMServiceError("OpenAI hat eine leere Antwort zurückgegeben.")
-        return content.strip()
+        return self._chat_completion(system, transcript)
 
     def emoji_text(self, transcript: str, density: str = "mittel") -> str:
         self._check_openai()
@@ -226,19 +217,7 @@ class LLMService:
             raise ValueError(f"invalid density: {density}")
 
         system = _EMOJI_SYSTEM_TEMPLATE.format(density=density) + self._custom_terms_instruction()
-
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": transcript.strip()},
-            ],
-            temperature=0.7,
-        )
-        content = response.choices[0].message.content
-        if content is None:
-            raise LLMServiceError("OpenAI hat eine leere Antwort zurückgegeben.")
-        return content.strip()
+        return self._chat_completion(system, transcript)
 
     def rewrite(self, workflow: WorkflowType, transcript: str) -> str:
         """Send transcript to OpenAI and return the rewritten text.
@@ -306,18 +285,7 @@ class LLMService:
         if not user_message or not user_message.strip():
             raise ValueError("user_message must not be empty")
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message.strip()},
-                ],
-                temperature=0.7,
-            )
-            content = response.choices[0].message.content
-            if content is None:
-                raise LLMServiceError("OpenAI hat eine leere Antwort zurückgegeben.")
-            return content.strip()
+            return self._chat_completion(system_prompt, user_message)
         except Exception as exc:
             if isinstance(exc, LLMServiceError):
                 raise

@@ -1,7 +1,7 @@
-"""Desktop-Benachrichtigungen via notify-send.
+"""Desktop notifications for BlitztextLinux.
 
-Portiert aus whisper-dictation app/gui/notify.py. Schlaegt nie hart fehl --
-fehlt notify-send, wird die Meldung still uebersprungen.
+Notifications never fail hard. If notify-send is unavailable, the message is
+silently skipped.
 """
 from __future__ import annotations
 
