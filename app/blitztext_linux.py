@@ -31,7 +31,7 @@ if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
 from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
-from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, LLMServiceError
+from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS
 from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
 from app.hotkey_service import HotkeyWorker
 from app.audio_recorder import AudioRecorder, AudioRecorderError
@@ -587,13 +587,10 @@ class _TranscribeWorker(QRunnable):
             if not transcript or not transcript.strip():
                 raise TranscribeError("Keine Sprache im Audio erkannt.")
 
-            # LLM rewrite if it is an LLM workflow
+            # LLM rewrite if it is an LLM workflow. rewrite() meldet einen
+            # fehlenden API-Key selbst als LLMServiceError mit Env-Var-Hinweis.
             if self.workflow in LLM_WORKFLOWS:
                 self._emit("status_changed", "rewriting")
-                if not self.llm_service.is_available():
-                    raise LLMServiceError(
-                        f"OpenAI API-Key nicht gesetzt. Bitte {self.config.openai_api_key_env} in ~/.config/blitztext-linux/secrets.env setzen."
-                    )
                 result_text = self.llm_service.rewrite(self.workflow, transcript)
             else:
                 result_text = transcript

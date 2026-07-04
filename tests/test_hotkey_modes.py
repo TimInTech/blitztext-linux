@@ -415,6 +415,51 @@ class TestTranscribeWorkerShutdown:
         worker._emit("result", "text")
 
 
+class TestTranscribeWorkerMissingApiKey:
+    def test_llm_workflow_without_key_reports_missing_key_message(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+        from app.llm_service import LLMService
+        from app.workflows import WorkflowType
+
+        wav = tmp_path / "audio.wav"
+        wav.write_bytes(b"RIFF")
+
+        emitted: list[tuple[str, tuple]] = []
+
+        class _CaptureSignal:
+            def __init__(self, name: str) -> None:
+                self._name = name
+
+            def emit(self, *args) -> None:
+                emitted.append((self._name, args))
+
+        class _CaptureSignals:
+            status_changed = _CaptureSignal("status_changed")
+            result = _CaptureSignal("result")
+            error = _CaptureSignal("error")
+            finished = _CaptureSignal("finished")
+
+        worker = _TranscribeWorker(
+            wav_file=wav,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TEXT_IMPROVER,
+            llm_service=LLMService(api_key="", api_key_env="MY_TEST_KEY_ENV"),
+            autopaste=False,
+            paste_service=MagicMock(),
+        )
+        worker.signals = _CaptureSignals()
+
+        with patch("app.blitztext_linux.transcribe", return_value="hallo welt"):
+            worker.run()
+
+        errors = [args[0] for name, args in emitted if name == "error"]
+        assert errors, "expected an error signal for the missing API key"
+        assert "MY_TEST_KEY_ENV" in errors[0]
+        assert "attribute" not in errors[0].lower()
+
+
 class TestModeFromConfig:
     def test_from_string_toggle(self, callbacks):
         svc = HotkeyService.from_config(
