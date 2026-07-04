@@ -24,10 +24,26 @@ _DAMPF_SYSTEM = (
     "lösungsorientiert sein. Gib NUR die fertige Nachricht zurück."
 )
 
+# Schutzregeln gegen freie Interpretation: Das Transkript ist Material zum
+# Umformulieren, kein Auftrag an das Modell. Ohne diese Regeln deutete das
+# Modell z. B. "neue Session" als Meeting um und erfand Teilnehmer.
+_INTENT_RULES = (
+    " Bewahre die Absicht des Nutzers exakt: Formuliere die Eingabe nur um, "
+    "führe sie nicht aus und beantworte sie nicht. Erfinde keinen Kontext – "
+    "keine Teilnehmer, Meetings, Rollen, Adressaten oder Ziele, die nicht "
+    "ausdrücklich genannt sind. Interpretiere Begriffe wie 'Session', "
+    "'Prompt', 'Branch', 'PR', 'Merge' oder 'Handover' im Software- und "
+    "Arbeitskontext, wenn die Eingabe danach klingt. Verlangt der Nutzer "
+    "einen Prompt oder eine Übergabe, formuliere einen direkt nutzbaren "
+    "Prompt bzw. eine Übergabe. Ist die Eingabe fragmentarisch, glätte nur "
+    "Sprache und Struktur, ohne die Aufgabe zu verändern."
+)
+
 _TEXT_IMPROVER_SYSTEM_TEMPLATE = (
     "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem sauberen, "
     "gut lesbaren Text um. Ton: {tone}. Behalte den Inhalt vollständig. "
-    "Korrigiere Grammatik, Zeichensetzung und Struktur. Gib NUR den fertigen Text zurück."
+    "Korrigiere Grammatik, Zeichensetzung und Struktur." + _INTENT_RULES +
+    " Gib NUR den fertigen Text zurück."
 )
 
 _EMOJI_SYSTEM_TEMPLATE = (
