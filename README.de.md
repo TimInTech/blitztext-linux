@@ -470,3 +470,9 @@ Das Original-Projekt ist ein experimentelles, nicht-kommerzielles Open-Source-Pr
 <div align="center">
   <sub>Erstellt mit ❤️ (und ein bisschen KI-Hilfe).</sub>
 </div>
+
+### v0.8.1: Absichtstreue Prompts und bessere Diagnose
+
+Blitztext+ und die Schreibstil-Presets bewahren die Absicht der Eingabe jetzt konservativer. Sie sollen bei diktierten Arbeitsanweisungen oder Übergabe-Prompts keine Meetings, Teilnehmer, Empfänger, Rollen oder Ziele erfinden. E-Mail-Presets nutzen eine E-Mail-artige Struktur nur dann, wenn die Eingabe erkennbar als Nachricht an jemanden gemeint ist.
+
+Das Linux-Prüfskript enthält außerdem verbesserte sitzungsabhängige Desktop-Diagnosen für X11, Wayland und Clipboard-Backends. Die Kompatibilitätsmatrix ist Diagnosehilfe, kein Supportversprechen.

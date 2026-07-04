@@ -474,3 +474,9 @@ The original project is an experimental, non-commercial open-source project unde
 <div align="center">
   <sub>Made with ❤️ (and a little AI help).</sub>
 </div>
+
+### v0.8.1: Intent-preserving prompts and diagnostics
+
+Blitztext+ and the writing presets now preserve the user's intent more conservatively. They avoid inventing meetings, participants, recipients, roles, or goals when rewriting spoken work instructions or handover prompts. Email presets only use email-like structure when the input is clearly meant as a message to someone.
+
+The Linux verification script also includes improved session-aware desktop diagnostics for X11, Wayland, and clipboard backends. The compatibility matrix is diagnostic guidance, not a support promise.
