@@ -57,6 +57,47 @@ class TestCatalogIntegrity:
         assert all(isinstance(p, WritingPreset) for p in WRITING_PRESETS.values())
 
 
+class TestIntentGuardRules:
+    """Alle Presets müssen die Absichts-Schutzregeln tragen (Regression:
+    Übergabe-Aufträge wurden als Meeting mit Teilnehmern umgedeutet)."""
+
+    NON_STANDARD_KEYS = tuple(k for k in EXPECTED_KEYS if k != DEFAULT_PRESET_KEY)
+
+    @pytest.mark.parametrize("key", NON_STANDARD_KEYS)
+    def test_preset_preserves_user_intent(self, key):
+        prompt = WRITING_PRESETS[key].system_prompt
+        assert "Bewahre die Absicht des Nutzers" in prompt
+        assert "führe sie nicht aus" in prompt
+
+    @pytest.mark.parametrize("key", NON_STANDARD_KEYS)
+    def test_preset_forbids_invented_context(self, key):
+        prompt = WRITING_PRESETS[key].system_prompt
+        assert "Erfinde keinen Kontext" in prompt
+        assert "Meetings" in prompt
+
+    @pytest.mark.parametrize("key", NON_STANDARD_KEYS)
+    def test_preset_anchors_technical_terms(self, key):
+        prompt = WRITING_PRESETS[key].system_prompt
+        assert "'Session'" in prompt
+        assert "Software- und Arbeitskontext" in prompt
+
+    @pytest.mark.parametrize("key", ("email_formal", "email_locker"))
+    def test_email_presets_do_not_force_email_structure(self, key):
+        prompt = WRITING_PRESETS[key].system_prompt
+        assert "Nur wenn die Eingabe erkennbar eine Nachricht" in prompt
+        assert "erfinde dabei keinen Empfänger" in prompt
+
+    @pytest.mark.parametrize("key", ("du_form", "sie_form"))
+    def test_tone_presets_only_change_tone(self, key):
+        prompt = WRITING_PRESETS[key].system_prompt
+        assert "nicht Bedeutung, Kontext oder Zweck" in prompt
+
+    def test_kurz_praezise_only_shortens(self):
+        prompt = WRITING_PRESETS["kurz_praezise"].system_prompt
+        assert "erfinde keine neuen Inhalte" in prompt
+        assert "nicht Bedeutung, Kontext oder Zweck" in prompt
+
+
 class TestGetPreset:
     @pytest.mark.parametrize("key", EXPECTED_KEYS)
     def test_known_keys_return_matching_preset(self, key):

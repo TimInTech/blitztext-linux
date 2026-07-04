@@ -30,6 +30,14 @@ def service(mock_client):
     return LLMService(api_key=DUMMY_API_KEY, client=mock_client)
 
 
+# Konkreter Fehlerfall: Diese Diktat-Eingabe wurde früher als Meeting
+# umgedeutet ("alle Teilnehmer", Moderationsanweisung) statt als
+# Übergabe-Prompt für eine neue Arbeits-Session erhalten zu bleiben.
+HANDOVER_TRANSCRIPT = (
+    "Erstelle eine kurze Übergabe prompt damit der Plan in neuer Session ausgeführt wird"
+)
+
+
 class TestLLMServiceInit:
     def test_empty_api_key_is_not_available(self, mock_client):
         service = LLMService(api_key="", client=mock_client, api_key_env="CUSTOM_OPENAI_KEY")
@@ -416,3 +424,68 @@ class TestRewriteRaw:
         service = LLMService(api_key="", client=mock_client)
         with pytest.raises(LLMServiceError):
             service.rewrite_raw("System.", "User.")
+
+
+class TestIntentPreservationRegression:
+    """Regression: Übergabe-/Prompt-Aufträge dürfen nicht als Meeting umgedeutet werden.
+
+    Die Tests laufen ohne echtes LLM. Geprüft wird der Prompt-Vertrag: Die
+    Schutzregeln müssen im System-Prompt ankommen und das Original-Transkript
+    muss unverändert als User-Message übertragen werden.
+    """
+
+    def _messages(self, mock_client):
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        system = next(m["content"] for m in kwargs["messages"] if m["role"] == "system")
+        user = next(m["content"] for m in kwargs["messages"] if m["role"] == "user")
+        return system, user
+
+    def test_standard_preset_system_prompt_contains_intent_rules(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        system, _ = self._messages(mock_client)
+        assert "Bewahre die Absicht des Nutzers" in system
+        assert "führe sie nicht aus" in system
+        assert "beantworte sie nicht" in system
+
+    def test_standard_preset_forbids_invented_meeting_context(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        system, _ = self._messages(mock_client)
+        assert "Teilnehmer" in system
+        assert "Meetings" in system
+        assert "Erfinde keinen Kontext" in system
+
+    def test_standard_preset_anchors_technical_terms_in_work_context(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        system, _ = self._messages(mock_client)
+        for term in ("'Session'", "'Prompt'", "'Branch'", "'PR'", "'Merge'", "'Handover'"):
+            assert term in system
+        assert "Software- und Arbeitskontext" in system
+
+    def test_standard_preset_demands_usable_prompt_for_prompt_requests(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        system, _ = self._messages(mock_client)
+        assert "direkt nutzbaren" in system
+        assert "Übergabe" in system
+
+    def test_handover_transcript_stays_verbatim_in_user_message(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        system, user = self._messages(mock_client)
+        assert user == HANDOVER_TRANSCRIPT
+        assert HANDOVER_TRANSCRIPT not in system
+
+    @pytest.mark.parametrize(
+        "preset_key",
+        ["email_formal", "email_locker", "stichpunkte", "zusammenfassung", "du_form", "sie_form", "kurz_praezise"],
+    )
+    def test_all_presets_carry_intent_rules(self, mock_client, preset_key):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset=preset_key)
+        service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        system = next(m["content"] for m in kwargs["messages"] if m["role"] == "system")
+        assert "Bewahre die Absicht des Nutzers" in system
+        assert "Erfinde keinen Kontext" in system
+
+    def test_build_system_prompt_preview_matches_intent_rules(self, service):
+        preview = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        assert "Bewahre die Absicht des Nutzers" in preview
+        assert "Erfinde keinen Kontext" in preview

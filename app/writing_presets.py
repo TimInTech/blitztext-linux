@@ -13,9 +13,14 @@ from dataclasses import dataclass
 DEFAULT_PRESET_KEY = "standard"
 
 _COMMON_RULES = (
-    " Behalte den Inhalt vollständig und erfinde nichts dazu. Korrigiere "
-    "Grammatik und Zeichensetzung. Gib NUR den fertigen Text zurück, ohne "
-    "Vorbemerkung oder Erklärung."
+    " Behalte den Inhalt vollständig und erfinde nichts dazu. Bewahre die "
+    "Absicht des Nutzers: Formuliere die Eingabe nur um, führe sie nicht aus "
+    "und beantworte sie nicht. Erfinde keinen Kontext – keine Adressaten, "
+    "Rollen, Meetings oder Ziele, die nicht ausdrücklich genannt sind. "
+    "Interpretiere Begriffe wie 'Session', 'Prompt', 'Branch', 'PR', 'Merge' "
+    "oder 'Handover' im Software- und Arbeitskontext, wenn die Eingabe danach "
+    "klingt. Korrigiere Grammatik und Zeichensetzung. Gib NUR den fertigen "
+    "Text zurück, ohne Vorbemerkung oder Erklärung."
 )
 
 
@@ -43,16 +48,22 @@ _PRESETS: tuple[WritingPreset, ...] = (
     WritingPreset(
         "email_formal",
         "E-Mail – formell",
-        "Du erhältst ein gesprochenes Transkript. Formuliere daraus eine "
-        "formelle, höfliche E-Mail in der Sie-Form mit klarer Struktur "
-        "(passende Anrede, Hauptteil, freundlicher Gruß)." + _COMMON_RULES,
+        "Du erhältst ein gesprochenes Transkript. Formuliere es formell und "
+        "höflich in der Sie-Form um. Nur wenn die Eingabe erkennbar eine "
+        "Nachricht an eine Person oder Stelle ist, gestalte sie als E-Mail "
+        "mit klarer Struktur (passende Anrede, Hauptteil, freundlicher "
+        "Gruß); erfinde dabei keinen Empfänger. Andernfalls verbessere nur "
+        "Ton und Sprachqualität ohne E-Mail-Struktur." + _COMMON_RULES,
     ),
     WritingPreset(
         "email_locker",
         "E-Mail – locker",
-        "Du erhältst ein gesprochenes Transkript. Formuliere daraus eine "
-        "lockere, freundliche E-Mail in der Du-Form mit natürlichem, "
-        "persönlichem Ton." + _COMMON_RULES,
+        "Du erhältst ein gesprochenes Transkript. Formuliere es locker und "
+        "freundlich in der Du-Form mit natürlichem, persönlichem Ton um. "
+        "Nur wenn die Eingabe erkennbar eine Nachricht an eine Person ist, "
+        "gestalte sie als E-Mail; erfinde dabei keinen Empfänger. "
+        "Andernfalls verbessere nur Ton und Sprachqualität ohne "
+        "E-Mail-Struktur." + _COMMON_RULES,
     ),
     WritingPreset(
         "stichpunkte",
@@ -71,20 +82,23 @@ _PRESETS: tuple[WritingPreset, ...] = (
         "du_form",
         "Persönlich (Du-Form)",
         "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem "
-        "klaren, gut lesbaren Text in der persönlichen Du-Form um." + _COMMON_RULES,
+        "klaren, gut lesbaren Text in der persönlichen Du-Form um. Ändere "
+        "nur Anrede und Ton, nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
     ),
     WritingPreset(
         "sie_form",
         "Höflich (Sie-Form)",
         "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem "
-        "klaren, gut lesbaren Text in der höflichen Sie-Form um." + _COMMON_RULES,
+        "klaren, gut lesbaren Text in der höflichen Sie-Form um. Ändere "
+        "nur Anrede und Ton, nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
     ),
     WritingPreset(
         "kurz_praezise",
         "Kurz & präzise",
         "Du erhältst ein gesprochenes Transkript. Formuliere es maximal kurz "
         "und präzise um: entferne Füllwörter und Wiederholungen, behalte aber "
-        "alle wesentlichen Informationen." + _COMMON_RULES,
+        "alle wesentlichen Informationen. Kürze nur, erfinde keine neuen "
+        "Inhalte und ändere nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
     ),
 )
 
