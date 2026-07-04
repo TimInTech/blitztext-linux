@@ -655,7 +655,6 @@ class ComposeWindow(QDialog):
         else:
             writing_preset = self._selected_preset()
 
-        thread = QThread(self)
         worker = _ComposeWorker(
             self._llm_service,
             workflow,
@@ -664,6 +663,11 @@ class ComposeWindow(QDialog):
             tone=tone,
             custom_prompt=custom_prompt,
         )
+        self._launch_worker(worker)
+
+    def _launch_worker(self, worker: _ComposeWorker) -> None:
+        """Gemeinsames Thread-Wiring für Standard- und Raw-Prompt-Worker."""
+        thread = QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(self._on_worker_result)
@@ -739,7 +743,6 @@ class ComposeWindow(QDialog):
             self._start_worker_raw(dialog.get_system_prompt(), dialog.get_user_message())
 
     def _start_worker_raw(self, system_prompt: str, user_message: str) -> None:
-        thread = QThread(self)
         worker = _ComposeWorker(
             self._llm_service,
             self._selected_workflow(),
@@ -748,19 +751,7 @@ class ComposeWindow(QDialog):
             raw_system_prompt=system_prompt,
             raw_user_message=user_message,
         )
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(self._on_worker_result)
-        worker.error.connect(self._on_worker_error)
-        worker.finished.connect(thread.quit)
-        worker.error.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self._on_worker_thread_finished)
-        self._worker_thread = thread
-        self._worker = worker
-        self._set_busy(True)
-        thread.start()
+        self._launch_worker(worker)
 
     @pyqtSlot(str)
     def _on_worker_result(self, result_text: str) -> None:
