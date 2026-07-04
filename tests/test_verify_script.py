@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 # NOTE: tests/conftest.py's autouse `_block_real_notifications` fixture patches
 # `subprocess.run` process-wide (it patches the shared `subprocess` module via
@@ -66,7 +73,13 @@ def _prepare_verify_script(
     return script_path, stub_bin
 
 
-def _run_script(script_path: Path, home_dir: Path, runtime_dir: Path, stub_bin: Path) -> subprocess.CompletedProcess[str]:
+def _run_script(
+    script_path: Path,
+    home_dir: Path,
+    runtime_dir: Path,
+    stub_bin: Path,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
@@ -77,6 +90,8 @@ def _run_script(script_path: Path, home_dir: Path, runtime_dir: Path, stub_bin: 
             "DISPLAY": "",
         }
     )
+    if extra_env:
+        env.update(extra_env)
     proc = subprocess.Popen(
         [BASH, str(script_path)],
         cwd=str(script_path.parent),
@@ -184,3 +199,78 @@ def test_verify_all_checked_binaries_present_removes_their_fail_lines(tmp_path: 
     for tool in checked_tools:
         assert f"{tool} nicht gefunden" not in result.stdout
         assert f"{tool} gefunden" in result.stdout
+
+
+def test_verify_prints_session_and_desktop_info(tmp_path: Path):
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root)
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _run_script(
+        script_path,
+        home_dir,
+        runtime_dir,
+        stub_bin,
+        extra_env={"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "KDE"},
+    )
+    stdout = _strip_ansi(result.stdout)
+
+    assert "XDG_SESSION_TYPE:    wayland" in stdout
+    assert "XDG_CURRENT_DESKTOP: KDE" in stdout
+
+
+def test_verify_x11_session_requires_xclip_not_wl_copy(tmp_path: Path):
+    """In einer reinen X11-Session (Mint/Lubuntu-Default) ist xclip Pflicht."""
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root, present_checked_tools=())
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _run_script(
+        script_path, home_dir, runtime_dir, stub_bin, extra_env={"DISPLAY": ":0"}
+    )
+    stdout = _strip_ansi(result.stdout)
+
+    assert "[FAIL]  xclip nicht gefunden" in stdout
+    assert "[WARN]  wl-copy nicht gefunden" in stdout
+    assert "[FAIL]  wl-copy nicht gefunden" not in stdout
+
+
+def test_verify_wayland_session_requires_wl_copy_not_xclip(tmp_path: Path):
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root, present_checked_tools=())
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _run_script(
+        script_path,
+        home_dir,
+        runtime_dir,
+        stub_bin,
+        extra_env={"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"},
+    )
+    stdout = _strip_ansi(result.stdout)
+
+    assert "[FAIL]  wl-copy nicht gefunden" in stdout
+    assert "[WARN]  xclip nicht gefunden" in stdout
+    assert "[FAIL]  xclip nicht gefunden" not in stdout
+
+
+def test_verify_missing_ydotool_is_warn_not_fail(tmp_path: Path):
+    """ydotool ist optional: ohne ydotool fehlt nur Auto-Paste, kein Hard-Fail."""
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root, present_checked_tools=())
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _run_script(script_path, home_dir, runtime_dir, stub_bin)
+    stdout = _strip_ansi(result.stdout)
+
+    assert "[WARN]  ydotool nicht gefunden" in stdout
+    assert "[FAIL]  ydotool nicht gefunden" not in stdout
+    assert "funktionieren auch ohne ydotool" in stdout

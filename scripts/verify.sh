@@ -51,11 +51,41 @@ ydotoold_provider_exists() {
     command -v ydotoold >/dev/null 2>&1 || ydotool_user_service_exists
 }
 
+# ─── Session-Erkennung ────────────────────────────────────────────────────────
+# Die App wählt das Clipboard-Backend nach Umgebung: wl-copy, wenn
+# WAYLAND_DISPLAY gesetzt ist oder gar kein DISPLAY existiert; nur in einer
+# reinen X11-Session (DISPLAY ohne WAYLAND_DISPLAY) ist xclip das Pflicht-Backend.
+if [[ -z "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" ]]; then
+    CLIPBOARD_REQUIRED="xclip"
+    CLIPBOARD_OPTIONAL="wl-copy"
+else
+    CLIPBOARD_REQUIRED="wl-copy"
+    CLIPBOARD_OPTIONAL="xclip"
+fi
+
+clipboard_install_hint() {
+    if [[ "$1" == "wl-copy" ]]; then
+        echo "sudo apt install wl-clipboard"
+    else
+        echo "sudo apt install xclip"
+    fi
+}
+
 echo ""
 echo -e "${BOLD}══════════════════════════════════════════════════════${RESET}"
 echo -e "${BOLD}  BlitztextLinux — Abhängigkeits-Check${RESET}"
 echo -e "${BOLD}  Verzeichnis: ${BLITZTEXT_DIR}${RESET}"
 echo -e "${BOLD}══════════════════════════════════════════════════════${RESET}"
+echo ""
+echo -e "${BOLD}── Session & Desktop ────────────────────────────────${RESET}"
+
+# Rein informativ — keine harten Entscheidungen anhand dieser Werte.
+info "XDG_SESSION_TYPE:    ${XDG_SESSION_TYPE:-nicht gesetzt}"
+info "XDG_CURRENT_DESKTOP: ${XDG_CURRENT_DESKTOP:-nicht gesetzt}"
+info "WAYLAND_DISPLAY:     ${WAYLAND_DISPLAY:-nicht gesetzt}"
+info "DISPLAY:             ${DISPLAY:-nicht gesetzt}"
+info "Clipboard-Backend für diese Session: ${CLIPBOARD_REQUIRED} (Pflicht), ${CLIPBOARD_OPTIONAL} (Fallback)"
+
 echo ""
 echo -e "${BOLD}── Systembinaries ───────────────────────────────────${RESET}"
 
@@ -66,25 +96,26 @@ else
     fail "parec nicht gefunden — 'sudo apt install pulseaudio-utils'"
 fi
 
-# wl-copy (wl-clipboard)
-if command -v wl-copy &>/dev/null; then
-    pass "wl-copy gefunden: $(command -v wl-copy)"
+# Clipboard-Backend (Pflicht für die aktuelle Session)
+if command -v "${CLIPBOARD_REQUIRED}" &>/dev/null; then
+    pass "${CLIPBOARD_REQUIRED} gefunden: $(command -v "${CLIPBOARD_REQUIRED}")"
 else
-    fail "wl-copy nicht gefunden — 'sudo apt install wl-clipboard'"
+    fail "${CLIPBOARD_REQUIRED} nicht gefunden — '$(clipboard_install_hint "${CLIPBOARD_REQUIRED}")'"
 fi
 
-# xclip (X11 clipboard fallback)
-if command -v xclip &>/dev/null; then
-    pass "xclip gefunden: $(command -v xclip)"
+# Clipboard-Fallback (optional für die aktuelle Session)
+if command -v "${CLIPBOARD_OPTIONAL}" &>/dev/null; then
+    pass "${CLIPBOARD_OPTIONAL} gefunden: $(command -v "${CLIPBOARD_OPTIONAL}")"
 else
-    warn "xclip nicht gefunden — X11-Clipboard-Fallback fehlt ('sudo apt install xclip')"
+    warn "${CLIPBOARD_OPTIONAL} nicht gefunden — Clipboard-Fallback fehlt ('$(clipboard_install_hint "${CLIPBOARD_OPTIONAL}")')"
 fi
 
-# ydotool
+# ydotool (optional: nur für Auto-Paste nötig, Clipboard-Kopie geht ohne)
 if command -v ydotool &>/dev/null; then
     pass "ydotool gefunden: $(command -v ydotool)"
 else
-    fail "ydotool nicht gefunden — 'sudo apt install ydotool'"
+    warn "ydotool nicht gefunden — Auto-Paste nicht verfügbar ('sudo apt install ydotool')"
+    warn "  Transkription und Clipboard-Kopie funktionieren auch ohne ydotool"
 fi
 
 # ffmpeg
@@ -186,6 +217,7 @@ elif groups "$(whoami)" 2>/dev/null | grep -qw "input"; then
 else
     warn "Benutzer NICHT in Gruppe 'input' — evdev-Hotkeys funktionieren nicht"
     warn "  Behebung: sudo usermod -aG input \$USER  (dann Re-Login)"
+    info "  Fenster/Tray-Bedienung funktioniert auch ohne die Gruppe 'input'"
 fi
 
 echo ""

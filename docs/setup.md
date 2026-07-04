@@ -37,6 +37,38 @@ systemctl --user disable blitztext-linux
 ```
 </details>
 
+## Compatibility matrix (diagnostic, not a support promise)
+
+BlitztextLinux is developed and tested on **Kubuntu (KDE Plasma, Wayland)**.
+The systems below share the Ubuntu/Debian package base, so `install.sh` runs on
+them, but only Kubuntu is systematically tested. This table documents expected
+behavior and known risks — it is **not** an official support statement.
+
+| Target system | Expected session | Main risks | Status |
+| :--- | :--- | :--- | :--- |
+| Kubuntu 26.04, Plasma | Wayland | ydotool ≥ 1.0 via apt available; lowest risk | tested |
+| Ubuntu 24.04, GNOME | Wayland | apt ydotool 0.1.x is client-only → no auto-paste (clipboard mode works); GNOME tray needs the AppIndicator extension | untested |
+| Ubuntu 26.04, GNOME | Wayland | GNOME tray needs the AppIndicator extension; Python 3.13/3.14: torch/openai-whisper wheels may lag behind new Python releases | untested |
+| Linux Mint 22.x, Cinnamon | X11 (default) | `xclip` is the required clipboard backend, not `wl-copy`; apt ydotool 0.1.x → no auto-paste | untested |
+| Lubuntu 24.04, LXQt | X11 (default) | same as Mint: `xclip` required; Qt tray via StatusNotifier usually fine | untested |
+| Lubuntu 26.04, LXQt | X11 or Wayland | session type decides the clipboard backend — run `scripts/verify.sh` to see which one applies | untested |
+
+Xfce and MATE are expected to behave like the X11 rows above, but are not
+tracked here.
+
+What works everywhere, regardless of session type:
+
+- Transcription and clipboard copy (no `ydotool`, no `input` group needed).
+- Window/tray operation without global hotkeys (`install.sh` offers this mode;
+  `BLITZTEXT_NO_HOTKEY=1 bash scripts/install.sh` selects it non-interactively).
+
+What is environment-dependent:
+
+- **Auto-paste** needs a working `ydotoold` (ydotool ≥ 1.0).
+- **Global hotkeys** need evdev access via the `input` group.
+- **Clipboard backend**: `wl-copy` on Wayland, `xclip` on plain X11.
+  `scripts/verify.sh` prints the detected session and which backend is required.
+
 ## Desktop session notes
 
 BlitztextLinux is developed for KDE Plasma on Wayland, with X11 fallbacks where the
