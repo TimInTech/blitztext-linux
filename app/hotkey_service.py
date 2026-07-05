@@ -426,6 +426,9 @@ def _group_names() -> Set[str]:
 
 
 def _build_missing_keyboard_message(context: str = "") -> str:
+    if os.path.exists("/.flatpak-info"):
+        return "Globale Hotkeys sind im Flatpak nicht verfügbar"
+
     suffix = f" {context}" if context else ""
     hints = []
     if not os.path.exists("/dev/uinput"):

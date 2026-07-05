@@ -136,6 +136,10 @@ class PasteService:
             return
 
         do_autopaste = self.autopaste if force_autopaste is None else bool(force_autopaste)
+        if do_autopaste and shutil.which("ydotool") is None:
+            logger.info("ydotool fehlt, Auto-Paste wird deaktiviert.")
+            do_autopaste = False
+
         logger.info("Paste request: %d chars, autopaste=%s", len(text), do_autopaste)
         previous_clipboard = self._read_clipboard() if do_autopaste else None
         self._copy_to_clipboard(text)
@@ -163,6 +167,9 @@ class PasteService:
         if _has_x11_clipboard():
             self._xclip_copy(text)
             return
+        if _has_qt_clipboard():
+            self._qt_copy(text)
+            return
         raise PasteServiceError(
             "Kein nutzbares Clipboard-Backend gefunden. Installieren: sudo apt install wl-clipboard xclip"
         )
@@ -174,6 +181,8 @@ class PasteService:
         elif _has_x11_clipboard():
             command = ["xclip", "-selection", "clipboard", "-o"]
             timeout = _XCLIP_PASTE_TIMEOUT
+        elif _has_qt_clipboard():
+            return self._qt_read()
         else:
             return None
         try:
@@ -341,6 +350,44 @@ class PasteService:
         logger.info("Auto-paste key injection completed with %s.", shortcut)
         return not wayland_unknown
 
+    def _qt_copy(self, text: str) -> None:
+        try:
+            from PyQt6.QtWidgets import QApplication
+            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG, QThread
+            app = QApplication.instance()
+            if not app:
+                raise PasteServiceError("Qt QApplication nicht verfuegbar.")
+            cb = app.clipboard()
+            if not cb:
+                raise PasteServiceError("Qt Clipboard nicht verfuegbar.")
+
+            if QThread.currentThread() == app.thread():
+                cb.setText(text)
+            else:
+                QMetaObject.invokeMethod(cb, "setText", Qt.ConnectionType.BlockingQueuedConnection, Q_ARG(str, text))
+            logger.info("Clipboard write completed via Qt (%d chars).", len(text))
+        except ImportError as exc:
+            raise PasteServiceError("PyQt6 Import fehlgeschlagen.") from exc
+
+    def _qt_read(self) -> Optional[str]:
+        try:
+            from PyQt6.QtWidgets import QApplication
+            from PyQt6.QtCore import QThread
+            app = QApplication.instance()
+            if not app:
+                return None
+            cb = app.clipboard()
+            if not cb:
+                return None
+
+            if QThread.currentThread() == app.thread():
+                return cb.text()
+            else:
+                return None
+        except Exception as exc:
+            logger.debug("Qt clipboard read failed: %s", exc)
+            return None
+
 
 def check_dependencies() -> list[str]:
     """Gibt eine Liste fehlender System-Abhaengigkeiten zurueck.
@@ -348,9 +395,10 @@ def check_dependencies() -> list[str]:
     Verwendet von install.sh-Verifikation und Einstellungs-Dialog.
     """
     missing = []
-    if shutil.which("wl-copy") is None and shutil.which("xclip") is None:
+    is_flatpak = os.path.exists("/.flatpak-info")
+    if shutil.which("wl-copy") is None and shutil.which("xclip") is None and not is_flatpak:
         missing.append("wl-clipboard oder xclip")
-    if shutil.which("ydotool") is None:
+    if shutil.which("ydotool") is None and not is_flatpak:
         missing.append("ydotool")
     return missing
 
@@ -367,6 +415,14 @@ def _has_wayland_clipboard() -> bool:
 
 def _has_x11_clipboard() -> bool:
     return bool(os.environ.get("DISPLAY") and shutil.which("xclip") is not None)
+
+
+def _has_qt_clipboard() -> bool:
+    try:
+        from PyQt6.QtWidgets import QApplication
+        return QApplication.instance() is not None
+    except ImportError:
+        return False
 
 
 def _looks_like_missing_ydotoold(stderr: str) -> bool:
