@@ -219,6 +219,15 @@ class TestRestoreClipboard:
                     service._restore_clipboard("")
         xclip_copy_mock.assert_called_once_with("")
 
+    def test_restores_qt_clipboard_with_saved_text(self):
+        service = PasteService()
+        with patch("app.paste_service._has_wayland_clipboard", return_value=False):
+            with patch("app.paste_service._has_x11_clipboard", return_value=False):
+                with patch("app.paste_service._has_qt_clipboard", return_value=True):
+                    with patch.object(service, "_qt_copy") as qt_copy_mock:
+                        service._restore_clipboard("qt-restore")
+        qt_copy_mock.assert_called_once_with("qt-restore")
+
     def test_logs_warning_on_restore_failure(self):
         service = PasteService()
         with patch("app.paste_service._has_wayland_clipboard", return_value=True):
@@ -310,32 +319,34 @@ class TestPasteClipboardRestore:
         service = PasteService(autopaste=True)
         calls: list[str] = []
 
-        with patch.object(service, "_read_clipboard", side_effect=lambda: calls.append("read") or "vorher"):
-            with patch.object(service, "_copy_to_clipboard", side_effect=lambda text: calls.append(f"copy:{text}")):
-                with patch.object(service, "_ydotool_paste", side_effect=lambda: calls.append("ydotool") or True):
-                    with patch("app.paste_service.time.sleep", side_effect=lambda _: calls.append("sleep")):
-                        with patch.object(
-                            service,
-                            "_restore_clipboard",
-                            side_effect=lambda value: calls.append(f"restore:{value}"),
-                        ):
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
+            with patch.object(service, "_read_clipboard", side_effect=lambda: calls.append("read") or "vorher"):
+                with patch.object(service, "_copy_to_clipboard", side_effect=lambda text: calls.append(f"copy:{text}")):
+                    with patch.object(service, "_ydotool_paste", side_effect=lambda: calls.append("ydotool") or True):
+                        with patch("app.paste_service.time.sleep", side_effect=lambda _: calls.append("sleep")):
                             with patch.object(
                                 service,
-                                "_cleanup_copyq",
-                                side_effect=lambda value: calls.append(f"cleanup:{value}"),
+                                "_restore_clipboard",
+                                side_effect=lambda value: calls.append(f"restore:{value}"),
                             ):
-                                service.paste("neu", force_autopaste=True)
+                                with patch.object(
+                                    service,
+                                    "_cleanup_copyq",
+                                    side_effect=lambda value: calls.append(f"cleanup:{value}"),
+                                ):
+                                    service.paste("neu", force_autopaste=True)
 
         assert calls == ["read", "copy:neu", "ydotool", "sleep", "restore:vorher", "cleanup:neu"]
 
     def test_paste_does_not_restore_or_cleanup_when_autopaste_disabled(self):
         service = PasteService(autopaste=True)
-        with patch.object(service, "_read_clipboard") as read_mock:
-            with patch.object(service, "_copy_to_clipboard") as copy_mock:
-                with patch.object(service, "_ydotool_paste") as paste_mock:
-                    with patch.object(service, "_restore_clipboard") as restore_mock:
-                        with patch.object(service, "_cleanup_copyq") as cleanup_mock:
-                            service.paste("neu", force_autopaste=False)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
+            with patch.object(service, "_read_clipboard") as read_mock:
+                with patch.object(service, "_copy_to_clipboard") as copy_mock:
+                    with patch.object(service, "_ydotool_paste") as paste_mock:
+                        with patch.object(service, "_restore_clipboard") as restore_mock:
+                            with patch.object(service, "_cleanup_copyq") as cleanup_mock:
+                                service.paste("neu", force_autopaste=False)
         read_mock.assert_not_called()
         copy_mock.assert_called_once_with("neu")
         paste_mock.assert_not_called()
@@ -344,13 +355,14 @@ class TestPasteClipboardRestore:
 
     def test_paste_does_not_restore_or_cleanup_when_ydotool_did_not_paste(self):
         service = PasteService(autopaste=True)
-        with patch.object(service, "_read_clipboard", return_value="vorher") as read_mock:
-            with patch.object(service, "_copy_to_clipboard") as copy_mock:
-                with patch.object(service, "_ydotool_paste", return_value=False) as paste_mock:
-                    with patch("app.paste_service.time.sleep") as sleep_mock:
-                        with patch.object(service, "_restore_clipboard") as restore_mock:
-                            with patch.object(service, "_cleanup_copyq") as cleanup_mock:
-                                service.paste("neu", force_autopaste=True)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
+            with patch.object(service, "_read_clipboard", return_value="vorher") as read_mock:
+                with patch.object(service, "_copy_to_clipboard") as copy_mock:
+                    with patch.object(service, "_ydotool_paste", return_value=False) as paste_mock:
+                        with patch("app.paste_service.time.sleep") as sleep_mock:
+                            with patch.object(service, "_restore_clipboard") as restore_mock:
+                                with patch.object(service, "_cleanup_copyq") as cleanup_mock:
+                                    service.paste("neu", force_autopaste=True)
         read_mock.assert_called_once_with()
         copy_mock.assert_called_once_with("neu")
         paste_mock.assert_called_once_with()
@@ -360,13 +372,14 @@ class TestPasteClipboardRestore:
 
     def test_paste_restores_empty_previous_clipboard_and_cleans_up_copyq(self):
         service = PasteService(autopaste=True)
-        with patch.object(service, "_read_clipboard", return_value="") as read_mock:
-            with patch.object(service, "_copy_to_clipboard") as copy_mock:
-                with patch.object(service, "_ydotool_paste", return_value=True) as paste_mock:
-                    with patch("app.paste_service.time.sleep") as sleep_mock:
-                        with patch.object(service, "_restore_clipboard") as restore_mock:
-                            with patch.object(service, "_cleanup_copyq") as cleanup_mock:
-                                service.paste("neu", force_autopaste=True)
+        with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
+            with patch.object(service, "_read_clipboard", return_value="") as read_mock:
+                with patch.object(service, "_copy_to_clipboard") as copy_mock:
+                    with patch.object(service, "_ydotool_paste", return_value=True) as paste_mock:
+                        with patch("app.paste_service.time.sleep") as sleep_mock:
+                            with patch.object(service, "_restore_clipboard") as restore_mock:
+                                with patch.object(service, "_cleanup_copyq") as cleanup_mock:
+                                    service.paste("neu", force_autopaste=True)
         read_mock.assert_called_once_with()
         copy_mock.assert_called_once_with("neu")
         paste_mock.assert_called_once_with()

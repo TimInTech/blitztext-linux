@@ -222,6 +222,9 @@ class PasteService:
             if _has_x11_clipboard():
                 self._xclip_copy(previous)
                 return
+            if _has_qt_clipboard():
+                self._qt_copy(previous)
+                return
             raise PasteServiceError("Kein Clipboard-Backend fuer Restore verfuegbar.")
         except PasteServiceError:
             logger.warning("Originalzwischenablage konnte nicht wiederhergestellt werden")
