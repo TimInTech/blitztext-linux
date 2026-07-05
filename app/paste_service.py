@@ -353,7 +353,8 @@ class PasteService:
     def _qt_copy(self, text: str) -> None:
         try:
             from PyQt6.QtWidgets import QApplication
-            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG, QThread
+            from PyQt6.QtCore import QMetaObject, Qt, Q_ARG, QThread, QObject, pyqtSlot
+
             app = QApplication.instance()
             if not app:
                 raise PasteServiceError("Qt QApplication nicht verfuegbar.")
@@ -364,7 +365,21 @@ class PasteService:
             if QThread.currentThread() == app.thread():
                 cb.setText(text)
             else:
-                QMetaObject.invokeMethod(cb, "setText", Qt.ConnectionType.BlockingQueuedConnection, Q_ARG(str, text))
+                class QtClipboardHelper(QObject):
+                    @pyqtSlot(str)
+                    def set_text(self, t: str):
+                        c = QApplication.instance().clipboard()
+                        if c:
+                            c.setText(t)
+
+                helper = QtClipboardHelper()
+                helper.moveToThread(app.thread())
+                QMetaObject.invokeMethod(
+                    helper,
+                    "set_text",
+                    Qt.ConnectionType.BlockingQueuedConnection,
+                    Q_ARG(str, text)
+                )
             logger.info("Clipboard write completed via Qt (%d chars).", len(text))
         except ImportError as exc:
             raise PasteServiceError("PyQt6 Import fehlgeschlagen.") from exc

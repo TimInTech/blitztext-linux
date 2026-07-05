@@ -110,3 +110,23 @@ def test_paste_service_qt_read_thread_safety():
          
         result = svc._qt_read()
         assert result is None
+
+
+def test_paste_service_qt_copy_real_thread():
+    import threading
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication(["-platform", "offscreen"])
+
+    svc = PasteService(autopaste=False)
+
+    def background_task():
+        svc._qt_copy("threaded content test")
+
+    t = threading.Thread(target=background_task)
+    t.start()
+
+    while t.is_alive():
+        app.processEvents()
+        t.join(0.01)
+
+    assert app.clipboard().text() == "threaded content test"
