@@ -92,7 +92,7 @@ def _infer_wayland_display() -> Optional[str]:
 def _is_hotkey_device_access_error(err_msg: str) -> bool:
     """Return True for hotkey startup errors that can fall back to GUI/tray."""
     text = err_msg.casefold()
-    return any(marker in text for marker in ("tastatur", "input", "evdev"))
+    return any(marker in text for marker in ("tastatur", "input", "evdev", "flatpak", "/dev/input", "/dev/uinput"))
 
 
 def _require_display_environment() -> None:
