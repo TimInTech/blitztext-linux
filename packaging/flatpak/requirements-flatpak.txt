@@ -1,0 +1,15 @@
+# Laufzeit-Abhaengigkeiten fuer den Flatpak-MVP-Spike.
+#
+# Bewusst NICHT enthalten (siehe README.md fuer Details):
+#   - evdev              -> globale Hotkeys sind im Flatpak-MVP deaktiviert;
+#                            app/hotkey_service.py importiert evdev lazy und
+#                            faengt das Fehlen bereits ab.
+#   - openai-whisper /
+#     faster-whisper /
+#     torch             -> lokale Transkription ist im MVP-Spike nicht
+#                            Teil des Build-Checks (mehrere GB Download).
+#                            app/transcribe.py importiert whisper ebenfalls
+#                            lazy; das Modul bleibt fuer eine spaetere
+#                            Erweiterung vorbereitet.
+PyQt6
+openai
