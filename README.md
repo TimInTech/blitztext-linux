@@ -18,6 +18,12 @@
 
 ---
 
+## Purpose
+
+Blitztext Linux is a hotkey-driven voice assistant that turns speech into text and pastes it directly into whatever application has focus. Transcription runs locally via Whisper by default; an LLM step is optional and only used when you explicitly pick one of the AI workflows (rephrase, tone filter, emoji enrichment) or the Compose window. Everything is designed to stay on your machine unless you deliberately opt into a cloud provider (OpenAI, OpenRouter, or a custom OpenAI-compatible endpoint) for LLM or Cloud TTS features.
+
+---
+
 ## Features
 
 - **Multilingual interface (EN/DE):** Switch the app interface between German and English under **Settings → General → "Interface language"** (takes effect after restarting the app).
@@ -30,9 +36,180 @@
 - **LLM-powered workflows:** Let the AI rephrase your sentences professionally, filter them emotionally, or enrich them with fitting emojis.
 - **Local processing:** Optionally 100% offline for full privacy.
 
+### The 5 workflows and hotkeys
+
+Blitztext registers global hotkeys via `evdev`. With these combinations you have full control:
+
+| Workflow | Hotkey | LLM? | Description |
+| :--- | :--- | :---: | :--- |
+| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Default: records, transcribes, and pastes the text. |
+| **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
+| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
+| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
+| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
+
+> [!NOTE]
+> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. See [Secrets](#secrets) below for how to configure it. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
+
+### AI workflows
+
+The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → AI Workflows**:
+
+<div align="center">
+  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="AI workflow settings" width="480">
+  <br><br>
+</div>
+
+**LLM providers.** Blitztext supports three provider modes, selectable under **Settings → AI Workflows → "LLM provider"**:
+
+| Provider | When to use |
+| :--- | :--- |
+| **OpenAI** (default) | Standard OpenAI API with `gpt-4o-mini` or any other model. |
+| **OpenRouter** | Access hundreds of models via a single API key (`OPENROUTER_API_KEY`). Base URL: `https://openrouter.ai/api/v1`. |
+| **Custom endpoint** | Any OpenAI-compatible API — set "Base URL" and "LLM model" to match your provider. |
+
+For OpenRouter, set `base_url` to `https://openrouter.ai/api/v1` and choose your model (e.g. `openai/gpt-4o`). The API key environment variable name is configured under "API key environment".
+
+**Writing-style presets.** For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"** or directly in the **Compose window**:
+
+| Preset | Effect |
+| --- | --- |
+| **Standard (improve text)** | Previous behavior – cleanly formatted text, the selected **tone** applies. |
+| **Email – formal** | Polite email in the formal form with a clear structure. |
+| **Email – casual** | Friendly email in the informal form. |
+| **Bullet points** | Structures the content into concise bullet points. |
+| **Summary** | Concise, factual summary of the key statements. |
+| **Personal (informal)** | Clear text in a personal, informal tone. |
+| **Polite (formal)** | Clear text in a polite, formal tone. |
+| **Short & precise** | As concise as possible, without filler words and repetitions. |
+| **Custom preset…** | A free-form system prompt you define yourself under **Settings → General → "Custom preset (Compose)"**. |
+
+> With **Standard**, the configured **tone** (casual / neutral / professional) is additionally applied. Every other preset brings its own writing style and overrides the tone setting. Custom names/terms are preserved in all presets.
+
+### Compose window
+
+The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/compose-en.png" alt="Compose window" width="480">
+  <br><br>
+</div>
+
+**How to open:** Click the tray icon → **✍ Compose…**
+
+**What you can do in the Compose window:**
+
+| Element | Description |
+| :--- | :--- |
+| **Draft (left pane)** | Type or paste the text you want to rewrite. |
+| **Workflow** | Choose between Blitztext+ (text improver), Blitztext $%&! (steam release), or Blitztext :) (emojis). |
+| **Writing-style preset** | Select a preset or **Custom preset…** for a fully custom system prompt. |
+| **Tone** | Choose casual, neutral, or professional. Active only when **Standard** preset + **Blitztext+** is selected; grayed out for all other presets (a tooltip explains why). |
+| **Improve** | Sends your draft to the AI and shows the result in the right pane. |
+| **Variant history** | The last 10 generated results within the current session are kept as a scrollable list — click any entry to restore it. |
+| **Signature** | Appends your saved signature (configured under **Settings → General**). Automatically replaces common AI-generated placeholders such as `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]`, and similar — so no stray placeholder is ever left behind. |
+| **Copy** | Copies the result to the clipboard. |
+| **Insert & Close** | Pastes the result directly into the active application and closes the window. |
+
+> [!NOTE]
+> The signature and custom preset text are configured under **Settings → General**. Set "Signature for Compose window" and toggle "Automatically append after generation" if you want the signature added to every result.
+
+### Tray icon and context menu
+
+The microphone in the system tray is your indicator of the current state:
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/tray-idle.png" width="60"><br><br>
+        <b>Green</b> (IDLE)<br>
+        <i>Ready — waiting for your action.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/tray-recording.png" width="60"><br><br>
+        <b>Red</b> (RECORDING)<br>
+        <i>Recording is actively running.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/tray-processing.png" width="60"><br><br>
+        <b>Orange</b> (TRANSCRIBING)<br>
+        <i>Magic in progress (transcription / AI rephrasing).</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/tray-error.png" width="60"><br><br>
+        <b>Gray</b> (ERROR)<br>
+        <i>Oops, something went wrong.</i>
+      </td>
+    </tr>
+  </table>
+</div>
+
+The tray context menu gives you quick access to all workflows, the compose window, writing-style presets, dictation mode, history, and settings:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray context menu" width="280">
+  <br><br>
+</div>
+
+> [!NOTE]
+> If no tray area is available in the desktop environment, the icon falls back to the system theme `audio-input-microphone`; the color coding may then not apply.
+
+### Main window
+
+The main window is your graphical control center — useful when hotkeys are blocked or you prefer mouse control:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/main-window-en.png" alt="Main window" width="300">
+  <br><br>
+</div>
+
+- **Workflow dropdown:** Select from all 5 recording modes.
+- **Writing-style preset:** Visible when **Blitztext+** is selected — pick your preset directly in the main window. Changes sync to the tray instantly.
+- **Start/Stop button:** Click to begin or end a recording.
+- **Discard:** Cancels the current recording without transcription.
+- **Dictation / History:** Quick access to dictation mode and the transcript history.
+- **Read aloud / Settings:** Open the read-aloud window or the settings dialog.
+
+*The window opens at startup and via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
+
+### Dictation, history, and read-aloud
+
+In addition to the workflows, the tool offers three convenience functions:
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/history-en.png" alt="History" width="340">
+  <img src="docs/screenshots/linux/tts-en.png" alt="Read aloud" width="340">
+  <br><br>
+</div>
+
+| Menu item | Description |
+| :--- | :--- |
+| **Dictation mode** | Toggle. When active, all transcripts are collected as dictation entries and each saved as a Markdown file. The history then shows a **Merge** button that combines all entries and copies them to the clipboard. |
+| **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. |
+| **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection). Use the **Export** button to save the audio as a file. |
+
+> [!NOTE]
+> **Dictation notes** are written exclusively into a folder **inside the home directory** (protection against path traversal), with permissions `0o600`.
+
+> [!IMPORTANT]
+> **Piper TTS** must be installed for the read-aloud function (as well as voices):
+> ```bash
+> .venv/bin/pip install piper-tts
+> # Place voices (.onnx + .onnx.json) into ~/.local/share/piper-voices/
+> ```
+> If Piper or a voice is missing, the read-aloud window shows an installation hint; all other functions remain usable. Optional desktop notifications use `notify-send` (package `libnotify-bin`).
+
+> [!NOTE]
+> **OpenAI Cloud TTS** is an optional alternative to Piper. Requirements: the `openai` package (`.venv/bin/pip install openai`) and a valid key in the environment variable `OPENAI_API_KEY` (see [Secrets](#secrets) below). When first switching to the "OpenAI Cloud" provider, the read-aloud window asks for confirmation once, because the entered text is sent to OpenAI's servers for synthesis. Piper remains the default and works entirely locally.
+
 ---
 
-## Installation
+## Installation & Start
 
 ### Quick install (recommended)
 
@@ -138,197 +315,9 @@ systemctl --user enable --now ydotool.service   # uses /usr/local/bin/ydotoold
 
 ---
 
-## The 5 workflows and hotkeys
-
-Blitztext registers global hotkeys via `evdev`. With these combinations you have full control:
-
-| Workflow | Hotkey | LLM? | Description |
-| :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Default: records, transcribes, and pastes the text. |
-| **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
-| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
-| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
-| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
-
-> [!NOTE]
-> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. The easiest way is to place it in `~/.config/blitztext-linux/secrets.env` using the format `NAME=VALUE` (e.g. `OPENAI_API_KEY` set to your key). `./run.sh` and the systemd service load this file automatically. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
-
----
-
-## AI workflows
-
-The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → AI Workflows**:
-
-<div align="center">
-  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="AI workflow settings" width="480">
-  <br><br>
-</div>
-
-### LLM providers
-
-Blitztext supports three provider modes, selectable under **Settings → AI Workflows → "LLM provider"**:
-
-| Provider | When to use |
-| :--- | :--- |
-| **OpenAI** (default) | Standard OpenAI API with `gpt-4o-mini` or any other model. |
-| **OpenRouter** | Access hundreds of models via a single API key (`OPENROUTER_API_KEY`). Base URL: `https://openrouter.ai/api/v1`. |
-| **Custom endpoint** | Any OpenAI-compatible API — set "Base URL" and "LLM model" to match your provider. |
-
-For OpenRouter, set `base_url` to `https://openrouter.ai/api/v1` and choose your model (e.g. `openai/gpt-4o`). The API key environment variable name is configured under "API key environment".
-
-### Writing-style presets
-
-For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"** or directly in the **Compose window**:
-
-| Preset | Effect |
-| --- | --- |
-| **Standard (improve text)** | Previous behavior – cleanly formatted text, the selected **tone** applies. |
-| **Email – formal** | Polite email in the formal form with a clear structure. |
-| **Email – casual** | Friendly email in the informal form. |
-| **Bullet points** | Structures the content into concise bullet points. |
-| **Summary** | Concise, factual summary of the key statements. |
-| **Personal (informal)** | Clear text in a personal, informal tone. |
-| **Polite (formal)** | Clear text in a polite, formal tone. |
-| **Short & precise** | As concise as possible, without filler words and repetitions. |
-| **Custom preset…** | A free-form system prompt you define yourself under **Settings → General → "Custom preset (Compose)"**. |
-
-> With **Standard**, the configured **tone** (casual / neutral / professional) is additionally applied. Every other preset brings its own writing style and overrides the tone setting. Custom names/terms are preserved in all presets.
-
----
-
-## Compose window
-
-The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
-
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/compose-en.png" alt="Compose window" width="480">
-  <br><br>
-</div>
-
-**How to open:** Click the tray icon → **✍ Compose…**
-
-**What you can do in the Compose window:**
-
-| Element | Description |
-| :--- | :--- |
-| **Draft (left pane)** | Type or paste the text you want to rewrite. |
-| **Workflow** | Choose between Blitztext+ (text improver), Blitztext $%&! (steam release), or Blitztext :) (emojis). |
-| **Writing-style preset** | Select a preset or **Custom preset…** for a fully custom system prompt. |
-| **Tone** | Choose casual, neutral, or professional. Active only when **Standard** preset + **Blitztext+** is selected; grayed out for all other presets (a tooltip explains why). |
-| **Improve** | Sends your draft to the AI and shows the result in the right pane. |
-| **Variant history** | The last 10 generated results within the current session are kept as a scrollable list — click any entry to restore it. |
-| **Signature** | Appends your saved signature (configured under **Settings → General**). Automatically replaces common AI-generated placeholders such as `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]`, and similar — so no stray placeholder is ever left behind. |
-| **Copy** | Copies the result to the clipboard. |
-| **Insert & Close** | Pastes the result directly into the active application and closes the window. |
-
-> [!NOTE]
-> The signature and custom preset text are configured under **Settings → General**. Set "Signature for Compose window" and toggle "Automatically append after generation" if you want the signature added to every result.
-
----
-
-## Tray icon and context menu
-
-The microphone in the system tray is your indicator of the current state:
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center" width="25%">
-        <img src="docs/screenshots/linux/tray-idle.png" width="60"><br><br>
-        <b>Green</b> (IDLE)<br>
-        <i>Ready — waiting for your action.</i>
-      </td>
-      <td align="center" width="25%">
-        <img src="docs/screenshots/linux/tray-recording.png" width="60"><br><br>
-        <b>Red</b> (RECORDING)<br>
-        <i>Recording is actively running.</i>
-      </td>
-      <td align="center" width="25%">
-        <img src="docs/screenshots/linux/tray-processing.png" width="60"><br><br>
-        <b>Orange</b> (TRANSCRIBING)<br>
-        <i>Magic in progress (transcription / AI rephrasing).</i>
-      </td>
-      <td align="center" width="25%">
-        <img src="docs/screenshots/linux/tray-error.png" width="60"><br><br>
-        <b>Gray</b> (ERROR)<br>
-        <i>Oops, something went wrong.</i>
-      </td>
-    </tr>
-  </table>
-</div>
-
-The tray context menu gives you quick access to all workflows, the compose window, writing-style presets, dictation mode, history, and settings:
-
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray context menu" width="280">
-  <br><br>
-</div>
-
-> [!NOTE]
-> If no tray area is available in the desktop environment, the icon falls back to the system theme `audio-input-microphone`; the color coding may then not apply.
-
----
-
-## Main window
-
-The main window is your graphical control center — useful when hotkeys are blocked or you prefer mouse control:
-
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/main-window-en.png" alt="Main window" width="300">
-  <br><br>
-</div>
-
-- **Workflow dropdown:** Select from all 5 recording modes.
-- **Writing-style preset:** Visible when **Blitztext+** is selected — pick your preset directly in the main window. Changes sync to the tray instantly.
-- **Start/Stop button:** Click to begin or end a recording.
-- **Discard:** Cancels the current recording without transcription.
-- **Dictation / History:** Quick access to dictation mode and the transcript history.
-- **Read aloud / Settings:** Open the read-aloud window or the settings dialog.
-
-*The window opens at startup and via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
-
----
-
-## Dictation, history, and read-aloud
-
-In addition to the workflows, the tool offers three convenience functions:
-
-<div align="center">
-  <br>
-  <img src="docs/screenshots/linux/history-en.png" alt="History" width="340">
-  <img src="docs/screenshots/linux/tts-en.png" alt="Read aloud" width="340">
-  <br><br>
-</div>
-
-
-| Menu item | Description |
-| :--- | :--- |
-| **Dictation mode** | Toggle. When active, all transcripts are collected as dictation entries and each saved as a Markdown file. The history then shows a **Merge** button that combines all entries and copies them to the clipboard. |
-| **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. |
-| **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection). Use the **Export** button to save the audio as a file. |
-
-> [!NOTE]
-> **Dictation notes** are written exclusively into a folder **inside the home directory** (protection against path traversal), with permissions `0o600`.
-
-> [!IMPORTANT]
-> **Piper TTS** must be installed for the read-aloud function (as well as voices):
-> ```bash
-> .venv/bin/pip install piper-tts
-> # Place voices (.onnx + .onnx.json) into ~/.local/share/piper-voices/
-> ```
-> If Piper or a voice is missing, the read-aloud window shows an installation hint; all other functions remain usable. Optional desktop notifications use `notify-send` (package `libnotify-bin`).
-
-> [!NOTE]
-> **OpenAI Cloud TTS** is an optional alternative to Piper. Requirements: the `openai` package (`.venv/bin/pip install openai`) and a valid key in the environment variable `OPENAI_API_KEY` (see `secrets.env` below). When first switching to the "OpenAI Cloud" provider, the read-aloud window asks for confirmation once, because the entered text is sent to OpenAI's servers for synthesis. Piper remains the default and works entirely locally.
-
----
-
 ## Configuration
 
-Everything is stored locally and securely under `~/.config/blitztext-linux/config.json`. The OpenAI key is not stored in this file but read from an environment variable. The configuration file can be opened directly from the settings: **Settings → General → "Open configuration file"**.
+Everything is stored locally under `~/.config/blitztext-linux/config.json`. This file holds no secrets — the OpenAI/OpenRouter key is read from an environment variable (see [Secrets](#secrets)). The configuration file can be opened directly from the settings: **Settings → General → "Open configuration file"**.
 
 The settings dialog has three tabs:
 
@@ -341,9 +330,8 @@ The settings dialog has three tabs:
   <br><i>General — Auto-Paste, dictation folder, history size, interface language, and signature.</i><br><br>
 </div>
 
-
 > [!IMPORTANT]
-> The configuration file is automatically saved with restrictive file permissions (**`0o600` / `chmod 600`**). The real OpenAI key instead lives in `~/.config/blitztext-linux/secrets.env` or is provided as an environment variable.
+> The configuration file is automatically saved with restrictive file permissions (**`0o600` / `chmod 600`**).
 
 <details>
 <summary><b>Example configuration & field explanation</b></summary>
@@ -386,7 +374,7 @@ The settings dialog has three tabs:
 - **language**: Transcription language (`de`, `en`) or `auto`.
 - **ui_language**: Language of the app interface (`de` or `en`). Default: `de`. Changes take effect after a restart.
 - **backend**: `openai-whisper` or `faster-whisper`.
-- **hotkey_mode**: 
+- **hotkey_mode**:
   - `toggle`: press once to start, press again to stop.
   - `hold`: recording runs as long as the hotkey is held.
 - **transcription_hotkey**: Recording key captured by the global hotkey daemon. Default: `KEY_LEFTALT`.
@@ -412,15 +400,66 @@ The settings dialog has three tabs:
 
 ---
 
-## Development and tests
+## Secrets
 
-We love stability! Run the tests locally:
+API keys are never stored in `config.json` — they are read from environment variables at runtime.
+
+**Recommended: `secrets.env`.** Place your key(s) in `~/.config/blitztext-linux/secrets.env`, one `NAME=VALUE` pair per line, for example:
+
+```bash
+OPENAI_API_KEY=sk-...
+# OPENROUTER_API_KEY=sk-or-...
+```
+
+`./run.sh` and the systemd user service load this file automatically. `config.json` only stores the *name* of the environment variable to read (`openai_api_key_env`), never the key itself.
+
+- Which variable is used depends on **Settings → AI Workflows → "API key environment"** and the selected LLM provider (`OPENAI_API_KEY` for OpenAI, `OPENROUTER_API_KEY` for OpenRouter, or a custom name for a custom endpoint).
+- Without a valid key, the LLM workflows (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) and OpenAI Cloud TTS are disabled or fail with an error message; local transcription and Piper TTS keep working.
+- Never commit `secrets.env`, API keys, or tokens to git. If a key is ever exposed (e.g. committed by accident or pasted into an issue), rotate it immediately with the provider.
+- `config.json` is written with restrictive permissions (`0o600`); keep the same expectation for `secrets.env`.
+
+---
+
+## Tests
+
+Run the test suite locally:
 
 ```bash
 pytest
 ```
 
 With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests (main window, compose window) run additionally.
+
+`bash scripts/verify.sh` runs session-aware diagnostics for X11, Wayland, and clipboard backends — useful after installation or when troubleshooting hotkeys/paste behavior. Its output is diagnostic guidance, not a support promise; see the compatibility notes it prints for your desktop session.
+
+---
+
+## Flatpak MVP status
+
+`packaging/flatpak/` contains an **experimental** Flatpak manifest spike — it is not a release channel and not published on Flathub.
+
+- A structural validation (`flatpak-builder --show-manifest` / `--show-deps`) and a full local build (including the `org.kde.Platform`/`org.kde.Sdk` 6.8 download) have both succeeded on a development machine.
+- The KDE 6.8 runtime is marked EOL upstream; it still builds and runs for this MVP. A runtime bump to 6.10 is a possible follow-up spike, not something implemented here.
+- Inside the Flatpak sandbox, several features are intentionally disabled or degraded: no global hotkeys (no evdev/input-device access), no `ydotool` auto-paste (clipboard copy still works via the Qt fallback), no local Whisper transcription (excluded from `requirements-flatpak.txt` due to its size — cloud transcription/LLM workflows still work with `--share=network`), and no desktop notifications (`notify-send` is not bundled).
+- No signing, no AppStream metadata, no `.desktop` file, and no packaged release exist for this spike.
+
+See [`packaging/flatpak/README.md`](packaging/flatpak/README.md) for the exact manifest scope, build commands, and known deviations from Flathub conventions.
+
+---
+
+## Known limitations
+
+- **Linux exclusive:** For Linux systems only.
+- **Wayland focus:** Developed for Wayland (`wl-clipboard`, `ydotool`).
+- **Privacy:** Local workflows stay 100% on your machine. OpenAI or OpenRouter is only contacted when needed for LLM or Cloud TTS tasks.
+- **Security (`evdev` & `input` group):** The tool reads input globally via `/dev/input/event*`. At the system level, this means all of the user's processes could read along with input (a trade-off under Wayland without XDG GlobalShortcuts). Only use Blitztext in environments you trust!
+- **Flatpak sandbox:** See [Flatpak MVP status](#flatpak-mvp-status) above — global hotkeys, auto-paste, local Whisper, and desktop notifications are unavailable inside the sandbox.
+
+---
+
+## Development
+
+This project was designed with the support of artificial intelligence (AI-assisted). Architecture, code, and tests were reviewed manually and verified locally for function/security. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 <details>
 <summary><b>Directory overview</b></summary>
@@ -443,20 +482,11 @@ With `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen pytest`, the GUI tests (main
 │   ├── tts_window.py       # Read Aloud window with audio export
 │   ├── workflows.py        # Workflow definitions
 │   └── writing_presets.py  # Writing-style preset definitions
+├── packaging/flatpak/      # Experimental Flatpak MVP spike (see above)
 ├── tests/                  # Test suite
 └── README.md               # This document (German version: README.de.md)
 ```
 </details>
-
----
-
-## Important notes
-
-- **Linux exclusive:** For Linux systems only.
-- **Wayland focus:** Developed for Wayland (`wl-clipboard`, `ydotool`).
-- **Privacy:** Local workflows stay 100% on your machine. OpenAI or OpenRouter is only contacted when needed for LLM or Cloud TTS tasks.
-- **Security (`evdev` & `input` group):** The tool reads input globally via `/dev/input/event*`. At the system level, this means all of the user's processes could read along with input (a trade-off under Wayland without XDG GlobalShortcuts). Only use Blitztext in environments you trust!
-- **Developer note:** This project was designed with the support of artificial intelligence (AI-assisted). Architecture, code, and tests were reviewed manually and verified locally for function/security.
 
 ---
 
@@ -475,7 +505,7 @@ The original project is an experimental, non-commercial open-source project unde
   <sub>Made with ❤️ (and a little AI help).</sub>
 </div>
 
-### v0.8.1: Intent-preserving prompts and diagnostics
+### Latest release notes (v0.8.1): Intent-preserving prompts and diagnostics
 
 Blitztext+ and the writing presets now preserve the user's intent more conservatively. They avoid inventing meetings, participants, recipients, roles, or goals when rewriting spoken work instructions or handover prompts. Email presets only use email-like structure when the input is clearly meant as a message to someone.
 

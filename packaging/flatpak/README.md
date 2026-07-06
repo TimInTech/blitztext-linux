@@ -55,23 +55,61 @@ Absichtlich **nicht** enthalten / sichtbar deaktiviert:
 
 ## Verifikation (in diesem Spike durchgefuehrt)
 
-`flatpak-builder` 1.4.8 ist auf diesem Host vorhanden. Ein vollstaendiger
-Build (Download von `org.kde.Platform`/`org.kde.Sdk` 6.8, ca. 1,5 GB) wurde
-in diesem Diagnose-Pass **nicht** ausgefuehrt -- das waere ein groesserer,
-bestaetigungspflichtiger Download/Installationsschritt ausserhalb des
-Spike-Rahmens. Stattdessen nur strukturelle Validierung ohne Runtime-Install:
+`flatpak-builder` 1.4.8 ist auf diesem Host vorhanden. Zunaechst wurde nur
+strukturell validiert, ohne Runtime-Install:
 
 ```bash
 flatpak-builder --show-manifest packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml
 flatpak-builder --show-deps packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml
 ```
 
-## Naechster Schritt (nicht Teil dieses Spikes)
+Nach PR #48 wurde zusaetzlich ein echter Build (inkl. Download von
+`org.kde.Platform`/`org.kde.Sdk` 6.8, ca. 1,5 GB) erfolgreich getestet.
 
-Falls ein echter Build gewuenscht ist:
+### Hinweis: Build-State-Dir unter `/tmp`
+
+Wenn das Build-Verzeichnis unter `/tmp` liegt, kann `flatpak-builder`
+je nach Setup versuchen, seinen State-Ordner (`.flatpak-builder/`) relativ
+zum Home-Filesystem anzulegen. Da `/tmp` haeufig ein separates `tmpfs` ist,
+schlagen manche Operationen (z. B. `rofiles-fuse`/Hardlinks) ueber die
+Filesystem-Grenze fehl. Abhilfe: State-Dir explizit auf denselben
+Filesystem-Mountpoint wie das Build-Ziel legen, z. B.:
 
 ```bash
-flatpak install flathub org.kde.Platform//6.8 org.kde.Sdk//6.8
+--state-dir=/tmp/blitztext-flatpak-builder-state
+```
+
+### Beispiel-Build-Befehl (ohne `--install`)
+
+```bash
+flatpak install --user -y flathub org.kde.Platform//6.8 org.kde.Sdk//6.8
+flatpak-builder --force-clean \
+  --state-dir=/tmp/blitztext-flatpak-builder-state \
+  /tmp/blitztext-flatpak-build \
+  packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml
+```
+
+Bewusst ohne `--install` -- der Build wird nur erzeugt, nicht in die lokale
+Flatpak-Umgebung installiert. Fuer einen manuellen Testlauf danach:
+
+```bash
+flatpak-builder --run /tmp/blitztext-flatpak-build \
+  packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml \
+  blitztext-linux.sh
+```
+
+### KDE Platform/Sdk 6.8 -- EOL-Hinweis
+
+Laut Flathub ist `org.kde.Platform`/`org.kde.Sdk` 6.8 als EOL markiert.
+Fuer diesen MVP ist die Runtime weiterhin funktionsfaehig und wurde
+erfolgreich gebaut. Naechster Upgrade-Kandidat: **6.10**. Ein Runtime-Bump
+ist nicht Teil dieses Spikes.
+
+## Naechster Schritt (nicht Teil dieses Spikes)
+
+Falls ein vollstaendig installierter Testlauf gewuenscht ist:
+
+```bash
 flatpak-builder --user --install --force-clean build-dir \
   packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml
 flatpak run io.github.TimInTech.BlitztextLinux
