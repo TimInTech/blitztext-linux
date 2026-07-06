@@ -1,0 +1,46 @@
+app-id: io.github.TimInTech.BlitztextLinux
+runtime: org.kde.Platform
+runtime-version: "6.8"
+sdk: org.kde.Sdk
+command: blitztext-linux
+
+# MVP-Sandbox-Rechte: nur was fuer GUI, Zwischenablage (Qt-Fallback),
+# Audioaufnahme (PulseAudio) und Cloud-Aufrufe (OpenAI) noetig ist.
+# Bewusst NICHT enthalten: --device=all / --system-talk-name=... fuer
+# evdev-Zugriff -- globale Hotkeys bleiben im Flatpak deaktiviert
+# (app/hotkey_service.py faengt das fehlende evdev bereits ab, siehe
+# tests/test_flatpak_fallback.py::test_hotkey_service_flatpak_hint).
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+
+modules:
+  - name: blitztext-linux-deps
+    buildsystem: simple
+    # Netzwerk nur fuer dieses Modul erlauben (pip-Installation).
+    # Nicht Flathub-konform (keine gepinnten/vendored Quellen) -- fuer
+    # diesen MVP-Spike bewusst so belassen, siehe README.md.
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - pip3 install --prefix=/app --no-build-isolation -r requirements-flatpak.txt
+    sources:
+      - type: file
+        path: requirements-flatpak.txt
+
+  - name: blitztext-linux
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 blitztext-linux.sh /app/bin/blitztext-linux
+      - mkdir -p /app/share/blitztext-linux
+      - cp -r app /app/share/blitztext-linux/app
+    sources:
+      - type: dir
+        path: ../../app
+        dest: app
+      - type: file
+        path: blitztext-linux.sh
