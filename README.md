@@ -404,11 +404,10 @@ The settings dialog has three tabs:
 
 API keys are never stored in `config.json` — they are read from environment variables at runtime.
 
-**Recommended: `secrets.env`.** Place your key(s) in `~/.config/blitztext-linux/secrets.env`, one `NAME=VALUE` pair per line, for example:
+**Recommended: `secrets.env`.** Place your key(s) in `~/.config/blitztext-linux/secrets.env`, one `NAME=VALUE` pair per line — the variable name matches the provider selected under **Settings → AI Workflows → "API key environment"** (e.g. the OpenAI variable for OpenAI, the OpenRouter variable for OpenRouter), and `VALUE` is the secret key you got from that provider:
 
 ```bash
-OPENAI_API_KEY=sk-...
-# OPENROUTER_API_KEY=sk-or-...
+<VARIABLE_NAME>=<your-secret-value>
 ```
 
 `./run.sh` and the systemd user service load this file automatically. `config.json` only stores the *name* of the environment variable to read (`openai_api_key_env`), never the key itself.
