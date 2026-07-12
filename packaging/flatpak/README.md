@@ -12,6 +12,11 @@ Absichtlich enthalten:
 - Audioaufnahme ueber PulseAudio-Socket
 - Cloud-Aufrufe (OpenAI: LLM-Workflows, ggf. Transkription/TTS) ueber
   `--share=network`
+- D-Bus-Zugriff auf `org.kde.StatusNotifierWatcher`
+  (`--talk-name=org.kde.StatusNotifierWatcher`) fuer das Tray-Icon --
+  siehe "Tray-Icon erfordert D-Bus-Talk-Name" unten, App startet
+  ausschliesslich als Tray-Icon (`app/blitztext_linux.py::setup_tray`),
+  ohne diese Berechtigung ist die GUI im Sandbox unerreichbar.
 
 Absichtlich **nicht** enthalten / sichtbar deaktiviert:
 - Globale Hotkeys (evdev) -- `app/hotkey_service.py` importiert `evdev` lazy
@@ -97,6 +102,25 @@ flatpak-builder --run /tmp/blitztext-flatpak-build \
   packaging/flatpak/io.github.TimInTech.BlitztextLinux.yaml \
   blitztext-linux.sh
 ```
+
+### Tray-Icon erfordert D-Bus-Talk-Name
+
+Beim ersten echten `flatpak run`-Testlauf (nach PR #48) blieb die App
+unerreichbar: kein Absturz, Prozess lief stabil (`flatpak ps` zeigte ihn),
+aber es erschien weder Tray-Icon noch Fenster. Ursache: Blitztext startet
+ausschliesslich als Tray-Icon (`app/blitztext_linux.py::setup_tray`, Zeile
+~645/673-781), das Hauptfenster oeffnet sich erst per Klick darauf. Ohne
+`--talk-name=org.kde.StatusNotifierWatcher` im Manifest kann Qt
+(`QDBusTrayIcon`, KDE-Style) das StatusNotifierItem nicht beim Watcher
+registrieren (`QDBusError("org.freedesktop.DBus.Error.ServiceUnknown")`
+im Log) -- damit gab es keinen Weg, die GUI ueberhaupt zu oeffnen.
+
+Fix: `--talk-name=org.kde.StatusNotifierWatcher` zu `finish-args`
+hinzugefuegt (kein breiterer `--socket=session-bus`, um beim
+Minimal-Rechte-Ansatz des MVP zu bleiben). Nach Rebuild + Neuinstallation
+registrierte sich das Tray-Item nachweisbar per D-Bus
+(`busctl --user call ... org.kde.StatusNotifierItem Title` lieferte
+`"Blitztext"`), kein `ServiceUnknown`-Fehler mehr im Log.
 
 ### KDE Platform/Sdk 6.8 -- EOL-Hinweis
 

@@ -16,6 +16,7 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --socket=pulseaudio
+  - --talk-name=org.kde.StatusNotifierWatcher
 
 modules:
   - name: blitztext-linux-deps
