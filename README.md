@@ -18,6 +18,12 @@
   <p><strong>🔗 Website: <a href="https://timintech.github.io/blitztextweb/">timintech.github.io/blitztextweb</a></strong></p>
 </div>
 
+<div align="center">
+  <img src="docs/screenshots/linux/demo-en.gif" alt="Demo: press the hotkey, speak, and Blitztext pastes the transcribed text into the active application" width="720">
+  <br>
+  <sub>Hold <kbd>Alt</kbd> (default hotkey), speak, release — the transcript lands directly in the active application.</sub>
+</div>
+
 > [!IMPORTANT]
 > **Standalone Linux port:** This repository contains exclusively the Linux port of Blitztext – a standalone Python 3/PyQt6 implementation optimized for **Kubuntu/Ubuntu running KDE Plasma with Wayland**. For the original macOS version, please visit the [official main repository](https://github.com/cmagnussen/blitztext-app).
 
