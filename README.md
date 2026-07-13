@@ -5,12 +5,17 @@
   <p><strong>Your local AI voice assistant for KDE Plasma & Wayland</strong></p>
 
   <p>
+    <a href="https://timintech.github.io/blitztextweb/"><img src="https://img.shields.io/badge/🌐_Website-blitztextweb-2ea44f?style=for-the-badge" alt="Website"></a>
+  </p>
+
+  <p>
     <a href="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="Blitztext Linux CI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/Platform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Platform">
   </p>
   <p><strong>🇬🇧 English</strong> | <a href="README.de.md">🇩🇪 Deutsch</a></p>
   <p><i>Record speech via hotkey, transcribe locally or online, optionally rewrite it with an LLM, and paste it directly into the active application.</i></p>
+  <p><strong>🔗 Website: <a href="https://timintech.github.io/blitztextweb/">timintech.github.io/blitztextweb</a></strong></p>
 </div>
 
 > [!IMPORTANT]

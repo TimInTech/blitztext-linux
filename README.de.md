@@ -5,12 +5,17 @@
   <p><strong>Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland</strong></p>
 
   <p>
+    <a href="https://timintech.github.io/blitztextweb/"><img src="https://img.shields.io/badge/🌐_Webseite-blitztextweb-2ea44f?style=for-the-badge" alt="Webseite"></a>
+  </p>
+
+  <p>
     <a href="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="Blitztext Linux CI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-yellow.svg" alt="Lizenz: MIT"></a>
     <img src="https://img.shields.io/badge/Plattform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Plattform">
   </p>
   <p><a href="README.md">🇬🇧 English</a> | <strong>🇩🇪 Deutsch</strong></p>
   <p><i>Sprache per Hotkey aufnehmen, lokal oder online transkribieren, optional per LLM umschreiben und direkt in die aktive Anwendung einfügen.</i></p>
+  <p><strong>🔗 Webseite: <a href="https://timintech.github.io/blitztextweb/">timintech.github.io/blitztextweb</a></strong></p>
 </div>
 
 > [!IMPORTANT]
