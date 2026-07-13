@@ -33,7 +33,7 @@ if PROJECT_DIR not in sys.path:
 from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS
 from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
-from app.hotkey_service import HotkeyWorker
+from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
 from app.paste_service import PasteService, PasteServiceError
@@ -705,7 +705,9 @@ class BlitztextApp(QObject):
         self.menu.addSeparator()
 
         # Actions für die fünf Workflows
-        self.action_transcription = QAction(f"{t('workflow.transcription.name')}\tMeta+H", self)
+        self.action_transcription = QAction(
+            f"{t('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}", self
+        )
         self.action_transcription.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TRANSCRIPTION))
         self.menu.addAction(self.action_transcription)
 
@@ -816,7 +818,9 @@ class BlitztextApp(QObject):
         if hasattr(self, "action_compose"):
             self.action_compose.setText(f"✍  {t('tray.compose')}")
         if hasattr(self, "action_transcription"):
-            self.action_transcription.setText(f"{t('workflow.transcription.name')}\tMeta+H")
+            self.action_transcription.setText(
+                f"{t('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}"
+            )
         if hasattr(self, "action_local"):
             self.action_local.setText(f"{t('workflow.local.name')}\tMeta+Shift+H")
         if hasattr(self, "action_improver"):

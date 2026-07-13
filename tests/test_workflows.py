@@ -28,7 +28,9 @@ class TestWorkflowType:
             assert "hotkey" in WORKFLOW_META[wf], f"Missing hotkey for {wf}"
 
     def test_transcription_hotkey(self):
-        assert WORKFLOW_META[WorkflowType.TRANSCRIPTION]["hotkey"] == "Meta+H"
+        # Standard-Aufnahmetaste (KEY_LEFTALT, Modus "hold") — nicht Meta+H;
+        # UI-Labels leiten den konfigurierten Wert via hotkey_display_name ab.
+        assert WORKFLOW_META[WorkflowType.TRANSCRIPTION]["hotkey"] == "Alt"
 
     def test_local_hotkey(self):
         assert WORKFLOW_META[WorkflowType.LOCAL]["hotkey"] == "Meta+Shift+H"

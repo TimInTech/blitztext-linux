@@ -53,7 +53,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 
 | Workflow | Hotkey | LLM? | Beschreibung |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Standard: Nimmt auf, transkribiert und fügt den Text ein. |
+| **Blitztext** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
 | **Blitztext Lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
 | **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Formuliert deine Aufnahme professionell via LLM um. |
 | **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |
