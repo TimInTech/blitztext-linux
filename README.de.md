@@ -18,6 +18,12 @@
   <p><strong>🔗 Webseite: <a href="https://timintech.github.io/blitztextweb/">timintech.github.io/blitztextweb</a></strong></p>
 </div>
 
+<div align="center">
+  <img src="docs/screenshots/linux/demo-de.gif" alt="Demo: Hotkey drücken, sprechen, und Blitztext fügt den transkribierten Text direkt in die aktive Anwendung ein" width="720">
+  <br>
+  <sub><kbd>Alt</kbd> gedrückt halten (Standard-Hotkey), sprechen, loslassen — das Transkript landet direkt in der aktiven Anwendung.</sub>
+</div>
+
 > [!IMPORTANT]
 > **Eigenständiger Linux-Port:** Dieses Repository enthält ausschließlich den Linux-Port von Blitztext – eine eigenständige Python 3/PyQt6-Implementierung optimiert für **Kubuntu/Ubuntu unter KDE Plasma mit Wayland**. Für die originale macOS-Version besuche bitte das [offizielle Haupt-Repository](https://github.com/cmagnussen/blitztext-app).
 
@@ -47,7 +53,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 
 | Workflow | Hotkey | LLM? | Beschreibung |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Standard: Nimmt auf, transkribiert und fügt den Text ein. |
+| **Blitztext** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
 | **Blitztext Lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
 | **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Formuliert deine Aufnahme professionell via LLM um. |
 | **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |

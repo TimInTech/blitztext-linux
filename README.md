@@ -18,6 +18,12 @@
   <p><strong>🔗 Website: <a href="https://timintech.github.io/blitztextweb/">timintech.github.io/blitztextweb</a></strong></p>
 </div>
 
+<div align="center">
+  <img src="docs/screenshots/linux/demo-en.gif" alt="Demo: press the hotkey, speak, and Blitztext pastes the transcribed text into the active application" width="720">
+  <br>
+  <sub>Hold <kbd>Alt</kbd> (default hotkey), speak, release — the transcript lands directly in the active application.</sub>
+</div>
+
 > [!IMPORTANT]
 > **Standalone Linux port:** This repository contains exclusively the Linux port of Blitztext – a standalone Python 3/PyQt6 implementation optimized for **Kubuntu/Ubuntu running KDE Plasma with Wayland**. For the original macOS version, please visit the [official main repository](https://github.com/cmagnussen/blitztext-app).
 
@@ -47,7 +53,7 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 
 | Workflow | Hotkey | LLM? | Description |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Meta</kbd> + <kbd>H</kbd> | ❌ | Default: records, transcribes, and pastes the text. |
+| **Blitztext** | <kbd>Alt</kbd> (hold) | ❌ | Default: records while the key is held, transcribes, and pastes the text. Recording key and hold/toggle mode are configurable under **Settings → Speech Recognition**. |
 | **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
 | **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
 | **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |

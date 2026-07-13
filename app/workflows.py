@@ -12,7 +12,10 @@ class WorkflowType(str, Enum):
 WORKFLOW_META: Dict[WorkflowType, Dict[str, Any]] = {
     WorkflowType.TRANSCRIPTION: {
         "display_name": "🎙  Blitztext",
-        "hotkey": "Meta+H",
+        # Standard-Aufnahmetaste (config.transcription_hotkey: KEY_LEFTALT);
+        # der tatsächliche Wert ist konfigurierbar, UI-Labels leiten ihn zur
+        # Laufzeit über hotkey_service.hotkey_display_name() ab.
+        "hotkey": "Alt",
         "needs_llm": False,
         "description": "Standard Sprache zu Text (Online oder Lokal)",
     },

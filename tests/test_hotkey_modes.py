@@ -484,3 +484,24 @@ class TestModeFromConfig:
                 on_start=callbacks["start"],
                 on_stop=callbacks["stop"],
             )
+
+
+class TestHotkeyDisplayName:
+    """Anzeigenamen für die konfigurierbare Aufnahmetaste (Tray-Menü-Label)."""
+
+    def test_default_left_alt_maps_to_alt(self):
+        from app.hotkey_service import hotkey_display_name
+        assert hotkey_display_name("KEY_LEFTALT") == "Alt"
+
+    def test_all_valid_hotkeys_have_explicit_display_names(self):
+        # Jede unter Einstellungen wählbare Taste hat ein gepflegtes Label
+        # (kein automatischer "Key_..."-Fallback).
+        from app.config import VALID_HOTKEY_KEYS
+        from app.hotkey_service import _HOTKEY_DISPLAY_NAMES, hotkey_display_name
+        for key in VALID_HOTKEY_KEYS:
+            assert key in _HOTKEY_DISPLAY_NAMES, f"Missing display name for {key}"
+            assert hotkey_display_name(key)
+
+    def test_unknown_key_falls_back_to_stripped_name(self):
+        from app.hotkey_service import hotkey_display_name
+        assert hotkey_display_name("KEY_KPENTER") == "Kpenter"

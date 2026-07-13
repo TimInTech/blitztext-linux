@@ -21,6 +21,29 @@ DEBOUNCE_SECONDS = 0.6
 DEVICE_REFRESH_SECONDS = 5.0
 logger = logging.getLogger("blitztext.hotkey")
 
+# Anzeigenamen für die konfigurierbare Aufnahmetaste (config.transcription_hotkey).
+# Deckt alle VALID_HOTKEY_KEYS aus app/config.py ab; unbekannte Namen fallen
+# auf den evdev-Namen ohne "KEY_"-Präfix zurück.
+_HOTKEY_DISPLAY_NAMES = {
+    "KEY_LEFTALT": "Alt",
+    "KEY_RIGHTALT": "AltGr",
+    "KEY_LEFTCTRL": "Ctrl",
+    "KEY_RIGHTCTRL": "Ctrl",
+    "KEY_F13": "F13",
+    "KEY_F14": "F14",
+    "KEY_F15": "F15",
+    "KEY_F16": "F16",
+    "KEY_SCROLLLOCK": "Scroll Lock",
+    "KEY_PAUSE": "Pause",
+    "KEY_INSERT": "Insert",
+    "KEY_CAPSLOCK": "Caps Lock",
+}
+
+
+def hotkey_display_name(key_name: str) -> str:
+    """Menschenlesbarer Name der Aufnahmetaste für Menü- und UI-Labels."""
+    return _HOTKEY_DISPLAY_NAMES.get(key_name, key_name.removeprefix("KEY_").capitalize())
+
 # Hotkey-Definitionen: WorkflowType -> (modifier_set, trigger_key_name)
 _HOTKEY_MAP = [
     # (workflow, trigger_key, required_modifiers)
