@@ -218,7 +218,7 @@ def test_input_reaches_direct_llm_path_and_sets_output(compose_window, qapp):
     window, llm, _paste = compose_window
 
     window.cmbWorkflow.setCurrentIndex(window.cmbWorkflow.findData(WorkflowType.TEXT_IMPROVER))
-    window.cmbPreset.setCurrentIndex(window.cmbPreset.findData("email_formal"))
+    window.cmbPreset.setCurrentIndex(window.cmbPreset.findData("shorten"))
     window.txtInput.setPlainText("Hallo Welt")
     window.btnAction.click()
 
@@ -228,7 +228,7 @@ def test_input_reaches_direct_llm_path_and_sets_output(compose_window, qapp):
     )
 
     assert llm.calls == [
-        (WorkflowType.TEXT_IMPROVER, "Hallo Welt", "email_formal"),
+        (WorkflowType.TEXT_IMPROVER, "Hallo Welt", "shorten"),
     ]
     assert window.txtOutput.toPlainText() == "OK"
     assert window.btnCopy.isEnabled() is True
@@ -806,7 +806,7 @@ def test_compose_signature_leaves_unrelated_brackets(compose_window, qapp):
 
 # --- Paket J: Tonfall-Selektor & Eigene Vorlage im Compose-Fenster ----------
 
-from app.compose_window import COMPOSE_CUSTOM_PRESET_KEY  # noqa: E402
+from app.writing_presets import CUSTOM_PRESET_KEY  # noqa: E402
 
 
 def _select_workflow(window, workflow: WorkflowType) -> None:
@@ -824,10 +824,12 @@ def test_tone_selector_visible_and_enabled_for_standard(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, "shorten")
         _select_preset(window, "standard")
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is True
+        assert window.cmbTone.toolTip() == t("compose.tone.tooltip_active")
     finally:
         window.close()
         qapp.processEvents()
@@ -840,7 +842,7 @@ def test_tone_selector_disabled_for_nonstandard_preset(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, "email_formal")
+        _select_preset(window, "shorten")
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is False
@@ -857,7 +859,7 @@ def test_tone_selector_disabled_for_custom_preset(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        _select_preset(window, CUSTOM_PRESET_KEY)
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is False
@@ -917,7 +919,7 @@ def test_selected_tone_is_passed_to_worker(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, "standard")
+        _select_preset(window, "change_tone")
         window.cmbTone.setCurrentIndex(window.cmbTone.findData("formal"))
         window.txtInput.setPlainText("Hallo Welt")
         window.btnAction.click()
@@ -930,7 +932,7 @@ def test_selected_tone_is_passed_to_worker(qapp):
 
 
 @gui_only
-def test_custom_preset_passes_config_prompt_to_worker(qapp):
+def test_custom_action_is_resolved_centrally_by_llm_service(qapp):
     config = Config()
     config.compose_custom_preset_text = "FREITEXT-PROMPT"
     llm = _FakeLLMService()
@@ -939,13 +941,12 @@ def test_custom_preset_passes_config_prompt_to_worker(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        _select_preset(window, CUSTOM_PRESET_KEY)
         window.txtInput.setPlainText("Hallo Welt")
         window.btnAction.click()
         _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
-        # Base preset falls back to "standard"; the free prompt is plumbed separately.
-        assert llm.calls[-1][2] == "standard"
-        assert llm.last_custom_prompt == "FREITEXT-PROMPT"
+        assert llm.calls[-1][2] == "custom"
+        assert llm.last_custom_prompt is None
     finally:
         window.close()
         qapp.processEvents()
@@ -955,9 +956,9 @@ def test_custom_preset_passes_config_prompt_to_worker(qapp):
 def test_custom_preset_entry_present_in_combo(qapp):
     window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
-        assert window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY) >= 0
-        idx = window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY)
-        assert window.cmbPreset.itemText(idx) == t("compose.preset.custom")
+        assert window.cmbPreset.findData(CUSTOM_PRESET_KEY) >= 0
+        idx = window.cmbPreset.findData(CUSTOM_PRESET_KEY)
+        assert window.cmbPreset.itemText(idx) == t("preset.custom.name")
     finally:
         window.close()
         qapp.processEvents()
@@ -973,13 +974,51 @@ def test_tone_i18n_keys_present_and_complete(qapp, language):
             "compose.tone.label",
             "compose.tone.tooltip_active",
             "compose.tone.tooltip_preset_overrides",
-            "compose.preset.custom",
+            "preset.custom.name",
             "tone.locker",
             "tone.neutral",
             "tone.formal",
         ):
             assert t(key) != key
         assert not missing_keys()
+    finally:
+        window.close()
+        qapp.processEvents()
+
+# --- Goal 04: Compose zeigt dieselben fünf Aktionen -------------------------
+
+GOAL_VISIBLE_PRESET_KEYS = ("standard", "shorten", "expand", "change_tone", "custom")
+
+
+def _selectable_preset_values(combo):
+    return tuple(
+        combo.itemData(index)
+        for index in range(combo.count())
+        if isinstance(combo.itemData(index), str)
+    )
+
+
+@gui_only
+def test_goal_compose_visible_actions_are_reduced_and_ordered(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    try:
+        assert _selectable_preset_values(window.cmbPreset) == GOAL_VISIBLE_PRESET_KEYS
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_goal_tone_selector_is_active_for_standard_and_change_tone(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        for key in GOAL_VISIBLE_PRESET_KEYS:
+            _select_preset(window, key)
+            qapp.processEvents()
+            assert window.cmbTone.isEnabled() is (key in {"standard", "change_tone"})
     finally:
         window.close()
         qapp.processEvents()

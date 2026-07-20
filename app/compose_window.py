@@ -27,7 +27,12 @@ from app.llm_service import LLMService
 from app.config import Config, VALID_TONES
 from app.paste_service import PasteService, PasteServiceError
 from app.workflows import WorkflowType
-from app.writing_presets import DEFAULT_PRESET_KEY, WRITING_PRESET_KEYS, preset_index
+from app.writing_presets import (
+    CUSTOM_PRESET_KEY,
+    DEFAULT_PRESET_KEY,
+    WRITING_PRESET_KEYS,
+    preset_index,
+)
 
 logger = logging.getLogger("blitztext.compose")
 
@@ -41,10 +46,6 @@ COMPOSE_WORKFLOW_ORDER: tuple[WorkflowType, ...] = (
 # unverändert (formal/neutral/locker); nur die Anzeige erfolgt über i18n-Labels
 # (z. B. "professionell" für "formal").
 COMPOSE_TONE_ORDER: tuple[str, ...] = ("locker", "neutral", "formal")
-
-# Sentinel-Schlüssel für den zusätzlichen Compose-Eintrag „Eigene Vorlage…“.
-# Bewusst kein echtes Writing-Preset, damit Hauptfenster/Tray unberührt bleiben.
-COMPOSE_CUSTOM_PRESET_KEY = "__compose_custom__"
 
 # In-memory ring buffer of successful generations for the current window
 # session. Oldest variants are trimmed once the cap is exceeded.
@@ -375,9 +376,9 @@ class ComposeWindow(QDialog):
         self.cmbPreset.blockSignals(True)
         self.cmbPreset.clear()
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self.cmbPreset.insertSeparator(self.cmbPreset.count())
             self.cmbPreset.addItem(t(f"preset.{key}.name"), key)
-        # Zusätzlicher, nur im Compose-Fenster sichtbarer Freitext-Eintrag.
-        self.cmbPreset.addItem(t("compose.preset.custom"), COMPOSE_CUSTOM_PRESET_KEY)
         target = selected or preset_index(self._llm_service.writing_preset)
         if isinstance(target, str):
             index = self.cmbPreset.findData(target)
@@ -416,9 +417,6 @@ class ComposeWindow(QDialog):
             return tone
         return self._config.text_improver_tone
 
-    def _is_custom_preset(self) -> bool:
-        return self._selected_preset() == COMPOSE_CUSTOM_PRESET_KEY
-
     @pyqtSlot()
     def _on_selectors_changed(self) -> None:
         self._update_tone_state()
@@ -426,9 +424,9 @@ class ComposeWindow(QDialog):
     def _update_tone_state(self) -> None:
         """Sichtbarkeit/Aktivierung des Tonfall-Selektors je nach Workflow+Vorlage.
 
-        Tonfall ist nur sinnvoll im Text-Verbesserer (Blitztext+) mit der Vorlage
-        „Standard“. Bei anderen Vorlagen bestimmt die Vorlage den Stil selbst, der
-        Selektor bleibt sichtbar, aber ausgegraut. Bei Dampf/Emoji entfällt er.
+        Tonfall ist im Text-Verbesserer (Blitztext+) für „Standard“ und
+        „Tonfall ändern“ aktiv. Bei allen anderen Aktionen bleibt der Selektor
+        sichtbar, aber ausgegraut. Bei Dampf/Emoji entfällt er.
         """
         workflow = self._selected_workflow()
         is_text_improver = workflow == WorkflowType.TEXT_IMPROVER
@@ -436,11 +434,14 @@ class ComposeWindow(QDialog):
         self.cmbTone.setVisible(is_text_improver)
         if not is_text_improver:
             return
-        is_standard = self._selected_preset() == DEFAULT_PRESET_KEY
-        self.cmbTone.setEnabled(is_standard)
+        uses_tone = self._selected_preset() in {
+            DEFAULT_PRESET_KEY,
+            "change_tone",
+        }
+        self.cmbTone.setEnabled(uses_tone)
         self.cmbTone.setToolTip(
             t("compose.tone.tooltip_active")
-            if is_standard
+            if uses_tone
             else t("compose.tone.tooltip_preset_overrides")
         )
 
@@ -599,6 +600,10 @@ class ComposeWindow(QDialog):
     def _on_append_signature_clicked(self) -> None:
         self._append_signature()
 
+    def set_llm_service(self, llm_service: LLMService) -> None:
+        """Verwendet bei der nächsten Aktion den aktuellen Controller-Service."""
+        self._llm_service = llm_service
+
     def set_input_text(self, text: str) -> None:
         self.txtInput.setPlainText(text)
         self._variants = []
@@ -651,22 +656,12 @@ class ComposeWindow(QDialog):
     def _start_worker(self, text: str) -> None:
         workflow = self._selected_workflow()
         tone = self._selected_tone()
-        custom_prompt: Optional[str] = None
-        if self._is_custom_preset():
-            # Freitext-Vorlage: Basis bleibt „Standard“, der freie System-Prompt
-            # wird separat durchgereicht (greift nur im Text-Verbesserer).
-            writing_preset = DEFAULT_PRESET_KEY
-            custom_prompt = self._config.compose_custom_preset_text
-        else:
-            writing_preset = self._selected_preset()
-
         worker = _ComposeWorker(
             self._llm_service,
             workflow,
             text,
-            writing_preset,
+            self._selected_preset(),
             tone=tone,
-            custom_prompt=custom_prompt,
         )
         self._launch_worker(worker)
 
@@ -734,14 +729,10 @@ class ComposeWindow(QDialog):
 
         workflow = self._selected_workflow()
         tone = self._selected_tone()
-        custom_prompt: Optional[str] = None
-        writing_preset = self._selected_preset()
-        if self._is_custom_preset():
-            writing_preset = DEFAULT_PRESET_KEY
-            custom_prompt = self._config.compose_custom_preset_text
-
         system_prompt = self._llm_service.build_system_prompt(
-            workflow, writing_preset=writing_preset, tone=tone, custom_prompt=custom_prompt
+            workflow,
+            writing_preset=self._selected_preset(),
+            tone=tone,
         )
         dialog = PromptEditorDialog(system_prompt, text.strip(), parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:

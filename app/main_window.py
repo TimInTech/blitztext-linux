@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 from app.llm_service import WorkflowType, LLM_WORKFLOWS
 from app.i18n import t
 from app import theme
-from app.writing_presets import WRITING_PRESET_KEYS
+from app.writing_presets import CUSTOM_PRESET_KEY, WRITING_PRESET_KEYS
 
 # Reihenfolge der Workflows in der Auswahl
 _WORKFLOW_ORDER = [
@@ -189,6 +189,8 @@ class MainWindow(QWidget):
         self._preset_combo = QComboBox()
         self._preset_combo.setMinimumHeight(28)
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self._preset_combo.insertSeparator(self._preset_combo.count())
             self._preset_combo.addItem(t(f"preset.{key}.name"), userData=key)
         self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_combo.setVisible(False)

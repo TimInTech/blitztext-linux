@@ -32,7 +32,11 @@ if PROJECT_DIR not in sys.path:
 
 from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS
-from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
+from app.writing_presets import (
+    CUSTOM_PRESET_KEY,
+    WRITING_PRESET_KEYS,
+    get_preset,
+)
 from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
@@ -286,8 +290,17 @@ class SettingsDialog(QDialog):
 
         self.combo_writing_preset = QComboBox()
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self.combo_writing_preset.insertSeparator(
+                    self.combo_writing_preset.count()
+                )
             self.combo_writing_preset.addItem(t(f"preset.{key}.name"), key)
-        self.combo_writing_preset.setCurrentIndex(preset_index(self.config.writing_preset))
+        selected_preset = self.combo_writing_preset.findData(
+            self.config.writing_preset
+        )
+        self.combo_writing_preset.setCurrentIndex(
+            selected_preset if selected_preset >= 0 else 0
+        )
 
         self.edit_compose_custom_preset = QPlainTextEdit()
         self.edit_compose_custom_preset.setPlainText(self.config.compose_custom_preset_text)
@@ -674,7 +687,14 @@ class BlitztextApp(QObject):
             writing_preset=self.config.writing_preset,
             base_url=base_url,
             model=self.config.llm_model,
+            writing_custom_prompt=self.config.compose_custom_preset_text,
         )
+
+    def _rebuild_llm_service(self) -> None:
+        """Baut den Service neu und aktualisiert ein bereits offenes Compose."""
+        self.llm_service = self._build_llm_service()
+        if self._compose_window is not None:
+            self._compose_window.set_llm_service(self.llm_service)
 
     def setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
@@ -741,6 +761,8 @@ class BlitztextApp(QObject):
         self.preset_action_group.setExclusive(True)
         self.preset_actions: dict[str, QAction] = {}
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self.menu_preset.addSeparator()
             preset_action = QAction(t(f"preset.{key}.name"), self)
             preset_action.setCheckable(True)
             preset_action.triggered.connect(
@@ -874,7 +896,7 @@ class BlitztextApp(QObject):
             return
         self.config.writing_preset = key
         self.config.save()
-        self.llm_service = self._build_llm_service()
+        self._rebuild_llm_service()
         self.update_menu_availability()
         if self._main_window is not None:
             self._main_window.set_preset(key)
@@ -886,7 +908,7 @@ class BlitztextApp(QObject):
             return
         self.config.writing_preset = key
         self.config.save()
-        self.llm_service = self._build_llm_service()
+        self._rebuild_llm_service()
         self.update_menu_availability()
         self._refresh_preset_menu()
         logger.info("Writing preset changed via main window: %s", key)
@@ -921,7 +943,7 @@ class BlitztextApp(QObject):
         dialog = SettingsDialog(self.config)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Update LLM Service parameters from saved configuration
-            self.llm_service = self._build_llm_service()
+            self._rebuild_llm_service()
             self._refresh_i18n_texts()
             self.update_menu_availability()
             # Preset kann im Dialog geändert worden sein -> Häkchen + Combo angleichen.
