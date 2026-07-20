@@ -333,7 +333,22 @@ def gui_app():
     qapp = QApplication.instance() or QApplication([])
     app = BlitztextApp(qapp)
     app.stop_hotkey_worker()  # kein echter evdev-Thread im Test
-    yield app
+    try:
+        yield app
+    finally:
+        app.stop_hotkey_worker()
+        for window in (
+            app._compose_window,
+            app._main_window,
+            app._history_panel,
+            app._tts_window,
+        ):
+            if window is not None:
+                window.hide()
+        app.tray_icon.hide()
+        app.menu.close()
+        # Qt-Ereignisse verarbeiten, solange alle Python-Referenzen gültig sind.
+        qapp.processEvents()
 
 
 @gui_only
