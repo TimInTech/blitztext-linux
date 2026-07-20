@@ -458,6 +458,67 @@ class TestMainWindowControl:
         gui_app._set_state("IDLE", "test")
         assert win._btn_toggle.text() == "Start"
 
+    def test_main_window_text_edit_opens_existing_compose_window(self, gui_app):
+        win = gui_app._ensure_main_window()
+        existing = gui_app._ensure_compose_window()
+        existing.set_input_text("Bestehender Entwurf")
+        existing.hide()
+
+        win._btn_edit_text.click()
+
+        assert gui_app._compose_window is existing
+        assert existing.isVisible() is True
+        assert existing.txtInput.toPlainText() == "Bestehender Entwurf"
+
+    def test_tray_and_main_window_reuse_same_compose_state(self, gui_app):
+        win = gui_app._ensure_main_window()
+
+        win._btn_edit_text.click()
+        compose = gui_app._compose_window
+        compose.set_input_text("Gemeinsamer Zustand")
+        compose.hide()
+        gui_app.action_compose.trigger()
+
+        assert gui_app._compose_window is compose
+        assert compose.isVisible() is True
+        assert compose.txtInput.toPlainText() == "Gemeinsamer Zustand"
+
+    def test_text_edit_action_is_keyboard_reachable(self, gui_app):
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QKeySequence
+        from PyQt6.QtTest import QTest
+
+        win = gui_app._ensure_main_window()
+        win.show()
+        gui_app.app.processEvents()
+
+        assert win._btn_edit_text.focusPolicy() == Qt.FocusPolicy.StrongFocus
+        assert win._btn_edit_text.shortcut() == QKeySequence("Ctrl+E")
+
+        win._btn_edit_text.setFocus()
+        assert win._btn_edit_text.hasFocus() is True
+        QTest.keyClick(win._btn_edit_text, Qt.Key.Key_Space)
+        gui_app.app.processEvents()
+        assert gui_app._compose_window is not None
+        assert gui_app._compose_window.isVisible() is True
+
+    def test_text_edit_action_fits_compact_main_window(self, gui_app):
+        win = gui_app._ensure_main_window()
+        win.show()
+        gui_app.app.processEvents()
+
+        button_rect = win._btn_edit_text.geometry()
+        history_rect = win._btn_history.geometry()
+        text_width = win._btn_edit_text.fontMetrics().horizontalAdvance(
+            win._btn_edit_text.text()
+        )
+
+        assert win.width() == 256
+        assert button_rect.left() >= win.contentsRect().left()
+        assert button_rect.right() <= win.contentsRect().right()
+        assert button_rect.bottom() < history_rect.top()
+        assert text_width < button_rect.width()
+
     def test_dictation_mode_syncs_window_and_tray(self, gui_app):
         win = gui_app._ensure_main_window()
         gui_app.set_dictation_mode(True)

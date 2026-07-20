@@ -1,11 +1,12 @@
 """Hauptfenster fuer BlitztextLinux (Glass-Redesign).
 
 Grafischer Fallback zum globalen Hotkey: Start/Stopp per Maus-Klick,
-Workflow-Auswahl, Verwerfen, Diktat, Verlauf, Vorlesen und Einstellungen.
+Workflow-Auswahl, Verwerfen, Diktat, Textbearbeitung, Verlauf, Vorlesen und Einstellungen.
 
 Das Design folgt dem Blitztext Design System (Glass-Idiom): runder Amber-
 Record-„Shutter" als Hero, Status-Punkt + Timer, weiche Pill-Buttons fuer
-Verwerfen/Diktat und runde Icon-Buttons fuer Vorlesen/Einstellungen.
+Verwerfen/Diktat, eine klare Textbearbeitungs-Aktion und runde Icon-Buttons
+fuer Vorlesen/Einstellungen.
 
 Das Fenster ist rein praesentational — die gesamte Aufnahme-/State-Logik
 bleibt im Controller (`BlitztextApp`). Beim Schliessen wird es nur versteckt,
@@ -17,7 +18,7 @@ import time
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QRectF
-from PyQt6.QtGui import QBrush, QCloseEvent, QColor, QPainter, QPen, QRadialGradient
+from PyQt6.QtGui import QBrush, QCloseEvent, QColor, QKeySequence, QPainter, QPen, QRadialGradient
 from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -238,6 +239,19 @@ class MainWindow(QWidget):
         self._btn_dictation.clicked.connect(self._on_dictation_clicked)
         sec_row.addWidget(self._btn_dictation)
         layout.addLayout(sec_row)
+
+        # Eigene Zeile: zentrale manuelle Textbearbeitung bleibt auch bei der
+        # kompakten Fensterbreite vollständig beschriftet.
+        self._btn_edit_text = QPushButton(t("mainwindow.button.edit_text"))
+        self._btn_edit_text.setMinimumHeight(30)
+        self._btn_edit_text.setStyleSheet("border-radius: 15px; font-weight: 600;")
+        self._btn_edit_text.setToolTip(t("mainwindow.tooltip.edit_text"))
+        self._btn_edit_text.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._btn_edit_text.setShortcut(QKeySequence("Ctrl+E"))
+        self._btn_edit_text.clicked.connect(
+            lambda _checked=False: self._controller.show_compose_window()
+        )
+        layout.addWidget(self._btn_edit_text)
 
         # Unterzeile: Verlauf (mit Zaehler), Vorlesen, Einstellungen
         bottom_row = QHBoxLayout()

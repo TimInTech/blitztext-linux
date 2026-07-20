@@ -137,18 +137,20 @@ def _wait_until(qapp, predicate, timeout_ms: int = 2500) -> None:
 
 @gui_only
 @pytest.mark.parametrize(
-    ("language", "title"),
+    ("language", "title", "prompt_label"),
     [
-        ("de", "Text verfassen"),
-        ("en", "Compose Text"),
+        ("de", "Text verfassen", "Schreibstil / Prompt bearbeiten"),
+        ("en", "Compose Text", "Edit style / prompt"),
     ],
 )
-def test_window_texts_follow_language(qapp, language, title):
+def test_window_texts_follow_language(qapp, language, title, prompt_label):
     set_language(language)
     window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
         assert window.windowTitle() == title
         assert window.btnAction.text() == t("compose.button.improve")
+        assert window.btnShowPrompt.text() == prompt_label
+        assert window.btnShowPrompt.toolTip() == t("compose.prompt_preview.tooltip")
         assert window.btnCopy.text() == t("compose.button.copy")
         assert window.btnPaste.text() == t("compose.button.insert_close")
         assert window.btnClose.text() == t("compose.button.close")

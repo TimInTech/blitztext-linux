@@ -107,6 +107,9 @@ class TestTranslations:
             "compose.status.processing",
             "compose.status.error",
             "compose.status.empty_input",
+            "compose.btn.show_prompt",
+            "mainwindow.button.edit_text",
+            "mainwindow.tooltip.edit_text",
         }
         actual_keys = set(TRANSLATIONS["de"].keys())
         assert expected_keys.issubset(actual_keys), f"Fehlende Compose-Keys: {expected_keys - actual_keys}"
