@@ -32,7 +32,11 @@ if PROJECT_DIR not in sys.path:
 
 from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS
-from app.writing_presets import WRITING_PRESET_KEYS, get_preset, preset_index
+from app.writing_presets import (
+    CUSTOM_PRESET_KEY,
+    WRITING_PRESET_KEYS,
+    get_preset,
+)
 from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe, TranscribeError
@@ -286,8 +290,17 @@ class SettingsDialog(QDialog):
 
         self.combo_writing_preset = QComboBox()
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self.combo_writing_preset.insertSeparator(
+                    self.combo_writing_preset.count()
+                )
             self.combo_writing_preset.addItem(t(f"preset.{key}.name"), key)
-        self.combo_writing_preset.setCurrentIndex(preset_index(self.config.writing_preset))
+        selected_preset = self.combo_writing_preset.findData(
+            self.config.writing_preset
+        )
+        self.combo_writing_preset.setCurrentIndex(
+            selected_preset if selected_preset >= 0 else 0
+        )
 
         self.edit_compose_custom_preset = QPlainTextEdit()
         self.edit_compose_custom_preset.setPlainText(self.config.compose_custom_preset_text)
@@ -554,6 +567,7 @@ class _TranscribeWorker(QRunnable):
         autopaste: bool,
         paste_service: PasteService,
         custom_terms: Optional[list[str]] = None,
+        route_to_compose: bool = False,
     ) -> None:
         super().__init__()
         self.signals = _WorkerSignals()
@@ -566,6 +580,7 @@ class _TranscribeWorker(QRunnable):
         self.autopaste = autopaste
         self.paste_service = paste_service
         self.custom_terms = list(custom_terms or [])
+        self.route_to_compose = route_to_compose
 
     def _emit(self, signal_name: str, *args) -> None:
         try:
@@ -587,19 +602,22 @@ class _TranscribeWorker(QRunnable):
             if not transcript or not transcript.strip():
                 raise TranscribeError("Keine Sprache im Audio erkannt.")
 
-            # LLM rewrite if it is an LLM workflow. rewrite() meldet einen
-            # fehlenden API-Key selbst als LLMServiceError mit Env-Var-Hinweis.
-            if self.workflow in LLM_WORKFLOWS:
+            # Compose routing always receives the raw recognized text; the
+            # compose window owns any later rewrite workflow selected there.
+            # rewrite() reports a missing API key as LLMServiceError itself.
+            if self.workflow in LLM_WORKFLOWS and not self.route_to_compose:
                 self._emit("status_changed", "rewriting")
                 result_text = self.llm_service.rewrite(self.workflow, transcript)
             else:
                 result_text = transcript
 
-            # Paste
-            if self.autopaste:
-                self.paste_service.paste(result_text)
-            else:
-                self.paste_service.clipboard_only(result_text)
+            # Compose routing is delivered by the GUI coordinator. Keeping it
+            # out of PasteService preserves the focused application's contents.
+            if not self.route_to_compose:
+                if self.autopaste:
+                    self.paste_service.paste(result_text)
+                else:
+                    self.paste_service.clipboard_only(result_text)
 
             self._emit("result", result_text)
         except Exception as e:
@@ -633,6 +651,7 @@ class BlitztextApp(QObject):
         self.current_workflow: Optional[WorkflowType] = None
         self._tray_error_message: Optional[str] = None
         self._active_workers: list[_TranscribeWorker] = []
+        self._recording_routes_to_compose = False
 
         # Diktat-/Verlauf-/TTS-Zustand
         self._dictation_mode = False
@@ -668,7 +687,14 @@ class BlitztextApp(QObject):
             writing_preset=self.config.writing_preset,
             base_url=base_url,
             model=self.config.llm_model,
+            writing_custom_prompt=self.config.compose_custom_preset_text,
         )
+
+    def _rebuild_llm_service(self) -> None:
+        """Baut den Service neu und aktualisiert ein bereits offenes Compose."""
+        self.llm_service = self._build_llm_service()
+        if self._compose_window is not None:
+            self._compose_window.set_llm_service(self.llm_service)
 
     def setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
@@ -735,6 +761,8 @@ class BlitztextApp(QObject):
         self.preset_action_group.setExclusive(True)
         self.preset_actions: dict[str, QAction] = {}
         for key in WRITING_PRESET_KEYS:
+            if key == CUSTOM_PRESET_KEY:
+                self.menu_preset.addSeparator()
             preset_action = QAction(t(f"preset.{key}.name"), self)
             preset_action.setCheckable(True)
             preset_action.triggered.connect(
@@ -868,7 +896,7 @@ class BlitztextApp(QObject):
             return
         self.config.writing_preset = key
         self.config.save()
-        self.llm_service = self._build_llm_service()
+        self._rebuild_llm_service()
         self.update_menu_availability()
         if self._main_window is not None:
             self._main_window.set_preset(key)
@@ -880,7 +908,7 @@ class BlitztextApp(QObject):
             return
         self.config.writing_preset = key
         self.config.save()
-        self.llm_service = self._build_llm_service()
+        self._rebuild_llm_service()
         self.update_menu_availability()
         self._refresh_preset_menu()
         logger.info("Writing preset changed via main window: %s", key)
@@ -915,7 +943,7 @@ class BlitztextApp(QObject):
         dialog = SettingsDialog(self.config)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Update LLM Service parameters from saved configuration
-            self.llm_service = self._build_llm_service()
+            self._rebuild_llm_service()
             self._refresh_i18n_texts()
             self.update_menu_availability()
             # Preset kann im Dialog geändert worden sein -> Häkchen + Combo angleichen.
@@ -962,13 +990,16 @@ class BlitztextApp(QObject):
             logger.info("Ignored hotkey trigger %s while busy", workflow)
 
     def _start_recording(self, workflow: WorkflowType) -> None:
+        self._recording_routes_to_compose = False
         try:
             self.audio_recorder.start(device=self.config.audio_device)
+            self._recording_routes_to_compose = self._compose_voice_routing_enabled()
             self.current_workflow = workflow
             self._set_state("RECORDING", f"workflow {workflow.value} started")
         except AudioRecorderError as e:
             logger.error("Failed to start recording: %s", e)
             self.show_tray_error(t("error.recording.title"), t("error.recording.start_failed").format(error=e))
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "recording start failed")
 
@@ -988,6 +1019,7 @@ class BlitztextApp(QObject):
         """Laufende Aufnahme verwerfen, ohne zu transkribieren."""
         if self.state == "RECORDING":
             self.audio_recorder.discard()
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "discarded via gui")
 
@@ -1002,6 +1034,8 @@ class BlitztextApp(QObject):
 
     def _stop_recording_and_process(self) -> None:
         try:
+            route_to_compose = self._recording_routes_to_compose
+            self._recording_routes_to_compose = False
             wav_path = self.audio_recorder.stop()
             if not wav_path:
                 logger.warning("No audio was recorded")
@@ -1027,10 +1061,15 @@ class BlitztextApp(QObject):
                 autopaste=self.config.autopaste,
                 paste_service=self.paste_service,
                 custom_terms=self.config.custom_terms,
+                route_to_compose=route_to_compose,
             )
 
             worker.signals.status_changed.connect(self._on_worker_status_changed)
-            worker.signals.result.connect(self._on_worker_result)
+            worker.signals.result.connect(
+                lambda result_text, routed=route_to_compose: self._on_worker_result(
+                    result_text, route_to_compose=routed
+                )
+            )
             worker.signals.error.connect(self._on_worker_error)
             worker.signals.finished.connect(self._on_worker_finished)
 
@@ -1040,6 +1079,7 @@ class BlitztextApp(QObject):
         except AudioRecorderError as e:
             logger.error("Failed to stop recording: %s", e)
             self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(error=e))
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "recording stop failed")
 
@@ -1052,9 +1092,10 @@ class BlitztextApp(QObject):
         else:
             self.update_tray_state()
 
-    @pyqtSlot(str)
-    def _on_worker_result(self, result_text: str) -> None:
+    def _on_worker_result(self, result_text: str, route_to_compose: bool = False) -> None:
         logger.info("Transcription/Rewrite success. Result length: %d chars", len(result_text))
+        if route_to_compose:
+            self._ensure_compose_window().set_input_text(result_text)
         self._add_to_history(result_text, is_dictation=self._dictation_mode)
         if self._dictation_mode:
             notify_service.notify(
@@ -1159,6 +1200,14 @@ class BlitztextApp(QObject):
         window.show()
         window.raise_()
         window.activateWindow()
+
+    def _compose_voice_routing_enabled(self) -> bool:
+        window = self._compose_window
+        return bool(
+            window is not None
+            and window.isVisible()
+            and window.voice_routing_enabled()
+        )
 
     def _on_tts_closed(self, _result: int) -> None:
         self._tts_window = None

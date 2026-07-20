@@ -129,6 +129,85 @@ class TestPasteTimeouts:
         assert "ydotool" not in cmd_names
 
 
+class TestComposeVoiceRoutingWorker:
+    def test_unrouted_transcription_keeps_standard_autopaste(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        paste_service = MagicMock()
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=True,
+            paste_service=paste_service,
+        )
+
+        with patch("app.blitztext_linux.transcribe", return_value="Standardtext"):
+            worker.run()
+
+        paste_service.paste.assert_called_once_with("Standardtext")
+        paste_service.clipboard_only.assert_not_called()
+
+    def test_routed_transcription_skips_clipboard_and_autopaste(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        paste_service = MagicMock()
+        results = []
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=True,
+            paste_service=paste_service,
+            route_to_compose=True,
+        )
+        worker.signals.result.connect(results.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="Gesprochener Text"):
+            worker.run()
+
+        assert results == ["Gesprochener Text"]
+        paste_service.paste.assert_not_called()
+        paste_service.clipboard_only.assert_not_called()
+
+    def test_routed_recording_uses_raw_transcript_instead_of_rewrite(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        llm_service = MagicMock()
+        llm_service.rewrite.return_value = "Umgeschriebener Text"
+        results = []
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TEXT_IMPROVER,
+            llm_service=llm_service,
+            autopaste=True,
+            paste_service=MagicMock(),
+            route_to_compose=True,
+        )
+        worker.signals.result.connect(results.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="Rohes Transkript"):
+            worker.run()
+
+        assert results == ["Rohes Transkript"]
+        llm_service.rewrite.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Hilfen: minimales Fake-evdev fuer den HotkeyWorker-Event-Loop
 # ---------------------------------------------------------------------------
@@ -254,7 +333,22 @@ def gui_app():
     qapp = QApplication.instance() or QApplication([])
     app = BlitztextApp(qapp)
     app.stop_hotkey_worker()  # kein echter evdev-Thread im Test
-    yield app
+    try:
+        yield app
+    finally:
+        app.stop_hotkey_worker()
+        for window in (
+            app._compose_window,
+            app._main_window,
+            app._history_panel,
+            app._tts_window,
+        ):
+            if window is not None:
+                window.hide()
+        app.tray_icon.hide()
+        app.menu.close()
+        # Qt-Ereignisse verarbeiten, solange alle Python-Referenzen gültig sind.
+        qapp.processEvents()
 
 
 @gui_only
@@ -290,6 +384,55 @@ class TestStateMachine:
             gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
             start_mock.assert_called_once()
         assert gui_app.state == "RECORDING"
+
+    def test_routed_worker_result_reaches_compose_draft(self, gui_app):
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+
+        gui_app._on_worker_result("Gesprochener Text", route_to_compose=True)
+
+        assert window.txtInput.toPlainText() == "Gesprochener Text"
+        assert gui_app.state == "IDLE"
+
+    def test_new_recording_uses_current_compose_routing_state(self, gui_app):
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+
+        with patch.object(gui_app.audio_recorder, "start"):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+
+        assert gui_app._recording_routes_to_compose is True
+
+        window.close()
+        with patch.object(gui_app.audio_recorder, "discard"):
+            gui_app.gui_discard()
+        with patch.object(gui_app.audio_recorder, "start"):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+
+        assert gui_app._recording_routes_to_compose is False
+
+    def test_stop_wires_routed_worker_result_into_compose(self, gui_app):
+        from pathlib import Path
+
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+        pool = MagicMock()
+
+        with patch.object(gui_app.audio_recorder, "start"), \
+             patch.object(gui_app.audio_recorder, "stop", return_value=Path("/tmp/voice.wav")), \
+             patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+            gui_app._stop_recording_and_process()
+
+        worker = pool.start.call_args.args[0]
+        assert worker.route_to_compose is True
+
+        worker.signals.result.emit("Gerouteter Text")
+
+        assert window.txtInput.toPlainText() == "Gerouteter Text"
 
 
 @gui_only
@@ -329,6 +472,67 @@ class TestMainWindowControl:
         assert win._btn_toggle.text() == "Stopp"
         gui_app._set_state("IDLE", "test")
         assert win._btn_toggle.text() == "Start"
+
+    def test_main_window_text_edit_opens_existing_compose_window(self, gui_app):
+        win = gui_app._ensure_main_window()
+        existing = gui_app._ensure_compose_window()
+        existing.set_input_text("Bestehender Entwurf")
+        existing.hide()
+
+        win._btn_edit_text.click()
+
+        assert gui_app._compose_window is existing
+        assert existing.isVisible() is True
+        assert existing.txtInput.toPlainText() == "Bestehender Entwurf"
+
+    def test_tray_and_main_window_reuse_same_compose_state(self, gui_app):
+        win = gui_app._ensure_main_window()
+
+        win._btn_edit_text.click()
+        compose = gui_app._compose_window
+        compose.set_input_text("Gemeinsamer Zustand")
+        compose.hide()
+        gui_app.action_compose.trigger()
+
+        assert gui_app._compose_window is compose
+        assert compose.isVisible() is True
+        assert compose.txtInput.toPlainText() == "Gemeinsamer Zustand"
+
+    def test_text_edit_action_is_keyboard_reachable(self, gui_app):
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QKeySequence
+        from PyQt6.QtTest import QTest
+
+        win = gui_app._ensure_main_window()
+        win.show()
+        gui_app.app.processEvents()
+
+        assert win._btn_edit_text.focusPolicy() == Qt.FocusPolicy.StrongFocus
+        assert win._btn_edit_text.shortcut() == QKeySequence("Ctrl+E")
+
+        win._btn_edit_text.setFocus()
+        assert win._btn_edit_text.hasFocus() is True
+        QTest.keyClick(win._btn_edit_text, Qt.Key.Key_Space)
+        gui_app.app.processEvents()
+        assert gui_app._compose_window is not None
+        assert gui_app._compose_window.isVisible() is True
+
+    def test_text_edit_action_fits_compact_main_window(self, gui_app):
+        win = gui_app._ensure_main_window()
+        win.show()
+        gui_app.app.processEvents()
+
+        button_rect = win._btn_edit_text.geometry()
+        history_rect = win._btn_history.geometry()
+        text_width = win._btn_edit_text.fontMetrics().horizontalAdvance(
+            win._btn_edit_text.text()
+        )
+
+        assert win.width() == 256
+        assert button_rect.left() >= win.contentsRect().left()
+        assert button_rect.right() <= win.contentsRect().right()
+        assert button_rect.bottom() < history_rect.top()
+        assert text_width < button_rect.width()
 
     def test_dictation_mode_syncs_window_and_tray(self, gui_app):
         win = gui_app._ensure_main_window()

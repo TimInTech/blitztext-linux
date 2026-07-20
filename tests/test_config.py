@@ -89,12 +89,12 @@ class TestWritingPreset:
         assert config.writing_preset == "standard"
 
     def test_valid_preset_is_accepted_and_persists(self, config, config_dir):
-        config.writing_preset = "email_formal"
-        assert config.writing_preset == "email_formal"
+        config.writing_preset = "shorten"
+        assert config.writing_preset == "shorten"
         config.save()
 
         loaded = BlitztextConfig(config_dir=config_dir)
-        assert loaded.writing_preset == "email_formal"
+        assert loaded.writing_preset == "shorten"
 
     def test_invalid_preset_is_rejected(self, config):
         with pytest.raises(ValueError):
@@ -428,3 +428,99 @@ class TestComposeCustomPreset:
     def test_custom_preset_setter_rejects_non_string(self, config):
         config.compose_custom_preset_text = 123  # type: ignore[arg-type]
         assert config.compose_custom_preset_text == ""
+
+# --- Goal 04: sichere und idempotente Preset-Migration ---------------------
+
+GOAL_LEGACY_CONFIG_MIGRATIONS = (
+    ("standard", "standard", "neutral"),
+    ("email_formal", "change_tone", "formal"),
+    ("email_locker", "change_tone", "locker"),
+    ("stichpunkte", "shorten", "neutral"),
+    ("zusammenfassung", "shorten", "neutral"),
+    ("du_form", "change_tone", "locker"),
+    ("sie_form", "change_tone", "formal"),
+    ("kurz_praezise", "shorten", "neutral"),
+)
+
+
+@pytest.mark.parametrize("legacy, expected, expected_tone", GOAL_LEGACY_CONFIG_MIGRATIONS)
+def test_goal_legacy_config_ids_migrate_without_touching_user_prompt(
+    config_dir, legacy, expected, expected_tone
+):
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file = config_dir / "config.json"
+    custom_prompt = "  Mein eigener Prompt bleibt exakt.  \n"
+    original = json.dumps(
+        {
+            "workflows": {"writing_preset": legacy, "text_improver_tone": "neutral"},
+            "compose_custom_preset_text": custom_prompt,
+        },
+        ensure_ascii=False,
+    )
+    config_file.write_text(original, encoding="utf-8")
+
+    loaded = BlitztextConfig(config_dir=config_dir)
+
+    assert loaded.writing_preset == expected
+    assert loaded.text_improver_tone == expected_tone
+    assert loaded.compose_custom_preset_text == custom_prompt
+    assert config_file.read_text(encoding="utf-8") == original
+    assert loaded.writing_preset == BlitztextConfig(config_dir=config_dir).writing_preset
+
+
+@pytest.mark.parametrize("legacy, expected, expected_tone", GOAL_LEGACY_CONFIG_MIGRATIONS)
+def test_goal_migrated_selection_persists_after_controlled_save_and_reload(
+    config_dir, legacy, expected, expected_tone
+):
+    config_dir.mkdir(parents=True, exist_ok=True)
+    custom_prompt = "Eigener Nutzer-Prompt – unverändert."
+    (config_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "workflows": {"writing_preset": legacy},
+                "compose_custom_preset_text": custom_prompt,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = BlitztextConfig(config_dir=config_dir)
+    loaded.save()
+    reloaded = BlitztextConfig(config_dir=config_dir)
+
+    assert reloaded.writing_preset == expected
+    assert reloaded.text_improver_tone == expected_tone
+    assert reloaded.compose_custom_preset_text == custom_prompt
+
+
+def test_goal_custom_action_and_prompt_persist_together(config, config_dir):
+    custom_prompt = "  Verwende exakt diese eigene Anweisung.  \n"
+    config.writing_preset = "custom"
+    config.compose_custom_preset_text = custom_prompt
+    config.save()
+
+    reloaded = BlitztextConfig(config_dir=config_dir)
+
+    assert reloaded.writing_preset == "custom"
+    assert reloaded.compose_custom_preset_text == custom_prompt
+
+
+def test_goal_unknown_saved_id_falls_back_without_deleting_custom_prompt(config_dir):
+    config_dir.mkdir(parents=True, exist_ok=True)
+    custom_prompt = "Nicht überschreiben."
+    (config_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "workflows": {"writing_preset": "veraltet-unbekannt"},
+                "compose_custom_preset_text": custom_prompt,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = BlitztextConfig(config_dir=config_dir)
+
+    assert loaded.writing_preset == "standard"
+    assert loaded.compose_custom_preset_text == custom_prompt

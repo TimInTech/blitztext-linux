@@ -107,6 +107,9 @@ class TestTranslations:
             "compose.status.processing",
             "compose.status.error",
             "compose.status.empty_input",
+            "compose.btn.show_prompt",
+            "mainwindow.button.edit_text",
+            "mainwindow.tooltip.edit_text",
         }
         actual_keys = set(TRANSLATIONS["de"].keys())
         assert expected_keys.issubset(actual_keys), f"Fehlende Compose-Keys: {expected_keys - actual_keys}"
@@ -209,3 +212,35 @@ class TestSetLanguage:
         """set_language('EN') wirft ValueError (case-sensitive)."""
         with pytest.raises(ValueError):
             set_language("EN")
+
+# --- Goal 04: sichtbare Aktionsnamen DE/EN ---------------------------------
+
+@pytest.mark.parametrize(
+    "language, expected",
+    [
+        (
+            "de",
+            (
+                "Standard / Text verbessern",
+                "Kürzen",
+                "Ausformulieren",
+                "Tonfall ändern",
+                "Eigener Prompt",
+            ),
+        ),
+        (
+            "en",
+            (
+                "Standard / Improve text",
+                "Shorten",
+                "Expand",
+                "Change tone",
+                "Custom prompt",
+            ),
+        ),
+    ],
+)
+def test_goal_visible_preset_names(language, expected):
+    keys = ("standard", "shorten", "expand", "change_tone", "custom")
+    set_language(language)
+    assert tuple(t(f"preset.{key}.name") for key in keys) == expected

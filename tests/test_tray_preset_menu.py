@@ -223,3 +223,79 @@ class TestMainWindowPresetSync:
                 f"Workflow {wf}: Combo sichtbar={window._preset_combo.isVisible()}, "
                 f"erwartet={expected}"
             )
+
+# --- Goal 04: Tray und Hauptfenster zeigen dieselben Kernaktionen -----------
+
+GOAL_VISIBLE_ACTIONS = ("standard", "shorten", "expand", "change_tone", "custom")
+
+
+@gui_only
+def test_goal_tray_and_main_window_share_reduced_action_catalog(tray_app):
+    assert tuple(tray_app.preset_actions) == GOAL_VISIBLE_ACTIONS
+    window = tray_app._ensure_main_window()
+    main_values = tuple(
+        window._preset_combo.itemData(index)
+        for index in range(window._preset_combo.count())
+        if isinstance(window._preset_combo.itemData(index), str)
+    )
+    assert main_values == GOAL_VISIBLE_ACTIONS
+
+
+@gui_only
+def test_goal_custom_action_persists_without_changing_custom_prompt(tray_app):
+    tray_app.config.compose_custom_preset_text = "Vorhandener eigener Prompt."
+
+    tray_app._on_writing_preset_selected("custom")
+
+    reloaded = BlitztextConfig(config_dir=tray_app.config.config_dir)
+    assert reloaded.writing_preset == "custom"
+    assert reloaded.compose_custom_preset_text == "Vorhandener eigener Prompt."
+
+# --- Goal 04: offenes Compose-Fenster erhält den aktuellen Service --------
+
+
+@gui_only
+def test_goal_tray_change_refreshes_service_in_open_compose(tray_app):
+    compose = tray_app._ensure_compose_window()
+    old_service = compose._llm_service
+    target = _other_key(tray_app.config.writing_preset)
+
+    tray_app._on_writing_preset_selected(target)
+
+    assert tray_app.llm_service is not old_service
+    assert compose._llm_service is tray_app.llm_service
+
+
+@gui_only
+def test_goal_main_window_change_refreshes_service_in_open_compose(tray_app):
+    compose = tray_app._ensure_compose_window()
+    old_service = compose._llm_service
+    target = _other_key(tray_app.config.writing_preset)
+
+    tray_app.main_window_preset_changed(target)
+
+    assert tray_app.llm_service is not old_service
+    assert compose._llm_service is tray_app.llm_service
+
+
+@gui_only
+def test_goal_settings_rebuild_refreshes_service_in_open_compose(tray_app, monkeypatch):
+    from PyQt6.QtWidgets import QDialog
+    import app.blitztext_linux as mod
+
+    compose = tray_app._ensure_compose_window()
+    old_service = compose._llm_service
+
+    class _AcceptedDialog:
+        def __init__(self, _config):
+            pass
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(mod, "SettingsDialog", _AcceptedDialog)
+
+    tray_app.show_settings_dialog()
+
+    assert tray_app.llm_service is not old_service
+    assert compose._llm_service is tray_app.llm_service

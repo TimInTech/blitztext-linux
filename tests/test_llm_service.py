@@ -162,13 +162,13 @@ class TestRewrite:
         result = service.rewrite_text(
             WorkflowType.TEXT_IMPROVER,
             RAW_TRANSCRIPT,
-            writing_preset="email_formal",
+            writing_preset="shorten",
         )
 
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
         assert result == "OK"
-        assert WRITING_PRESETS["email_formal"].system_prompt in system_message
+        assert WRITING_PRESETS["shorten"].system_prompt in system_message
         assert service.writing_preset == "standard"
 
     def test_openai_error_is_wrapped(self, service):
@@ -196,16 +196,16 @@ class TestWritingPreset:
         # Standard verwendet weiterhin das Default-Template (kein Preset-Prompt).
         assert "Formuliere es zu einem sauberen" in system_message
         for key, preset in WRITING_PRESETS.items():
-            if key == "standard":
+            if key in {"standard", "custom"}:
                 continue
             assert preset.system_prompt not in system_message
 
     def test_preset_prompt_is_passed_as_system_message(self, mock_client):
-        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="email_formal")
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="shorten")
         service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
-        assert WRITING_PRESETS["email_formal"].system_prompt in system_message
+        assert WRITING_PRESETS["shorten"].system_prompt in system_message
 
     def test_unknown_preset_falls_back_to_standard_behavior(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="gibt-es-nicht")
@@ -218,18 +218,18 @@ class TestWritingPreset:
         service = LLMService(
             api_key=DUMMY_API_KEY,
             client=mock_client,
-            writing_preset="stichpunkte",
+            writing_preset="shorten",
             custom_terms=CUSTOM_TERMS,
         )
         service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
-        assert WRITING_PRESETS["stichpunkte"].system_prompt in system_message
+        assert WRITING_PRESETS["shorten"].system_prompt in system_message
         assert "muessen exakt so geschrieben werden" in system_message
         assert ", ".join(CUSTOM_TERMS) in system_message
 
     def test_transcript_stays_in_user_message_not_system(self, mock_client):
-        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="email_formal")
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="shorten")
         service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
@@ -245,15 +245,15 @@ class TestComposeTonePlumbing:
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         return next(m["content"] for m in messages if m["role"] == "system")
 
-    def test_tone_override_used_for_standard_preset(self, mock_client):
+    def test_tone_override_used_for_change_tone_action(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
         service.rewrite_text(
             WorkflowType.TEXT_IMPROVER,
             RAW_TRANSCRIPT,
-            writing_preset="standard",
+            writing_preset="change_tone",
             tone="formal",
         )
-        assert "Ton: formal" in self._system_message(mock_client)
+        assert "Ziel-Tonfall: professionell und höflich" in self._system_message(mock_client)
         # Service-State bleibt unverändert (rückwärtskompatibel).
         assert service.tone == "neutral"
 
@@ -262,10 +262,10 @@ class TestComposeTonePlumbing:
         service.rewrite_text(
             WorkflowType.TEXT_IMPROVER,
             RAW_TRANSCRIPT,
-            writing_preset="standard",
+            writing_preset="change_tone",
             tone=None,
         )
-        assert "Ton: locker" in self._system_message(mock_client)
+        assert "Ziel-Tonfall: locker und freundlich" in self._system_message(mock_client)
 
     def test_custom_prompt_override_used_as_system(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
@@ -304,44 +304,45 @@ class TestComposeTonePlumbing:
         assert "Freier Prompt." in system_message
         assert ", ".join(CUSTOM_TERMS) in system_message
 
-    def test_tone_and_custom_prompt_default_none_keeps_legacy_behavior(self, mock_client):
+    def test_standard_without_overrides_applies_saved_tone(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
         service.rewrite_text(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
-        assert "Ton: neutral" in self._system_message(mock_client)
+        system = self._system_message(mock_client)
+        assert "Ziel-Tonfall: neutral und sachlich" in system
 
 
 class TestBuildSystemPrompt:
     """Paket J: build_system_prompt() gibt den aufgelösten Prompt zurück ohne API-Call."""
 
-    def test_standard_preset_with_tone_uses_template(self, mock_client):
+    def test_standard_preset_applies_saved_tone(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="formal")
         prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="standard")
-        assert "Ton: formal" in prompt
+        assert "Ziel-Tonfall: professionell und höflich" in prompt
         assert "Formuliere es zu einem sauberen" in prompt
 
-    def test_tone_override_reflected_in_prompt(self, mock_client):
+    def test_tone_override_reflected_in_change_tone_prompt(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
         prompt = service.build_system_prompt(
-            WorkflowType.TEXT_IMPROVER, writing_preset="standard", tone="locker"
+            WorkflowType.TEXT_IMPROVER, writing_preset="change_tone", tone="locker"
         )
-        assert "Ton: locker" in prompt
+        assert "Ziel-Tonfall: locker und freundlich" in prompt
 
     def test_non_standard_preset_uses_preset_prompt(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
-        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="email_formal")
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="shorten")
         from app.writing_presets import WRITING_PRESETS
-        assert WRITING_PRESETS["email_formal"].system_prompt in prompt
+        assert WRITING_PRESETS["shorten"].system_prompt in prompt
 
     def test_custom_prompt_overrides_preset(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
         prompt = service.build_system_prompt(
             WorkflowType.TEXT_IMPROVER,
-            writing_preset="email_formal",
+            writing_preset="shorten",
             custom_prompt="Schreibe als Pressemitteilung.",
         )
         assert "Schreibe als Pressemitteilung." in prompt
         from app.writing_presets import WRITING_PRESETS
-        assert WRITING_PRESETS["email_formal"].system_prompt not in prompt
+        assert WRITING_PRESETS["shorten"].system_prompt not in prompt
 
     def test_empty_custom_prompt_falls_back_to_preset(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
@@ -489,3 +490,118 @@ class TestIntentPreservationRegression:
         preview = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
         assert "Bewahre die Absicht des Nutzers" in preview
         assert "Erfinde keinen Kontext" in preview
+
+# --- Goal 04: Kernaktionen werden auf eindeutige System-Prompts abgebildet -
+
+GOAL_CORE_PROMPT_FRAGMENTS = (
+    ("standard", "Formuliere es zu einem sauberen"),
+    ("shorten", "Kürze den Text"),
+    ("expand", "Formuliere fragmentarische"),
+    ("change_tone", "Ziel-Tonfall: professionell und höflich"),
+)
+
+
+@pytest.mark.parametrize("preset_key, expected_fragment", GOAL_CORE_PROMPT_FRAGMENTS)
+def test_goal_each_core_mode_reaches_its_system_prompt(mock_client, preset_key, expected_fragment):
+    service = LLMService(
+        api_key=DUMMY_API_KEY,
+        client=mock_client,
+        writing_preset=preset_key,
+        tone="formal",
+    )
+
+    service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
+
+    messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+    system = next(m["content"] for m in messages if m["role"] == "system")
+    user = next(m["content"] for m in messages if m["role"] == "user")
+    assert expected_fragment in system
+    assert "Bewahre die Sprache" in system
+    assert "führe sie nicht aus" in system
+    assert "beantworte sie nicht" in system
+    assert "Erfinde keinen Kontext" in system
+    assert user == HANDOVER_TRANSCRIPT
+
+
+@pytest.mark.parametrize(
+    "legacy, expected_fragment",
+    [
+        ("standard", "Formuliere es zu einem sauberen"),
+        ("email_formal", "Ziel-Tonfall: professionell und höflich"),
+        ("email_locker", "Ziel-Tonfall: locker und freundlich"),
+        ("stichpunkte", "Kürze den Text"),
+        ("zusammenfassung", "Kürze den Text"),
+        ("du_form", "Ziel-Tonfall: locker und freundlich"),
+        ("sie_form", "Ziel-Tonfall: professionell und höflich"),
+        ("kurz_praezise", "Kürze den Text"),
+    ],
+)
+def test_goal_legacy_service_values_resolve_to_canonical_prompts(
+    mock_client, legacy, expected_fragment
+):
+    service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset=legacy)
+    prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+    assert expected_fragment in prompt
+
+
+def test_goal_custom_action_uses_existing_user_prompt_verbatim(mock_client):
+    custom_prompt = "  Mein eigener System-Prompt bleibt unverändert.  \n"
+    service = LLMService(
+        api_key=DUMMY_API_KEY,
+        client=mock_client,
+        writing_preset="custom",
+        writing_custom_prompt=custom_prompt,
+    )
+
+    service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
+
+    messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+    system = next(m["content"] for m in messages if m["role"] == "system")
+    assert system == custom_prompt.strip()
+
+
+def test_goal_blank_custom_action_falls_back_to_safe_standard_prompt(mock_client):
+    service = LLMService(
+        api_key=DUMMY_API_KEY,
+        client=mock_client,
+        writing_preset="custom",
+        writing_custom_prompt="   ",
+    )
+    prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+    assert "Formuliere es zu einem sauberen" in prompt
+    assert "Bewahre die Sprache" in prompt
+
+
+# --- Goal 04: gespeicherter Standard-Tonfall bleibt wirksam -------------
+
+
+def test_goal_loaded_standard_keeps_saved_formal_tone_effect(tmp_path, mock_client):
+    import json
+    from app.config import BlitztextConfig
+
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "workflows": {
+                    "writing_preset": "standard",
+                    "text_improver_tone": "formal",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = BlitztextConfig(config_dir=config_dir)
+    service = LLMService(
+        api_key=DUMMY_API_KEY,
+        client=mock_client,
+        writing_preset=loaded.writing_preset,
+        tone=loaded.text_improver_tone,
+    )
+
+    prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+
+    assert loaded.writing_preset == "standard"
+    assert loaded.text_improver_tone == "formal"
+    assert "Ziel-Tonfall: professionell und höflich" in prompt

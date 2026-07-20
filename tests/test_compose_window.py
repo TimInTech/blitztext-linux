@@ -137,18 +137,20 @@ def _wait_until(qapp, predicate, timeout_ms: int = 2500) -> None:
 
 @gui_only
 @pytest.mark.parametrize(
-    ("language", "title"),
+    ("language", "title", "prompt_label"),
     [
-        ("de", "Text verfassen"),
-        ("en", "Compose Text"),
+        ("de", "Text verfassen", "Schreibstil / Prompt bearbeiten"),
+        ("en", "Compose Text", "Edit style / prompt"),
     ],
 )
-def test_window_texts_follow_language(qapp, language, title):
+def test_window_texts_follow_language(qapp, language, title, prompt_label):
     set_language(language)
     window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
         assert window.windowTitle() == title
         assert window.btnAction.text() == t("compose.button.improve")
+        assert window.btnShowPrompt.text() == prompt_label
+        assert window.btnShowPrompt.toolTip() == t("compose.prompt_preview.tooltip")
         assert window.btnCopy.text() == t("compose.button.copy")
         assert window.btnPaste.text() == t("compose.button.insert_close")
         assert window.btnClose.text() == t("compose.button.close")
@@ -169,11 +171,54 @@ def test_window_opens_without_llm_call(compose_window):
 
 
 @gui_only
+def test_compact_window_keeps_controls_separate_and_readable(qapp):
+    config = Config()
+    config.compose_signature_text = "Tim"
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
+    window.show()
+    window.resize(window.minimumWidth(), window.minimumHeight())
+    qapp.processEvents()
+
+    try:
+        control_groups = [
+            [
+                ("workflow label", window.lblWorkflow),
+                ("workflow selector", window.cmbWorkflow),
+                ("preset label", window.lblPreset),
+                ("preset selector", window.cmbPreset),
+                ("tone label", window.lblTone),
+                ("tone selector", window.cmbTone),
+                ("voice routing", window.chkVoiceRouting),
+            ],
+            [
+                ("copy", window.btnCopy),
+                ("paste", window.btnPaste),
+                ("signature", window.btnSignature),
+                ("close", window.btnClose),
+            ],
+        ]
+        for controls in control_groups:
+            visible_controls = [
+                (name, control) for name, control in controls if control.isVisible()
+            ]
+            for index, (name, control) in enumerate(visible_controls):
+                assert control.width() >= control.sizeHint().width(), name
+                for other_name, other in visible_controls[index + 1 :]:
+                    assert not control.geometry().intersects(other.geometry()), (
+                        name,
+                        other_name,
+                    )
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
 def test_input_reaches_direct_llm_path_and_sets_output(compose_window, qapp):
     window, llm, _paste = compose_window
 
     window.cmbWorkflow.setCurrentIndex(window.cmbWorkflow.findData(WorkflowType.TEXT_IMPROVER))
-    window.cmbPreset.setCurrentIndex(window.cmbPreset.findData("email_formal"))
+    window.cmbPreset.setCurrentIndex(window.cmbPreset.findData("shorten"))
     window.txtInput.setPlainText("Hallo Welt")
     window.btnAction.click()
 
@@ -183,7 +228,7 @@ def test_input_reaches_direct_llm_path_and_sets_output(compose_window, qapp):
     )
 
     assert llm.calls == [
-        (WorkflowType.TEXT_IMPROVER, "Hallo Welt", "email_formal"),
+        (WorkflowType.TEXT_IMPROVER, "Hallo Welt", "shorten"),
     ]
     assert window.txtOutput.toPlainText() == "OK"
     assert window.btnCopy.isEnabled() is True
@@ -285,15 +330,59 @@ def test_no_autopaste_after_llm_success(compose_window, qapp):
 
 
 @gui_only
-def test_voice_routing_checkbox_visible_and_disabled(compose_window, qapp):
-    """Voice-Routing-Checkbox ist vorhanden, sichtbar und deaktiviert (Future-Hook)."""
-    window, _llm, _paste = compose_window
+def test_voice_routing_checkbox_mouse_and_keyboard_toggle(compose_window, qapp):
+    """Kästchen und Beschriftung sind klickbar; Leertaste schaltet mit Fokus."""
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
 
+    window, _llm, _paste = compose_window
     chk = window.chkVoiceRouting
-    assert chk is not None
+    assert isinstance(chk, QCheckBox)
+
     assert chk.isVisible() is True
-    assert chk.isEnabled() is False
+    assert chk.isEnabled() is True
     assert chk.text() == t("compose.voice_routing.label")
+    assert chk.focusPolicy() == Qt.FocusPolicy.StrongFocus
+
+    option = QStyleOptionButton()
+    chk.initStyleOption(option)
+    indicator = chk.style().subElementRect(
+        QStyle.SubElement.SE_CheckBoxIndicator, option, chk
+    )
+    QTest.mouseClick(
+        chk,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        indicator.center(),
+    )
+    assert chk.isChecked() is True
+
+    label_pos = QPoint(indicator.right() + 12, chk.rect().center().y())
+    QTest.mouseClick(
+        chk,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        label_pos,
+    )
+    assert chk.isChecked() is False
+
+    chk.setFocus(Qt.FocusReason.TabFocusReason)
+    qapp.processEvents()
+    assert chk.hasFocus() is True
+    QTest.keyClick(chk, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    assert chk.isChecked() is True
+
+
+@gui_only
+def test_closing_compose_window_clears_voice_routing(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window.chkVoiceRouting.setChecked(True)
+
+    window.close()
+    qapp.processEvents()
+
+    assert window.chkVoiceRouting.isChecked() is False
 
 
 # ---------------------------------------------------------------------------
@@ -717,7 +806,7 @@ def test_compose_signature_leaves_unrelated_brackets(compose_window, qapp):
 
 # --- Paket J: Tonfall-Selektor & Eigene Vorlage im Compose-Fenster ----------
 
-from app.compose_window import COMPOSE_CUSTOM_PRESET_KEY  # noqa: E402
+from app.writing_presets import CUSTOM_PRESET_KEY  # noqa: E402
 
 
 def _select_workflow(window, workflow: WorkflowType) -> None:
@@ -735,10 +824,12 @@ def test_tone_selector_visible_and_enabled_for_standard(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        _select_preset(window, "shorten")
         _select_preset(window, "standard")
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is True
+        assert window.cmbTone.toolTip() == t("compose.tone.tooltip_active")
     finally:
         window.close()
         qapp.processEvents()
@@ -751,7 +842,7 @@ def test_tone_selector_disabled_for_nonstandard_preset(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, "email_formal")
+        _select_preset(window, "shorten")
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is False
@@ -768,7 +859,7 @@ def test_tone_selector_disabled_for_custom_preset(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        _select_preset(window, CUSTOM_PRESET_KEY)
         qapp.processEvents()
         assert window.cmbTone.isVisible() is True
         assert window.cmbTone.isEnabled() is False
@@ -828,7 +919,7 @@ def test_selected_tone_is_passed_to_worker(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, "standard")
+        _select_preset(window, "change_tone")
         window.cmbTone.setCurrentIndex(window.cmbTone.findData("formal"))
         window.txtInput.setPlainText("Hallo Welt")
         window.btnAction.click()
@@ -841,7 +932,7 @@ def test_selected_tone_is_passed_to_worker(qapp):
 
 
 @gui_only
-def test_custom_preset_passes_config_prompt_to_worker(qapp):
+def test_custom_action_is_resolved_centrally_by_llm_service(qapp):
     config = Config()
     config.compose_custom_preset_text = "FREITEXT-PROMPT"
     llm = _FakeLLMService()
@@ -850,13 +941,12 @@ def test_custom_preset_passes_config_prompt_to_worker(qapp):
     qapp.processEvents()
     try:
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
-        _select_preset(window, COMPOSE_CUSTOM_PRESET_KEY)
+        _select_preset(window, CUSTOM_PRESET_KEY)
         window.txtInput.setPlainText("Hallo Welt")
         window.btnAction.click()
         _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
-        # Base preset falls back to "standard"; the free prompt is plumbed separately.
-        assert llm.calls[-1][2] == "standard"
-        assert llm.last_custom_prompt == "FREITEXT-PROMPT"
+        assert llm.calls[-1][2] == "custom"
+        assert llm.last_custom_prompt is None
     finally:
         window.close()
         qapp.processEvents()
@@ -866,9 +956,9 @@ def test_custom_preset_passes_config_prompt_to_worker(qapp):
 def test_custom_preset_entry_present_in_combo(qapp):
     window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     try:
-        assert window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY) >= 0
-        idx = window.cmbPreset.findData(COMPOSE_CUSTOM_PRESET_KEY)
-        assert window.cmbPreset.itemText(idx) == t("compose.preset.custom")
+        assert window.cmbPreset.findData(CUSTOM_PRESET_KEY) >= 0
+        idx = window.cmbPreset.findData(CUSTOM_PRESET_KEY)
+        assert window.cmbPreset.itemText(idx) == t("preset.custom.name")
     finally:
         window.close()
         qapp.processEvents()
@@ -884,13 +974,51 @@ def test_tone_i18n_keys_present_and_complete(qapp, language):
             "compose.tone.label",
             "compose.tone.tooltip_active",
             "compose.tone.tooltip_preset_overrides",
-            "compose.preset.custom",
+            "preset.custom.name",
             "tone.locker",
             "tone.neutral",
             "tone.formal",
         ):
             assert t(key) != key
         assert not missing_keys()
+    finally:
+        window.close()
+        qapp.processEvents()
+
+# --- Goal 04: Compose zeigt dieselben fünf Aktionen -------------------------
+
+GOAL_VISIBLE_PRESET_KEYS = ("standard", "shorten", "expand", "change_tone", "custom")
+
+
+def _selectable_preset_values(combo):
+    return tuple(
+        combo.itemData(index)
+        for index in range(combo.count())
+        if isinstance(combo.itemData(index), str)
+    )
+
+
+@gui_only
+def test_goal_compose_visible_actions_are_reduced_and_ordered(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    try:
+        assert _selectable_preset_values(window.cmbPreset) == GOAL_VISIBLE_PRESET_KEYS
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
+def test_goal_tone_selector_is_active_for_standard_and_change_tone(qapp):
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
+    window.show()
+    qapp.processEvents()
+    try:
+        _select_workflow(window, WorkflowType.TEXT_IMPROVER)
+        for key in GOAL_VISIBLE_PRESET_KEYS:
+            _select_preset(window, key)
+            qapp.processEvents()
+            assert window.cmbTone.isEnabled() is (key in {"standard", "change_tone"})
     finally:
         window.close()
         qapp.processEvents()

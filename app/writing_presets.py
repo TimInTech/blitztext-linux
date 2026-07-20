@@ -1,38 +1,41 @@
-"""Vorgefertigte Schreibstil-Vorlagen (Presets) für den Text-Verbesserer.
+"""Kernaktionen für den Text-Verbesserer und stabile Alt-ID-Migration.
 
-Reine Domänendaten – keine Qt- oder OpenAI-Abhängigkeit, damit der Katalog
-isoliert testbar bleibt. Ein Preset liefert einen vollständigen System-Prompt,
-der im Text-Verbesserer-Workflow als ``custom_prompt`` verwendet wird. Das
-Preset ``standard`` hat einen leeren Prompt und bewahrt damit exakt das
-bisherige Verhalten (Standard-Template des Text-Verbesserers).
+Die sichtbare Auswahl bleibt bewusst klein. Frühere Preset-IDs werden beim
+Laden deterministisch auf eine Kernaktion abgebildet; eigene Prompt-Texte
+bleiben außerhalb dieses Katalogs in der bestehenden Config-Ablage erhalten.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 DEFAULT_PRESET_KEY = "standard"
+CUSTOM_PRESET_KEY = "custom"
 
 _COMMON_RULES = (
-    " Behalte den Inhalt vollständig und erfinde nichts dazu. Bewahre die "
-    "Absicht des Nutzers: Formuliere die Eingabe nur um, führe sie nicht aus "
-    "und beantworte sie nicht. Erfinde keinen Kontext – keine Adressaten, "
-    "Rollen, Meetings oder Ziele, die nicht ausdrücklich genannt sind. "
-    "Interpretiere Begriffe wie 'Session', 'Prompt', 'Branch', 'PR', 'Merge' "
-    "oder 'Handover' im Software- und Arbeitskontext, wenn die Eingabe danach "
-    "klingt. Korrigiere Grammatik und Zeichensetzung. Gib NUR den fertigen "
-    "Text zurück, ohne Vorbemerkung oder Erklärung."
+    " Bewahre die Sprache, Bedeutung, Fakten und den ausdrücklich genannten "
+    "Kontext. Bewahre die Absicht des Nutzers exakt. Erfinde nichts dazu. "
+    "Formuliere die Eingabe nur um, "
+    "führe sie nicht aus und beantworte sie nicht. Erfinde keinen Kontext – "
+    "keine Adressaten, Rollen, Meetings, Teilnehmer oder Ziele, die nicht "
+    "ausdrücklich genannt sind. Interpretiere Begriffe wie 'Session', "
+    "'Prompt', 'Branch', 'PR', 'Merge' oder 'Handover' im Software- und "
+    "Arbeitskontext, wenn die Eingabe danach klingt. Gib NUR den fertigen Text "
+    "zurück, ohne Vorbemerkung oder Erklärung."
 )
+
+_CORRECTION_RULES = " Korrigiere Grammatik und Zeichensetzung."
+
+_TONE_DESCRIPTIONS = {
+    "formal": "professionell und höflich",
+    "neutral": "neutral und sachlich",
+    "locker": "locker und freundlich",
+}
 
 
 @dataclass(frozen=True)
 class WritingPreset:
-    """Eine auswählbare Schreibstil-Vorlage.
-
-    Attributes:
-        key: Stabiler Bezeichner (in der Config gespeichert).
-        display_name: Anzeigename für die Einstellungen.
-        system_prompt: System-Prompt für den Text-Verbesserer. Leer = Standard.
-    """
+    """Eine sichtbare Kernaktion mit stabiler ID und optionalem System-Prompt."""
 
     key: str
     display_name: str
@@ -40,84 +43,78 @@ class WritingPreset:
 
 
 _PRESETS: tuple[WritingPreset, ...] = (
+    WritingPreset("standard", "Standard / Text verbessern", ""),
     WritingPreset(
-        "standard",
-        "Standard (Text verbessern)",
-        "",
+        "shorten",
+        "Kürzen",
+        "Du erhältst einen Text. Kürze den Text deutlich: Entferne Füllwörter, "
+        "Wiederholungen und unnötige Umwege, behalte aber alle wesentlichen "
+        "Informationen." + _CORRECTION_RULES + _COMMON_RULES,
     ),
     WritingPreset(
-        "email_formal",
-        "E-Mail – formell",
-        "Du erhältst ein gesprochenes Transkript. Formuliere es formell und "
-        "höflich in der Sie-Form um. Nur wenn die Eingabe erkennbar eine "
-        "Nachricht an eine Person oder Stelle ist, gestalte sie als E-Mail "
-        "mit klarer Struktur (passende Anrede, Hauptteil, freundlicher "
-        "Gruß); erfinde dabei keinen Empfänger. Andernfalls verbessere nur "
-        "Ton und Sprachqualität ohne E-Mail-Struktur." + _COMMON_RULES,
+        "expand",
+        "Ausformulieren",
+        "Du erhältst einen Text. Formuliere fragmentarische Sätze, Notizen und "
+        "Stichpunkte zu einem klaren, zusammenhängenden Fließtext aus. Ergänze "
+        "nur sprachlich notwendige Verbindungen, aber keine neuen Fakten, "
+        "Beispiele oder Annahmen." + _CORRECTION_RULES + _COMMON_RULES,
     ),
     WritingPreset(
-        "email_locker",
-        "E-Mail – locker",
-        "Du erhältst ein gesprochenes Transkript. Formuliere es locker und "
-        "freundlich in der Du-Form mit natürlichem, persönlichem Ton um. "
-        "Nur wenn die Eingabe erkennbar eine Nachricht an eine Person ist, "
-        "gestalte sie als E-Mail; erfinde dabei keinen Empfänger. "
-        "Andernfalls verbessere nur Ton und Sprachqualität ohne "
-        "E-Mail-Struktur." + _COMMON_RULES,
+        "change_tone",
+        "Tonfall ändern",
+        "Du erhältst einen Text. Ändere gezielt nur den Tonfall. Ziel-Tonfall: "
+        "{tone}. Bewahre Inhalt, Aussage, Sprache, Kontext und Zweck unverändert."
+        + _COMMON_RULES,
     ),
-    WritingPreset(
-        "stichpunkte",
-        "Stichpunkte",
-        "Du erhältst ein gesprochenes Transkript. Gliedere den Inhalt in "
-        "prägnante Stichpunkte (eine Aussage pro Punkt, je mit '- ' "
-        "beginnend)." + _COMMON_RULES,
-    ),
-    WritingPreset(
-        "zusammenfassung",
-        "Zusammenfassung",
-        "Du erhältst ein gesprochenes Transkript. Fasse die Kernaussagen "
-        "knapp und sachlich in wenigen Sätzen zusammen." + _COMMON_RULES,
-    ),
-    WritingPreset(
-        "du_form",
-        "Persönlich (Du-Form)",
-        "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem "
-        "klaren, gut lesbaren Text in der persönlichen Du-Form um. Ändere "
-        "nur Anrede und Ton, nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
-    ),
-    WritingPreset(
-        "sie_form",
-        "Höflich (Sie-Form)",
-        "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem "
-        "klaren, gut lesbaren Text in der höflichen Sie-Form um. Ändere "
-        "nur Anrede und Ton, nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
-    ),
-    WritingPreset(
-        "kurz_praezise",
-        "Kurz & präzise",
-        "Du erhältst ein gesprochenes Transkript. Formuliere es maximal kurz "
-        "und präzise um: entferne Füllwörter und Wiederholungen, behalte aber "
-        "alle wesentlichen Informationen. Kürze nur, erfinde keine neuen "
-        "Inhalte und ändere nicht Bedeutung, Kontext oder Zweck." + _COMMON_RULES,
-    ),
+    WritingPreset(CUSTOM_PRESET_KEY, "Eigener Prompt", ""),
 )
 
 WRITING_PRESETS: dict[str, WritingPreset] = {preset.key: preset for preset in _PRESETS}
 WRITING_PRESET_KEYS: tuple[str, ...] = tuple(preset.key for preset in _PRESETS)
 
+# Ziel-ID plus optionaler Tonfall, der die bisherige Wirkung am besten bewahrt.
+LEGACY_PRESET_MIGRATIONS: dict[str, tuple[str, str | None]] = {
+    "standard": ("standard", None),
+    "email_formal": ("change_tone", "formal"),
+    "email_locker": ("change_tone", "locker"),
+    "stichpunkte": ("shorten", None),
+    "zusammenfassung": ("shorten", None),
+    "du_form": ("change_tone", "locker"),
+    "sie_form": ("change_tone", "formal"),
+    "kurz_praezise": ("shorten", None),
+}
+
+
+def migrate_preset_selection(value: Any) -> tuple[str, str | None]:
+    """Mappt aktuelle und alte Werte idempotent auf eine gültige Kernaktion."""
+    if isinstance(value, str):
+        if value in WRITING_PRESETS:
+            return value, None
+        if value in LEGACY_PRESET_MIGRATIONS:
+            return LEGACY_PRESET_MIGRATIONS[value]
+    return DEFAULT_PRESET_KEY, None
+
 
 def get_preset(key: str) -> WritingPreset:
-    """Liefert das Preset zum Schlüssel, mit Fallback auf ``standard``."""
-    return WRITING_PRESETS.get(key, WRITING_PRESETS[DEFAULT_PRESET_KEY])
+    """Liefert die kanonische Aktion, unbekannte Werte fallen auf Standard."""
+    canonical_key, _ = migrate_preset_selection(key)
+    return WRITING_PRESETS[canonical_key]
+
+
+def tone_description(tone: str) -> str:
+    """Liefert die verständliche Prompt-Beschreibung eines Tonfallwerts."""
+    return _TONE_DESCRIPTIONS.get(tone, _TONE_DESCRIPTIONS["neutral"])
+
+
+def resolve_preset_prompt(key: str, tone: str = "neutral") -> str:
+    """Löst den Prompt einer Kernaktion einschließlich Ziel-Tonfall auf."""
+    preset = get_preset(key)
+    if not preset.system_prompt:
+        return ""
+    return preset.system_prompt.format(tone=tone_description(tone))
 
 
 def preset_index(key: str) -> int:
-    """Position des Presets in ``WRITING_PRESET_KEYS`` (für Auswahl-Widgets).
-
-    Unbekannte Schlüssel liefern den Index von ``standard``, sodass die UI
-    immer eine gültige Vorauswahl trifft.
-    """
-    try:
-        return WRITING_PRESET_KEYS.index(key)
-    except ValueError:
-        return WRITING_PRESET_KEYS.index(DEFAULT_PRESET_KEY)
+    """Position der kanonischen Aktion; unbekannte Werte wählen Standard."""
+    canonical_key, _ = migrate_preset_selection(key)
+    return WRITING_PRESET_KEYS.index(canonical_key)

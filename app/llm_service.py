@@ -6,7 +6,13 @@ from typing import Any, Optional
 
 from app.config import DEFAULTS
 from app.workflows import WorkflowType
-from app.writing_presets import DEFAULT_PRESET_KEY, get_preset
+from app.writing_presets import (
+    CUSTOM_PRESET_KEY,
+    DEFAULT_PRESET_KEY,
+    migrate_preset_selection,
+    resolve_preset_prompt,
+    tone_description,
+)
 
 logger = logging.getLogger("blitztext.llm_service")
 
@@ -28,20 +34,22 @@ _DAMPF_SYSTEM = (
 # Umformulieren, kein Auftrag an das Modell. Ohne diese Regeln deutete das
 # Modell z. B. "neue Session" als Meeting um und erfand Teilnehmer.
 _INTENT_RULES = (
-    " Bewahre die Absicht des Nutzers exakt: Formuliere die Eingabe nur um, "
-    "führe sie nicht aus und beantworte sie nicht. Erfinde keinen Kontext – "
-    "keine Teilnehmer, Meetings, Rollen, Adressaten oder Ziele, die nicht "
-    "ausdrücklich genannt sind. Interpretiere Begriffe wie 'Session', "
-    "'Prompt', 'Branch', 'PR', 'Merge' oder 'Handover' im Software- und "
-    "Arbeitskontext, wenn die Eingabe danach klingt. Verlangt der Nutzer "
-    "einen Prompt oder eine Übergabe, formuliere einen direkt nutzbaren "
-    "Prompt bzw. eine Übergabe. Ist die Eingabe fragmentarisch, glätte nur "
-    "Sprache und Struktur, ohne die Aufgabe zu verändern."
+    " Bewahre die Sprache, Bedeutung, Fakten und den ausdrücklich genannten "
+    "Kontext. Bewahre die Absicht des Nutzers exakt. Formuliere die Eingabe "
+    "nur um, führe sie nicht aus und "
+    "beantworte sie nicht. Erfinde keinen Kontext – keine Teilnehmer, Meetings, "
+    "Rollen, Adressaten oder Ziele, die nicht ausdrücklich genannt sind. "
+    "Interpretiere Begriffe wie 'Session', 'Prompt', 'Branch', 'PR', 'Merge' "
+    "oder 'Handover' im Software- und Arbeitskontext, wenn die Eingabe danach "
+    "klingt. Verlangt der Nutzer einen Prompt oder eine Übergabe, formuliere "
+    "einen direkt nutzbaren Prompt bzw. eine Übergabe. Ist die Eingabe "
+    "fragmentarisch, glätte nur Sprache und Struktur, ohne die Aufgabe zu "
+    "verändern."
 )
 
 _TEXT_IMPROVER_SYSTEM_TEMPLATE = (
     "Du erhältst ein gesprochenes Transkript. Formuliere es zu einem sauberen, "
-    "gut lesbaren Text um. Ton: {tone}. Behalte den Inhalt vollständig. "
+    "gut lesbaren Text um. Ziel-Tonfall: {tone}. Behalte den Inhalt vollständig. "
     "Korrigiere Grammatik, Zeichensetzung und Struktur." + _INTENT_RULES +
     " Gib NUR den fertigen Text zurück."
 )
@@ -86,16 +94,23 @@ class LLMService:
         writing_preset: str = DEFAULT_PRESET_KEY,
         base_url: str = "",
         model: str = "",
+        writing_custom_prompt: str = "",
     ) -> None:
         self.api_key = api_key or ""
         self.api_key_env = api_key_env or "OPENAI_API_KEY"
         self.base_url = (base_url or "").strip()
         self.model = (model or "").strip() or DEFAULT_LLM_MODEL
-        self.tone = tone
+        canonical_preset, migrated_tone = migrate_preset_selection(
+            writing_preset or DEFAULT_PRESET_KEY
+        )
+        self.tone = migrated_tone or tone
         self.emoji_density = emoji_density
         self.dampf_system_prompt = dampf_system_prompt
         self.custom_terms = self._sanitize_terms(custom_terms)
-        self.writing_preset = writing_preset or DEFAULT_PRESET_KEY
+        self.writing_preset = canonical_preset
+        self.writing_custom_prompt = (
+            writing_custom_prompt if isinstance(writing_custom_prompt, str) else ""
+        )
 
         self._openai_installed = True
         self._client_is_fallback_mock = False
@@ -158,6 +173,23 @@ class LLMService:
             + ", ".join(terms)
         )
 
+    def _resolve_text_prompt(
+        self,
+        writing_preset: Optional[str],
+        tone: Optional[str],
+        custom_prompt: Optional[str],
+    ) -> tuple[str, str]:
+        effective_tone = tone if tone is not None else self.tone
+        selected = writing_preset if writing_preset is not None else self.writing_preset
+        canonical, migrated_tone = migrate_preset_selection(selected)
+        if migrated_tone is not None:
+            effective_tone = migrated_tone
+        if custom_prompt is not None and custom_prompt.strip():
+            return custom_prompt.strip(), effective_tone
+        if canonical == CUSTOM_PRESET_KEY:
+            return self.writing_custom_prompt.strip(), effective_tone
+        return resolve_preset_prompt(canonical, effective_tone), effective_tone
+
     def _rewrite_for_workflow(
         self,
         workflow: WorkflowType,
@@ -175,15 +207,12 @@ class LLMService:
             if workflow == WorkflowType.DAMPF_ABLASSEN:
                 return self.dampf_ablassen(text, custom_system_prompt=self.dampf_system_prompt)
             if workflow == WorkflowType.TEXT_IMPROVER:
-                # Ein expliziter Freitext-Prompt (z. B. „Eigene Vorlage…“) hat
-                # Vorrang vor der gewählten Vorlage. Sonst gilt die Vorlage; nur
-                # bei „Standard“ (leerer Preset-Prompt) greift der Tonfall.
-                effective_tone = tone if tone is not None else self.tone
-                if custom_prompt is not None and custom_prompt.strip():
-                    system_prompt = custom_prompt
-                else:
-                    system_prompt = get_preset(writing_preset or self.writing_preset).system_prompt
-                return self.text_improver(text, tone=effective_tone, custom_prompt=system_prompt)
+                system_prompt, effective_tone = self._resolve_text_prompt(
+                    writing_preset, tone, custom_prompt
+                )
+                return self.text_improver(
+                    text, tone=effective_tone, custom_prompt=system_prompt
+                )
             if workflow == WorkflowType.EMOJI_TEXT:
                 return self.emoji_text(text, density=self.emoji_density)
             raise LLMServiceError(f"Unsupported workflow: {workflow}")
@@ -222,7 +251,10 @@ class LLMService:
         if tone not in {"formal", "neutral", "locker"}:
             raise ValueError(f"invalid tone: {tone}")
 
-        system = (custom_prompt.strip() or _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(tone=tone)) + self._custom_terms_instruction()
+        default_prompt = _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(
+            tone=tone_description(tone)
+        )
+        system = (custom_prompt.strip() or default_prompt) + self._custom_terms_instruction()
         return self._chat_completion(system, transcript)
 
     def emoji_text(self, transcript: str, density: str = "mittel") -> str:
@@ -280,13 +312,13 @@ class LLMService:
         if workflow == WorkflowType.DAMPF_ABLASSEN:
             return (self.dampf_system_prompt.strip() or _DAMPF_SYSTEM) + self._custom_terms_instruction()
         if workflow == WorkflowType.TEXT_IMPROVER:
-            effective_tone = tone if tone is not None else self.tone
-            if custom_prompt is not None and custom_prompt.strip():
-                effective_system = custom_prompt.strip()
-            else:
-                preset_system = get_preset(writing_preset or self.writing_preset).system_prompt
-                effective_system = preset_system or _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(tone=effective_tone)
-            return effective_system + self._custom_terms_instruction()
+            effective_system, effective_tone = self._resolve_text_prompt(
+                writing_preset, tone, custom_prompt
+            )
+            default_prompt = _TEXT_IMPROVER_SYSTEM_TEMPLATE.format(
+                tone=tone_description(effective_tone)
+            )
+            return (effective_system or default_prompt) + self._custom_terms_instruction()
         if workflow == WorkflowType.EMOJI_TEXT:
             return _EMOJI_SYSTEM_TEMPLATE.format(density=self.emoji_density) + self._custom_terms_instruction()
         raise LLMServiceError(f"Unsupported workflow: {workflow}")

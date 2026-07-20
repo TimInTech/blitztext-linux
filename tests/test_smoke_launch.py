@@ -66,6 +66,8 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
         assert win._btn_discard.text() == t("mainwindow.button.discard")
         assert win._btn_dictation.text() == t("mainwindow.button.dictation")
         assert win._btn_history.text() == t("mainwindow.button.history").format(count=0)
+        assert win._btn_edit_text.text() == t("mainwindow.button.edit_text")
+        assert win._btn_edit_text.toolTip() == t("mainwindow.tooltip.edit_text")
         assert win._btn_tts.toolTip() == t("mainwindow.tooltip.tts")
         assert win._btn_settings.toolTip() == t("mainwindow.tooltip.settings")
         assert win._status_label.text() == t("mainwindow.status.ready")

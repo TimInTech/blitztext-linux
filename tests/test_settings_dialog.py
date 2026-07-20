@@ -170,9 +170,11 @@ def test_save_settings_persists_writing_preset(tmp_path):
 
     SettingsDialog.save_settings(fake)
 
-    assert fake.config.writing_preset == "email_formal"
+    assert fake.config.writing_preset == "change_tone"
+    assert fake.config.text_improver_tone == "formal"
     reloaded = BlitztextConfig(config_dir=config_dir)
-    assert reloaded.writing_preset == "email_formal"
+    assert reloaded.writing_preset == "change_tone"
+    assert reloaded.text_improver_tone == "formal"
 
 
 def test_save_settings_persists_llm_provider_fields(tmp_path):
@@ -372,3 +374,42 @@ def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
     assert "CUSTOM_OPENAI_KEY" in fake.lbl_api_key_status.text
     assert "gesetzt" in fake.lbl_api_key_status.text
     assert secret_value not in fake.lbl_api_key_status.text
+
+# --- Goal 04: Settings nutzt dieselbe Auswahl und bestehende Prompt-Ablage --
+
+
+def test_goal_settings_lists_only_core_actions_and_keeps_single_custom_prompt_field(tmp_path):
+    from PyQt6.QtWidgets import QApplication
+    from app.writing_presets import WRITING_PRESET_KEYS
+
+    qapp = QApplication.instance() or QApplication([])
+    config = BlitztextConfig(config_dir=tmp_path / ".config" / "blitztext-linux")
+    config.writing_preset = "custom"
+    config.compose_custom_preset_text = "Bestehender Nutzer-Prompt."
+    dialog = SettingsDialog(config)
+    try:
+        values = tuple(
+            dialog.combo_writing_preset.itemData(index)
+            for index in range(dialog.combo_writing_preset.count())
+            if isinstance(dialog.combo_writing_preset.itemData(index), str)
+        )
+        assert values == WRITING_PRESET_KEYS == (
+            "standard", "shorten", "expand", "change_tone", "custom"
+        )
+        assert dialog.combo_writing_preset.currentData() == "custom"
+        assert dialog.edit_compose_custom_preset.toPlainText() == "Bestehender Nutzer-Prompt."
+    finally:
+        dialog.close()
+        qapp.processEvents()
+
+
+def test_goal_settings_save_preserves_custom_selection_and_prompt(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "custom")
+    fake.edit_compose_custom_preset = _Edit("  Nutzer-Prompt exakt.  \n")
+
+    SettingsDialog.save_settings(fake)
+    reloaded = BlitztextConfig(config_dir=config_dir)
+
+    assert reloaded.writing_preset == "custom"
+    assert reloaded.compose_custom_preset_text == "  Nutzer-Prompt exakt.  \n"

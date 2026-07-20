@@ -14,7 +14,12 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.writing_presets import DEFAULT_PRESET_KEY, WRITING_PRESET_KEYS
+from app.writing_presets import (
+    DEFAULT_PRESET_KEY,
+    LEGACY_PRESET_MIGRATIONS,
+    WRITING_PRESET_KEYS,
+    migrate_preset_selection,
+)
 
 from app.i18n import LANGUAGES as I18N_LANGUAGES, DEFAULT_LANGUAGE as I18N_DEFAULT_LANGUAGE
 
@@ -391,9 +396,17 @@ class BlitztextConfig:
 
     @writing_preset.setter
     def writing_preset(self, value: str) -> None:
-        if value not in VALID_WRITING_PRESETS:
-            raise ValueError(f"Ungueltiges Schreib-Preset: {value!r}. Gueltig: {sorted(VALID_WRITING_PRESETS)}")
-        self._data["workflows"]["writing_preset"] = value
+        if not isinstance(value, str) or (
+            value not in VALID_WRITING_PRESETS and value not in LEGACY_PRESET_MIGRATIONS
+        ):
+            raise ValueError(
+                f"Ungueltiges Schreib-Preset: {value!r}. "
+                f"Gueltig: {sorted(VALID_WRITING_PRESETS)}"
+            )
+        canonical, migrated_tone = migrate_preset_selection(value)
+        self._data["workflows"]["writing_preset"] = canonical
+        if migrated_tone is not None:
+            self._data["workflows"]["text_improver_tone"] = migrated_tone
 
     @property
     def custom_terms(self) -> list[str]:
@@ -497,8 +510,10 @@ class BlitztextConfig:
         if wf.get("emoji_density") not in VALID_EMOJI_DENSITIES:
             wf["emoji_density"] = "mittel"
         preset_value = wf.get("writing_preset")
-        if not isinstance(preset_value, str) or preset_value not in VALID_WRITING_PRESETS:
-            wf["writing_preset"] = DEFAULT_PRESET_KEY
+        canonical_preset, migrated_tone = migrate_preset_selection(preset_value)
+        wf["writing_preset"] = canonical_preset
+        if migrated_tone is not None:
+            wf["text_improver_tone"] = migrated_tone
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
 
 
