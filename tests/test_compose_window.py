@@ -169,6 +169,49 @@ def test_window_opens_without_llm_call(compose_window):
 
 
 @gui_only
+def test_compact_window_keeps_controls_separate_and_readable(qapp):
+    config = Config()
+    config.compose_signature_text = "Tim"
+    window = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
+    window.show()
+    window.resize(window.minimumWidth(), window.minimumHeight())
+    qapp.processEvents()
+
+    try:
+        control_groups = [
+            [
+                ("workflow label", window.lblWorkflow),
+                ("workflow selector", window.cmbWorkflow),
+                ("preset label", window.lblPreset),
+                ("preset selector", window.cmbPreset),
+                ("tone label", window.lblTone),
+                ("tone selector", window.cmbTone),
+                ("voice routing", window.chkVoiceRouting),
+            ],
+            [
+                ("copy", window.btnCopy),
+                ("paste", window.btnPaste),
+                ("signature", window.btnSignature),
+                ("close", window.btnClose),
+            ],
+        ]
+        for controls in control_groups:
+            visible_controls = [
+                (name, control) for name, control in controls if control.isVisible()
+            ]
+            for index, (name, control) in enumerate(visible_controls):
+                assert control.width() >= control.sizeHint().width(), name
+                for other_name, other in visible_controls[index + 1 :]:
+                    assert not control.geometry().intersects(other.geometry()), (
+                        name,
+                        other_name,
+                    )
+    finally:
+        window.close()
+        qapp.processEvents()
+
+
+@gui_only
 def test_input_reaches_direct_llm_path_and_sets_output(compose_window, qapp):
     window, llm, _paste = compose_window
 

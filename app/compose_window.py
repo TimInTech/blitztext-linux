@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -208,38 +209,39 @@ class ComposeWindow(QDialog):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(10)
 
-        header_row = QHBoxLayout()
-        header_row.setSpacing(8)
+        header_grid = QGridLayout()
+        header_grid.setSpacing(8)
 
         self.lblWorkflow = QLabel()
-        header_row.addWidget(self.lblWorkflow)
+        header_grid.addWidget(self.lblWorkflow, 0, 0)
 
         self.cmbWorkflow = QComboBox()
         self.cmbWorkflow.setMinimumWidth(160)
-        header_row.addWidget(self.cmbWorkflow, 1)
+        header_grid.addWidget(self.cmbWorkflow, 0, 1)
 
         self.lblPreset = QLabel()
-        header_row.addWidget(self.lblPreset)
+        header_grid.addWidget(self.lblPreset, 0, 2)
 
         self.cmbPreset = QComboBox()
         self.cmbPreset.setMinimumWidth(180)
-        header_row.addWidget(self.cmbPreset, 1)
+        header_grid.addWidget(self.cmbPreset, 0, 3)
 
         self.lblTone = QLabel()
-        header_row.addWidget(self.lblTone)
+        header_grid.addWidget(self.lblTone, 1, 0)
 
         self.cmbTone = QComboBox()
         self.cmbTone.setMinimumWidth(130)
-        header_row.addWidget(self.cmbTone, 1)
+        header_grid.addWidget(self.cmbTone, 1, 1)
 
         self.chkVoiceRouting = QCheckBox()
         self.chkVoiceRouting.setEnabled(False)
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
         # Future hook only; phase I-1 must not alter the existing transcription path.
-        header_row.addWidget(self.chkVoiceRouting)
+        header_grid.addWidget(self.chkVoiceRouting, 1, 2, 1, 2)
 
-        header_row.addStretch(1)
-        layout.addLayout(header_row)
+        header_grid.setColumnStretch(1, 1)
+        header_grid.setColumnStretch(3, 1)
+        layout.addLayout(header_grid)
 
         self.splitMain = QSplitter(Qt.Orientation.Vertical)
         self.splitMain.setChildrenCollapsible(False)
