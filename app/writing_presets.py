@@ -20,10 +20,11 @@ _COMMON_RULES = (
     "keine Adressaten, Rollen, Meetings, Teilnehmer oder Ziele, die nicht "
     "ausdrücklich genannt sind. Interpretiere Begriffe wie 'Session', "
     "'Prompt', 'Branch', 'PR', 'Merge' oder 'Handover' im Software- und "
-    "Arbeitskontext, wenn die Eingabe danach klingt. Korrigiere Grammatik und "
-    "Zeichensetzung. Gib NUR den fertigen Text zurück, ohne Vorbemerkung oder "
-    "Erklärung."
+    "Arbeitskontext, wenn die Eingabe danach klingt. Gib NUR den fertigen Text "
+    "zurück, ohne Vorbemerkung oder Erklärung."
 )
+
+_CORRECTION_RULES = " Korrigiere Grammatik und Zeichensetzung."
 
 _TONE_DESCRIPTIONS = {
     "formal": "professionell und höflich",
@@ -48,7 +49,7 @@ _PRESETS: tuple[WritingPreset, ...] = (
         "Kürzen",
         "Du erhältst einen Text. Kürze den Text deutlich: Entferne Füllwörter, "
         "Wiederholungen und unnötige Umwege, behalte aber alle wesentlichen "
-        "Informationen." + _COMMON_RULES,
+        "Informationen." + _CORRECTION_RULES + _COMMON_RULES,
     ),
     WritingPreset(
         "expand",
@@ -56,7 +57,7 @@ _PRESETS: tuple[WritingPreset, ...] = (
         "Du erhältst einen Text. Formuliere fragmentarische Sätze, Notizen und "
         "Stichpunkte zu einem klaren, zusammenhängenden Fließtext aus. Ergänze "
         "nur sprachlich notwendige Verbindungen, aber keine neuen Fakten, "
-        "Beispiele oder Annahmen." + _COMMON_RULES,
+        "Beispiele oder Annahmen." + _CORRECTION_RULES + _COMMON_RULES,
     ),
     WritingPreset(
         "change_tone",

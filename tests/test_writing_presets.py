@@ -120,3 +120,11 @@ class TestCurrentSelection:
 
     def test_module_exports_match_public_catalog(self):
         assert preset_catalog.WRITING_PRESET_KEYS == EXPECTED_KEYS
+
+
+def test_change_tone_prompt_changes_only_tone():
+    prompt = resolve_preset_prompt("change_tone", "formal")
+
+    assert "Ändere gezielt nur den Tonfall" in prompt
+    assert "Grammatik" not in prompt
+    assert "Zeichensetzung" not in prompt
