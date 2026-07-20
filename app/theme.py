@@ -149,7 +149,13 @@ QTabBar::tab:hover:!selected {{
 
 QCheckBox {{
     background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px;
     spacing: 8px;
+}}
+QCheckBox:focus {{
+    border-color: {BLITZ_500};
 }}
 
 QToolTip {{

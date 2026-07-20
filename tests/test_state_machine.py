@@ -129,6 +129,85 @@ class TestPasteTimeouts:
         assert "ydotool" not in cmd_names
 
 
+class TestComposeVoiceRoutingWorker:
+    def test_unrouted_transcription_keeps_standard_autopaste(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        paste_service = MagicMock()
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=True,
+            paste_service=paste_service,
+        )
+
+        with patch("app.blitztext_linux.transcribe", return_value="Standardtext"):
+            worker.run()
+
+        paste_service.paste.assert_called_once_with("Standardtext")
+        paste_service.clipboard_only.assert_not_called()
+
+    def test_routed_transcription_skips_clipboard_and_autopaste(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        paste_service = MagicMock()
+        results = []
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=True,
+            paste_service=paste_service,
+            route_to_compose=True,
+        )
+        worker.signals.result.connect(results.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="Gesprochener Text"):
+            worker.run()
+
+        assert results == ["Gesprochener Text"]
+        paste_service.paste.assert_not_called()
+        paste_service.clipboard_only.assert_not_called()
+
+    def test_routed_recording_uses_raw_transcript_instead_of_rewrite(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        llm_service = MagicMock()
+        llm_service.rewrite.return_value = "Umgeschriebener Text"
+        results = []
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TEXT_IMPROVER,
+            llm_service=llm_service,
+            autopaste=True,
+            paste_service=MagicMock(),
+            route_to_compose=True,
+        )
+        worker.signals.result.connect(results.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="Rohes Transkript"):
+            worker.run()
+
+        assert results == ["Rohes Transkript"]
+        llm_service.rewrite.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Hilfen: minimales Fake-evdev fuer den HotkeyWorker-Event-Loop
 # ---------------------------------------------------------------------------
@@ -290,6 +369,55 @@ class TestStateMachine:
             gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
             start_mock.assert_called_once()
         assert gui_app.state == "RECORDING"
+
+    def test_routed_worker_result_reaches_compose_draft(self, gui_app):
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+
+        gui_app._on_worker_result("Gesprochener Text", route_to_compose=True)
+
+        assert window.txtInput.toPlainText() == "Gesprochener Text"
+        assert gui_app.state == "IDLE"
+
+    def test_new_recording_uses_current_compose_routing_state(self, gui_app):
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+
+        with patch.object(gui_app.audio_recorder, "start"):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+
+        assert gui_app._recording_routes_to_compose is True
+
+        window.close()
+        with patch.object(gui_app.audio_recorder, "discard"):
+            gui_app.gui_discard()
+        with patch.object(gui_app.audio_recorder, "start"):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+
+        assert gui_app._recording_routes_to_compose is False
+
+    def test_stop_wires_routed_worker_result_into_compose(self, gui_app):
+        from pathlib import Path
+
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+        pool = MagicMock()
+
+        with patch.object(gui_app.audio_recorder, "start"), \
+             patch.object(gui_app.audio_recorder, "stop", return_value=Path("/tmp/voice.wav")), \
+             patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+            gui_app._stop_recording_and_process()
+
+        worker = pool.start.call_args.args[0]
+        assert worker.route_to_compose is True
+
+        worker.signals.result.emit("Gerouteter Text")
+
+        assert window.txtInput.toPlainText() == "Gerouteter Text"
 
 
 @gui_only

@@ -554,6 +554,7 @@ class _TranscribeWorker(QRunnable):
         autopaste: bool,
         paste_service: PasteService,
         custom_terms: Optional[list[str]] = None,
+        route_to_compose: bool = False,
     ) -> None:
         super().__init__()
         self.signals = _WorkerSignals()
@@ -566,6 +567,7 @@ class _TranscribeWorker(QRunnable):
         self.autopaste = autopaste
         self.paste_service = paste_service
         self.custom_terms = list(custom_terms or [])
+        self.route_to_compose = route_to_compose
 
     def _emit(self, signal_name: str, *args) -> None:
         try:
@@ -587,19 +589,22 @@ class _TranscribeWorker(QRunnable):
             if not transcript or not transcript.strip():
                 raise TranscribeError("Keine Sprache im Audio erkannt.")
 
-            # LLM rewrite if it is an LLM workflow. rewrite() meldet einen
-            # fehlenden API-Key selbst als LLMServiceError mit Env-Var-Hinweis.
-            if self.workflow in LLM_WORKFLOWS:
+            # Compose routing always receives the raw recognized text; the
+            # compose window owns any later rewrite workflow selected there.
+            # rewrite() reports a missing API key as LLMServiceError itself.
+            if self.workflow in LLM_WORKFLOWS and not self.route_to_compose:
                 self._emit("status_changed", "rewriting")
                 result_text = self.llm_service.rewrite(self.workflow, transcript)
             else:
                 result_text = transcript
 
-            # Paste
-            if self.autopaste:
-                self.paste_service.paste(result_text)
-            else:
-                self.paste_service.clipboard_only(result_text)
+            # Compose routing is delivered by the GUI coordinator. Keeping it
+            # out of PasteService preserves the focused application's contents.
+            if not self.route_to_compose:
+                if self.autopaste:
+                    self.paste_service.paste(result_text)
+                else:
+                    self.paste_service.clipboard_only(result_text)
 
             self._emit("result", result_text)
         except Exception as e:
@@ -633,6 +638,7 @@ class BlitztextApp(QObject):
         self.current_workflow: Optional[WorkflowType] = None
         self._tray_error_message: Optional[str] = None
         self._active_workers: list[_TranscribeWorker] = []
+        self._recording_routes_to_compose = False
 
         # Diktat-/Verlauf-/TTS-Zustand
         self._dictation_mode = False
@@ -962,13 +968,16 @@ class BlitztextApp(QObject):
             logger.info("Ignored hotkey trigger %s while busy", workflow)
 
     def _start_recording(self, workflow: WorkflowType) -> None:
+        self._recording_routes_to_compose = False
         try:
             self.audio_recorder.start(device=self.config.audio_device)
+            self._recording_routes_to_compose = self._compose_voice_routing_enabled()
             self.current_workflow = workflow
             self._set_state("RECORDING", f"workflow {workflow.value} started")
         except AudioRecorderError as e:
             logger.error("Failed to start recording: %s", e)
             self.show_tray_error(t("error.recording.title"), t("error.recording.start_failed").format(error=e))
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "recording start failed")
 
@@ -988,6 +997,7 @@ class BlitztextApp(QObject):
         """Laufende Aufnahme verwerfen, ohne zu transkribieren."""
         if self.state == "RECORDING":
             self.audio_recorder.discard()
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "discarded via gui")
 
@@ -1002,6 +1012,8 @@ class BlitztextApp(QObject):
 
     def _stop_recording_and_process(self) -> None:
         try:
+            route_to_compose = self._recording_routes_to_compose
+            self._recording_routes_to_compose = False
             wav_path = self.audio_recorder.stop()
             if not wav_path:
                 logger.warning("No audio was recorded")
@@ -1027,10 +1039,15 @@ class BlitztextApp(QObject):
                 autopaste=self.config.autopaste,
                 paste_service=self.paste_service,
                 custom_terms=self.config.custom_terms,
+                route_to_compose=route_to_compose,
             )
 
             worker.signals.status_changed.connect(self._on_worker_status_changed)
-            worker.signals.result.connect(self._on_worker_result)
+            worker.signals.result.connect(
+                lambda result_text, routed=route_to_compose: self._on_worker_result(
+                    result_text, route_to_compose=routed
+                )
+            )
             worker.signals.error.connect(self._on_worker_error)
             worker.signals.finished.connect(self._on_worker_finished)
 
@@ -1040,6 +1057,7 @@ class BlitztextApp(QObject):
         except AudioRecorderError as e:
             logger.error("Failed to stop recording: %s", e)
             self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(error=e))
+            self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "recording stop failed")
 
@@ -1052,9 +1070,10 @@ class BlitztextApp(QObject):
         else:
             self.update_tray_state()
 
-    @pyqtSlot(str)
-    def _on_worker_result(self, result_text: str) -> None:
+    def _on_worker_result(self, result_text: str, route_to_compose: bool = False) -> None:
         logger.info("Transcription/Rewrite success. Result length: %d chars", len(result_text))
+        if route_to_compose:
+            self._ensure_compose_window().set_input_text(result_text)
         self._add_to_history(result_text, is_dictation=self._dictation_mode)
         if self._dictation_mode:
             notify_service.notify(
@@ -1159,6 +1178,14 @@ class BlitztextApp(QObject):
         window.show()
         window.raise_()
         window.activateWindow()
+
+    def _compose_voice_routing_enabled(self) -> bool:
+        window = self._compose_window
+        return bool(
+            window is not None
+            and window.isVisible()
+            and window.voice_routing_enabled()
+        )
 
     def _on_tts_closed(self, _result: int) -> None:
         self._tts_window = None

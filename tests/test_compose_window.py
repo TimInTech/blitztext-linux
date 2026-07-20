@@ -328,15 +328,59 @@ def test_no_autopaste_after_llm_success(compose_window, qapp):
 
 
 @gui_only
-def test_voice_routing_checkbox_visible_and_disabled(compose_window, qapp):
-    """Voice-Routing-Checkbox ist vorhanden, sichtbar und deaktiviert (Future-Hook)."""
-    window, _llm, _paste = compose_window
+def test_voice_routing_checkbox_mouse_and_keyboard_toggle(compose_window, qapp):
+    """Kästchen und Beschriftung sind klickbar; Leertaste schaltet mit Fokus."""
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
 
+    window, _llm, _paste = compose_window
     chk = window.chkVoiceRouting
-    assert chk is not None
+    assert isinstance(chk, QCheckBox)
+
     assert chk.isVisible() is True
-    assert chk.isEnabled() is False
+    assert chk.isEnabled() is True
     assert chk.text() == t("compose.voice_routing.label")
+    assert chk.focusPolicy() == Qt.FocusPolicy.StrongFocus
+
+    option = QStyleOptionButton()
+    chk.initStyleOption(option)
+    indicator = chk.style().subElementRect(
+        QStyle.SubElement.SE_CheckBoxIndicator, option, chk
+    )
+    QTest.mouseClick(
+        chk,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        indicator.center(),
+    )
+    assert chk.isChecked() is True
+
+    label_pos = QPoint(indicator.right() + 12, chk.rect().center().y())
+    QTest.mouseClick(
+        chk,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        label_pos,
+    )
+    assert chk.isChecked() is False
+
+    chk.setFocus(Qt.FocusReason.TabFocusReason)
+    qapp.processEvents()
+    assert chk.hasFocus() is True
+    QTest.keyClick(chk, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    assert chk.isChecked() is True
+
+
+@gui_only
+def test_closing_compose_window_clears_voice_routing(compose_window, qapp):
+    window, _llm, _paste = compose_window
+    window.chkVoiceRouting.setChecked(True)
+
+    window.close()
+    qapp.processEvents()
+
+    assert window.chkVoiceRouting.isChecked() is False
 
 
 # ---------------------------------------------------------------------------

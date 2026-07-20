@@ -234,9 +234,8 @@ class ComposeWindow(QDialog):
         header_grid.addWidget(self.cmbTone, 1, 1)
 
         self.chkVoiceRouting = QCheckBox()
-        self.chkVoiceRouting.setEnabled(False)
+        self.chkVoiceRouting.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
-        # Future hook only; phase I-1 must not alter the existing transcription path.
         header_grid.addWidget(self.chkVoiceRouting, 1, 2, 1, 2)
 
         header_grid.setColumnStretch(1, 1)
@@ -608,6 +607,10 @@ class ComposeWindow(QDialog):
         self._hide_status()
         self._sync_state()
 
+    def voice_routing_enabled(self) -> bool:
+        """Return whether new recordings should target this draft window."""
+        return self.chkVoiceRouting.isChecked()
+
     def retranslate_ui(self) -> None:
         """Refresh visible text to the active UI language."""
         current_workflow = self._selected_workflow()
@@ -802,6 +805,8 @@ class ComposeWindow(QDialog):
         self.close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # A hidden modeless window must never remain an implicit routing target.
+        self.chkVoiceRouting.setChecked(False)
         if self._busy or (self._worker_thread is not None and self._worker_thread.isRunning()):
             self._detach_worker_thread()
         super().closeEvent(event)
