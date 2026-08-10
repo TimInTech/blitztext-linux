@@ -165,6 +165,16 @@ class HistoryEntryWidget(QFrame):
             "border: 1px solid palette(mid); margin: 1px 0; }"
         )
 
+        # Diese Timer muessen dem Widget gehoeren. Ein statischer
+        # QTimer.singleShot mit Lambda kann nach deleteLater() noch feuern und
+        # dann auf das bereits zerstoerte C++-Objekt zugreifen.
+        self._copy_reset_timer = QTimer(self)
+        self._copy_reset_timer.setSingleShot(True)
+        self._copy_reset_timer.timeout.connect(self._reset_copy_button)
+        self._highlight_reset_timer = QTimer(self)
+        self._highlight_reset_timer.setSingleShot(True)
+        self._highlight_reset_timer.timeout.connect(self._reset_highlight)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(3)
@@ -200,7 +210,7 @@ class HistoryEntryWidget(QFrame):
         _clipboard_write(self.entry.text)
         self._btn_copy.setText("✓")
         self._btn_copy.setStyleSheet("color: #4caf50; font-weight: bold;")
-        QTimer.singleShot(1500, self._reset_copy_button)
+        self._copy_reset_timer.start(1500)
 
     def _reset_copy_button(self) -> None:
         self._btn_copy.setText("\U0001f4cb")
@@ -211,10 +221,13 @@ class HistoryEntryWidget(QFrame):
             "HistoryEntryWidget { background: #fff3cd; border-radius: 4px; "
             "border: 1px solid #ffc107; margin: 1px 0; }"
         )
-        QTimer.singleShot(800, lambda: self.setStyleSheet(
+        self._highlight_reset_timer.start(800)
+
+    def _reset_highlight(self) -> None:
+        self.setStyleSheet(
             "HistoryEntryWidget { background: palette(base); border-radius: 4px; "
             "border: 1px solid palette(mid); margin: 1px 0; }"
-        ))
+        )
 
 
 class HistoryPanel(QWidget):
@@ -236,6 +249,17 @@ class HistoryPanel(QWidget):
         self._entry_widgets: List[HistoryEntryWidget] = []
         self._clear_armed = False
         self._setup_ui()
+        self._scroll_reset_timer = QTimer(self)
+        self._scroll_reset_timer.setSingleShot(True)
+        self._scroll_reset_timer.timeout.connect(
+            lambda: self._scroll.verticalScrollBar().setValue(0)
+        )
+        self._clear_disarm_timer = QTimer(self)
+        self._clear_disarm_timer.setSingleShot(True)
+        self._clear_disarm_timer.timeout.connect(self._disarm_clear)
+        self._merge_reset_timer = QTimer(self)
+        self._merge_reset_timer.setSingleShot(True)
+        self._merge_reset_timer.timeout.connect(self._reset_merge_button)
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -293,7 +317,7 @@ class HistoryPanel(QWidget):
         self._list_layout.insertWidget(0, widget)
 
         widget.highlight()
-        QTimer.singleShot(50, lambda: self._scroll.verticalScrollBar().setValue(0))
+        self._scroll_reset_timer.start(50)
 
         self._update_header()
         self._update_merge_button()
@@ -320,7 +344,7 @@ class HistoryPanel(QWidget):
             self._clear_armed = True
             self._btn_clear.setText(t("history.button.confirm_clear"))
             self._btn_clear.setStyleSheet("color: #f44336; font-weight: bold;")
-            QTimer.singleShot(3000, self._disarm_clear)
+            self._clear_disarm_timer.start(3000)
         else:
             self.clear_all()
 
@@ -353,7 +377,7 @@ class HistoryPanel(QWidget):
 
         self._btn_merge.setText(t("history.status.saved") if path else t("history.status.copied"))
         self._btn_merge.setStyleSheet("color: #4caf50; font-weight: bold;")
-        QTimer.singleShot(2500, self._reset_merge_button)
+        self._merge_reset_timer.start(2500)
 
     def _reset_merge_button(self) -> None:
         self._btn_merge.setText(t("history.button.merge"))

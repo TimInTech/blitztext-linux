@@ -534,6 +534,36 @@ class TestMainWindowControl:
         assert button_rect.bottom() < history_rect.top()
         assert text_width < button_rect.width()
 
+    def test_history_reset_timers_are_owned_by_their_widgets(self, gui_app):
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        from PyQt6.QtTest import QTest
+        from app.history_panel import HistoryEntry, HistoryEntryWidget, HistoryPanel
+
+        entry_widget = HistoryEntryWidget(HistoryEntry("Testtext"))
+        entry_widget.highlight()
+
+        assert entry_widget._highlight_reset_timer.parent() is entry_widget
+        assert entry_widget._highlight_reset_timer.isSingleShot() is True
+        assert entry_widget._highlight_reset_timer.isActive() is True
+        assert entry_widget._copy_reset_timer.parent() is entry_widget
+
+        panel = HistoryPanel()
+        assert panel._scroll_reset_timer.parent() is panel
+        assert panel._clear_disarm_timer.parent() is panel
+        assert panel._merge_reset_timer.parent() is panel
+
+        # Kurze echte Timeouts wuerden bei kontextlosen singleShot-Lambdas nach
+        # der C++-Zerstoerung einen Prozess-Abort ausloesen.
+        entry_widget._copy_reset_timer.start(1)
+        entry_widget._highlight_reset_timer.start(1)
+        panel._scroll_reset_timer.start(1)
+        panel._clear_disarm_timer.start(1)
+        panel._merge_reset_timer.start(1)
+        entry_widget.deleteLater()
+        panel.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QTest.qWait(20)
+
     def test_dictation_mode_syncs_window_and_tray(self, gui_app):
         win = gui_app._ensure_main_window()
         gui_app.set_dictation_mode(True)

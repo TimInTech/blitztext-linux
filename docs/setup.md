@@ -9,7 +9,8 @@ bash scripts/install.sh
 
 ## After installation
 
-1. Restart or log out and back in so the `input` group is active.
+1. If you selected global hotkeys, restart or log out and back in so the
+   `input` group is active. Window/tray-only mode does not require this.
 2. Run the verification script:
 
    ```bash
@@ -22,7 +23,7 @@ bash scripts/install.sh
    ./run.sh
    ```
 
-4. Enable autostart if you want it on every login:
+4. Start the autostart service that `install.sh` already enabled:
 
    ```bash
    systemctl --user start blitztext-linux
@@ -39,16 +40,18 @@ systemctl --user disable blitztext-linux
 
 ## Compatibility matrix (diagnostic, not a support promise)
 
-BlitztextLinux is developed and tested on **Kubuntu (KDE Plasma, Wayland)**.
-The systems below share the Ubuntu/Debian package base, so `install.sh` runs on
-them, but only Kubuntu is systematically tested. This table documents expected
-behavior and known risks — it is **not** an official support statement.
+BlitztextLinux is developed and tested on **Kubuntu (KDE Plasma, Wayland)** and
+has also completed a native clean-install and live functional pass on **Ubuntu
+26.04 (GNOME, Wayland)**. The other systems below share the Ubuntu/Debian
+package base, so `install.sh` runs on them, but they are not systematically
+tested. This table documents observed or expected behavior and known risks — it
+is **not** an official support statement.
 
 | Target system | Expected session | Main risks | Status |
 | :--- | :--- | :--- | :--- |
 | Kubuntu 26.04, Plasma | Wayland | ydotool ≥ 1.0 via apt available; lowest risk | tested |
 | Ubuntu 24.04, GNOME | Wayland | apt ydotool 0.1.x is client-only → no auto-paste (clipboard mode works); GNOME tray needs the AppIndicator extension | untested |
-| Ubuntu 26.04, GNOME | Wayland | GNOME tray needs the AppIndicator extension; Python 3.13/3.14: torch/openai-whisper wheels may lag behind new Python releases | untested |
+| Ubuntu 26.04, GNOME | Wayland | GNOME tray needs the AppIndicator extension; ydotool 1.0.4 is available via apt | tested 2026-08-10: Python 3.14.4, verify 17/0/0 before first config and 18/0/0 afterwards; window, tray, recording, local Whisper, hotkey, clipboard, auto-paste, autostart |
 | Linux Mint 22.x, Cinnamon | X11 (default) | `xclip` is the required clipboard backend, not `wl-copy`; apt ydotool 0.1.x → no auto-paste | untested |
 | Lubuntu 24.04, LXQt | X11 (default) | same as Mint: `xclip` required; Qt tray via StatusNotifier usually fine | untested |
 | Lubuntu 26.04, LXQt | X11 or Wayland | session type decides the clipboard backend — run `scripts/verify.sh` to see which one applies | untested |
@@ -56,7 +59,7 @@ behavior and known risks — it is **not** an official support statement.
 Xfce and MATE are expected to behave like the X11 rows above, but are not
 tracked here.
 
-What works everywhere, regardless of session type:
+Base functions when the listed session prerequisites are present:
 
 - Transcription and clipboard copy (no `ydotool`, no `input` group needed).
 - Window/tray operation without global hotkeys (`install.sh` offers this mode;
@@ -71,8 +74,9 @@ What is environment-dependent:
 
 ## Desktop session notes
 
-BlitztextLinux is developed for KDE Plasma on Wayland, with X11 fallbacks where the
-underlying tools support them.
+BlitztextLinux is developed for KDE Plasma on Wayland and additionally verified
+on Ubuntu 26.04 GNOME/Wayland, with X11 fallbacks where the underlying tools
+support them.
 
 - GUI startup needs a real desktop session: either a usable `WAYLAND_DISPLAY` socket
   or `DISPLAY` must be available. In headless shells, `scripts/verify.sh` can report
@@ -80,6 +84,9 @@ underlying tools support them.
 - Qt prefers Wayland when `WAYLAND_DISPLAY` points to an existing socket. If that
   variable is stale but `DISPLAY` is set, the launcher falls back to X11.
 - Clipboard support uses `wl-copy`/`wl-paste` on Wayland and `xclip` on X11.
+- GNOME needs an AppIndicator/StatusNotifier extension for the tray icon. Ubuntu
+  26.04's default GNOME session provided a working StatusNotifier host in the
+  verified native-install test.
 - Auto-paste uses `ydotool`; terminal windows may need `Ctrl+Shift+V` instead of
   `Ctrl+V`, so the app detects known terminal window classes when possible.
 - Global hotkeys still use `evdev`/the `input` group. A future desktop-native XDG
@@ -116,6 +123,7 @@ sudo usermod -aG input $USER
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install --index-url https://download.pytorch.org/whl/cpu torch
 pip install PyQt6 evdev openai pytest openai-whisper faster-whisper
 ```
 
@@ -124,7 +132,7 @@ pip install PyQt6 evdev openai pytest openai-whisper faster-whisper
 If you want to install `openai-whisper` outside the venv:
 
 ```bash
-pipx install --python "$(command -v python3.11)" openai-whisper
+pipx install --python "$(command -v python3)" openai-whisper
 pipx inject openai-whisper faster-whisper   # optional
 ```
 
