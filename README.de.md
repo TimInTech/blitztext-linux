@@ -2,7 +2,7 @@
   <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
 
   <h1>Blitztext Linux</h1>
-  <p><strong>Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland</strong></p>
+  <p><strong>Dein lokaler KI-Sprachassistent für Linux-Desktops unter Wayland</strong></p>
 
   <p>
     <a href="https://timintech.github.io/blitztextweb/"><img src="https://img.shields.io/badge/🌐_Webseite-blitztextweb-2ea44f?style=for-the-badge" alt="Webseite"></a>
@@ -11,7 +11,7 @@
   <p>
     <a href="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml"><img src="https://github.com/TimInTech/blitztext-linux/actions/workflows/blitztext-linux-ci.yml/badge.svg" alt="Blitztext Linux CI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-yellow.svg" alt="Lizenz: MIT"></a>
-    <img src="https://img.shields.io/badge/Plattform-Ubuntu%2FKubuntu%20%2B%20KDE%20Plasma-blue" alt="Plattform">
+    <img src="https://img.shields.io/badge/Plattform-Ubuntu%2FKubuntu%20%2B%20Wayland-blue" alt="Plattform">
   </p>
   <p><a href="README.md">🇬🇧 English</a> | <strong>🇩🇪 Deutsch</strong></p>
   <p><i>Sprache per Hotkey aufnehmen, lokal oder online transkribieren, optional per LLM umschreiben und direkt in die aktive Anwendung einfügen.</i></p>
@@ -25,7 +25,7 @@
 </div>
 
 > [!IMPORTANT]
-> **Eigenständiger Linux-Port:** Dieses Repository enthält ausschließlich den Linux-Port von Blitztext – eine eigenständige Python 3/PyQt6-Implementierung optimiert für **Kubuntu/Ubuntu unter KDE Plasma mit Wayland**. Für die originale macOS-Version besuche bitte das [offizielle Haupt-Repository](https://github.com/cmagnussen/blitztext-app).
+> **Eigenständiger Linux-Port:** Dieses Repository enthält ausschließlich den Linux-Port von Blitztext – eine eigenständige Python 3/PyQt6-Implementierung, die unter **KDE Plasma mit Wayland** entwickelt und zusätzlich nativ unter **Ubuntu 26.04 GNOME mit Wayland** verifiziert wurde. Für die originale macOS-Version besuche bitte das [offizielle Haupt-Repository](https://github.com/cmagnussen/blitztext-app).
 
 ---
 
@@ -70,6 +70,16 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
   <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="KI-Workflow-Einstellungen" width="480">
   <br><br>
 </div>
+
+> [!IMPORTANT]
+> **Das Feld „API-Key-Umgebung“ ist kein Eingabefeld für den geheimen
+> API-Key.** Trage dort nur den Namen der Umgebungsvariable ein, für OpenAI
+> beispielsweise `OPENAI_API_KEY` und für OpenRouter `OPENROUTER_API_KEY`.
+> Der tatsächliche Schlüssel wird beim Speichern der Einstellungen weder in
+> `config.json` noch automatisch in eine andere Datei geschrieben. Lege ihn
+> separat in `~/.config/blitztext-linux/secrets.env` ab; `./run.sh` und der
+> systemd-User-Service laden diese Datei beim nächsten Start. Eine vollständige
+> Anleitung mit Dateiformat und Berechtigungen steht unter [Secrets](#secrets).
 
 **LLM-Anbieter.** Blitztext unterstützt drei Anbieter-Modi, wählbar unter **Einstellungen → KI-Workflows → „LLM-Anbieter"**:
 
@@ -238,7 +248,8 @@ Es ist idempotent (mehrfach ausführbar) und erledigt alles vollautomatisch:
 2. Installiert fehlende Systempakete (inkl. `pipx`).
 3. Fragt den Betriebsmodus ab: globale Hotkeys mit `input`-Gruppe oder nur Fenster/Tray ohne globale Hotkeys.
 4. Richtet eine `.venv` Umgebung ein und installiert `openai-whisper`/`faster-whisper`.
-5. Bereitet `ydotool.service` und den systemd-User-Service vor.
+5. Bereitet `ydotool.service` vor, installiert den systemd-User-Service und
+   aktiviert ihn für den Autostart, ohne ihn sofort zu starten.
 
 ### Nach der Installation
 
@@ -251,10 +262,20 @@ Es ist idempotent (mehrfach ausführbar) und erledigt alles vollautomatisch:
    ./run.sh
    ```
    *(Erscheint das Tray-Symbol und reagieren die Hotkeys? Dann lief alles glatt!)*
-3. **Autostart aktivieren:**
+3. **Den bereits aktivierten Autostart-Dienst jetzt starten:**
    ```bash
    systemctl --user start blitztext-linux
    ```
+
+> **Stand Ubuntu 26.04 GNOME / Wayland (verifiziert am 10.08.2026):** Eine
+> saubere Installation mit Python 3.14.4 bestand `scripts/verify.sh` vor der
+> ersten Benutzerkonfiguration mit 17 PASS, 0 FAIL, 0 WARN und danach mit
+> 18 PASS, 0 FAIL, 0 WARN. Hauptfenster, GNOME-AppIndicator-Tray, Audioaufnahme,
+> lokale `openai-whisper`-Transkription, globaler Left-Alt-Hotkey,
+> Wayland-Zwischenablage, `ydotool`-Auto-Paste und der Autostart als
+> systemd-User-Service wurden in der echten Desktop-Sitzung ausgeführt. Diese
+> Verifikation gilt für die native Installation, nicht für das experimentelle
+> Flatpak-Manifest.
 
 <details>
 <summary><b>Autostart wieder deaktivieren</b></summary>
@@ -300,9 +321,11 @@ pip install PyQt6 evdev openai pytest openai-whisper faster-whisper
 ```
 
 **4. Whisper-Engine als Alternative via pipx**
-Falls du `openai-whisper` losgelöst von der venv installieren möchtest (umgeht Versionskonflikte auf neueren Ubuntu-Setups durch Python 3.11):
+Falls du `openai-whisper` losgelöst von der venv installieren möchtest, nutze
+den vorhandenen System-Interpreter. Der verifizierte Ubuntu-26.04-Pfad verwendet
+die Projekt-venv mit Python 3.14.4; pipx ist dort nicht erforderlich:
 ```bash
-pipx install --python "$(command -v python3.11)" openai-whisper
+pipx install --python "$(command -v python3)" openai-whisper
 pipx inject openai-whisper faster-whisper   # optional, für beschleunigte Ausführung
 ```
 
