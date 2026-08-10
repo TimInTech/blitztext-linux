@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.14"]
     env:
       # Qt headless: Offscreen-Plattform, damit GUI-Tests ohne Display laufen.
       QT_QPA_PLATFORM: offscreen
