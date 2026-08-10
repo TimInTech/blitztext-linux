@@ -71,6 +71,15 @@ The AI workflows help with phrasing, tone, and emojis. You'll find the relevant 
   <br><br>
 </div>
 
+> [!IMPORTANT]
+> **“API key environment” is not an input field for the secret API key.** Enter
+> only the environment-variable name there, such as `OPENAI_API_KEY` for OpenAI
+> or `OPENROUTER_API_KEY` for OpenRouter. Saving the settings does not write the
+> actual key to `config.json` or automatically create another file for it.
+> Store the key separately in `~/.config/blitztext-linux/secrets.env`; `./run.sh`
+> and the systemd user service load that file on the next start. See
+> [Secrets](#secrets) for the complete file format and permission instructions.
+
 **LLM providers.** Blitztext supports three provider modes, selectable under **Settings → AI Workflows → "LLM provider"**:
 
 | Provider | When to use |

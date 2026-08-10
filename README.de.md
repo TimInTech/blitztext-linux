@@ -71,6 +71,16 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
   <br><br>
 </div>
 
+> [!IMPORTANT]
+> **Das Feld „API-Key-Umgebung“ ist kein Eingabefeld für den geheimen
+> API-Key.** Trage dort nur den Namen der Umgebungsvariable ein, für OpenAI
+> beispielsweise `OPENAI_API_KEY` und für OpenRouter `OPENROUTER_API_KEY`.
+> Der tatsächliche Schlüssel wird beim Speichern der Einstellungen weder in
+> `config.json` noch automatisch in eine andere Datei geschrieben. Lege ihn
+> separat in `~/.config/blitztext-linux/secrets.env` ab; `./run.sh` und der
+> systemd-User-Service laden diese Datei beim nächsten Start. Eine vollständige
+> Anleitung mit Dateiformat und Berechtigungen steht unter [Secrets](#secrets).
+
 **LLM-Anbieter.** Blitztext unterstützt drei Anbieter-Modi, wählbar unter **Einstellungen → KI-Workflows → „LLM-Anbieter"**:
 
 | Anbieter | Wann verwenden |
