@@ -1114,7 +1114,7 @@ class BlitztextApp(QObject):
         logger.info("No speech detected; returning to idle without persistent error")
         self.current_workflow = None
         self._tray_error_message = None
-        self.show_tray_warning("Blitztext", "Keine Sprache im Audio erkannt.")
+        self.show_tray_warning(t("app.name"), t("notify.no_speech.message"))
         self._set_state("IDLE", "no speech detected")
 
     @pyqtSlot(str)

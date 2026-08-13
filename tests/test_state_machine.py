@@ -226,15 +226,21 @@ class TestTranscribeWorkerNoSpeech:
             paste_service=MagicMock(),
         )
         no_speech = []
+        results = []
         errors = []
         worker.signals.no_speech.connect(lambda: no_speech.append(True))
+        worker.signals.result.connect(results.append)
         worker.signals.error.connect(errors.append)
 
         with patch("app.blitztext_linux.transcribe", return_value="   "):
             worker.run()
 
         assert no_speech == [True]
+        assert results == []
         assert errors == []
+        worker.paste_service.paste.assert_not_called()
+        worker.paste_service.clipboard_only.assert_not_called()
+        assert not wav_path.exists()
 
 
 # ---------------------------------------------------------------------------
