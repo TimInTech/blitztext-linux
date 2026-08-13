@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import types
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -208,6 +209,40 @@ class TestComposeVoiceRoutingWorker:
         llm_service.rewrite.assert_not_called()
 
 
+class TestTranscribeWorkerNoSpeech:
+    def test_empty_transcript_emits_no_speech_not_error(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=False,
+            paste_service=MagicMock(),
+        )
+        no_speech = []
+        results = []
+        errors = []
+        worker.signals.no_speech.connect(lambda: no_speech.append(True))
+        worker.signals.result.connect(results.append)
+        worker.signals.error.connect(errors.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="   "):
+            worker.run()
+
+        assert no_speech == [True]
+        assert results == []
+        assert errors == []
+        worker.paste_service.paste.assert_not_called()
+        worker.paste_service.clipboard_only.assert_not_called()
+        assert not wav_path.exists()
+
+
 # ---------------------------------------------------------------------------
 # Hilfen: minimales Fake-evdev fuer den HotkeyWorker-Event-Loop
 # ---------------------------------------------------------------------------
@@ -260,14 +295,22 @@ class _FakeDevice:
         pass
 
 
-def _run_worker_with_events(events, transcription_key="KEY_LEFTALT"):
-    """Startet HotkeyWorker.run() mit injiziertem Fake-evdev und einem
-    einzigen Event-Batch. Gibt die Liste ausgeloester WorkflowTypes zurueck."""
+def _run_worker_with_events(
+    events,
+    transcription_key="KEY_LEFTALT",
+    hotkey_mode="toggle",
+    monotonic_values=None,
+):
+    """Run one fake evdev batch and capture all emitted worker signals."""
     ec = _make_fake_ecodes()
-    worker = HotkeyWorker(hotkey_mode="toggle", transcription_key=transcription_key)
+    worker = HotkeyWorker(hotkey_mode=hotkey_mode, transcription_key=transcription_key)
 
     triggered = []
+    stopped = []
+    discarded = []
     worker.workflow_triggered.connect(lambda wf: triggered.append(wf))
+    worker.recording_stop.connect(lambda: stopped.append(True))
+    worker.recording_discard.connect(lambda: discarded.append(True))
 
     fake_dev_holder = {}
 
@@ -290,16 +333,54 @@ def _run_worker_with_events(events, transcription_key="KEY_LEFTALT"):
             dev._batch = batch
         return (list(rlist), [], [])
 
+    if monotonic_values is not None:
+        monotonic_iter = iter(monotonic_values)
+        last_monotonic = monotonic_values[-1]
+
+        def fake_monotonic():
+            nonlocal last_monotonic
+            last_monotonic = next(monotonic_iter, last_monotonic)
+            return last_monotonic
+
+        monotonic_patch = patch("app.hotkey_service.time.monotonic", side_effect=fake_monotonic)
+    else:
+        monotonic_patch = nullcontext()
     with patch.dict(sys.modules, {"evdev": fake_evdev}), \
-         patch("select.select", side_effect=fake_select):
+         patch("select.select", side_effect=fake_select), monotonic_patch:
         worker.run()
 
-    return triggered
+    if hotkey_mode == "toggle":
+        return triggered
+    return triggered, stopped, discarded
 
 
 # ---------------------------------------------------------------------------
 # Phase 3: evdev value-Handling (KEY_LEFTALT)
 # ---------------------------------------------------------------------------
+
+class TestHoldWorkerEvents:
+    def test_short_hold_emits_discard_not_stop(self):
+        result = _run_worker_with_events(
+            [(_KEYCODES["KEY_LEFTALT"], 1), (_KEYCODES["KEY_LEFTALT"], 0)],
+            hotkey_mode="hold",
+            monotonic_values=[10.0, 10.0, 10.0, 10.149],
+        )
+        triggered, stopped, discarded = result
+        assert triggered == [WorkflowType.TRANSCRIPTION]
+        assert stopped == []
+        assert discarded == [True]
+
+    def test_hold_at_threshold_emits_stop_not_discard(self):
+        result = _run_worker_with_events(
+            [(_KEYCODES["KEY_LEFTALT"], 1), (_KEYCODES["KEY_LEFTALT"], 0)],
+            hotkey_mode="hold",
+            monotonic_values=[10.0, 10.0, 10.0, 10.150],
+        )
+        triggered, stopped, discarded = result
+        assert triggered == [WorkflowType.TRANSCRIPTION]
+        assert stopped == [True]
+        assert discarded == []
+
 
 class TestLeftAltEvents:
     def test_leftalt_keydown_triggers_toggle(self):
@@ -359,6 +440,17 @@ class TestStateMachine:
         gui_app._on_worker_result("fertiger text")
         assert gui_app.state == "IDLE"
         assert gui_app.current_workflow is None
+
+    def test_no_speech_result_is_neutral_and_clears_tray_error(self, gui_app):
+        gui_app.state = "TRANSCRIBING"
+        gui_app.current_workflow = WorkflowType.TRANSCRIPTION
+        gui_app._tray_error_message = "alter Fehler"
+
+        gui_app._on_no_speech()
+
+        assert gui_app.state == "IDLE"
+        assert gui_app.current_workflow is None
+        assert gui_app._tray_error_message is None
 
     def test_state_returns_to_idle_after_error(self, gui_app):
         gui_app.state = "TRANSCRIBING"

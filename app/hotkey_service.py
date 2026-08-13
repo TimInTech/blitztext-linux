@@ -18,6 +18,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from app.workflows import WorkflowType
 
 DEBOUNCE_SECONDS = 0.6
+MIN_HOLD_PRESS_SECONDS = 0.15
 DEVICE_REFRESH_SECONDS = 5.0
 logger = logging.getLogger("blitztext.hotkey")
 
@@ -108,6 +109,11 @@ class HotkeyMode(str, Enum):
     HOLD = "hold"
 
 
+def classify_hold_release(held_seconds: float) -> str:
+    """Classify a hold release without starting transcription for accidental taps."""
+    return "process" if held_seconds >= MIN_HOLD_PRESS_SECONDS else "discard"
+
+
 class HotkeyService:
     """Mockable Hotkey Service logic used by tests."""
 
@@ -164,7 +170,8 @@ class HotkeyWorker(QObject):
     """
 
     workflow_triggered = pyqtSignal(object)   # WorkflowType
-    recording_stop = pyqtSignal()             # nur im Hold-Modus
+    recording_stop = pyqtSignal()             # Hold-Modus: Aufnahme verarbeiten
+    recording_discard = pyqtSignal()          # Hold-Modus: zu kurzen Druck verwerfen
     error = pyqtSignal(str)
 
     def __init__(
@@ -200,6 +207,7 @@ class HotkeyWorker(QObject):
         pressed: Set[int] = set()
         last_trigger: Dict[WorkflowType, float] = {}
         _hold_active: Optional[WorkflowType] = None
+        _hold_started_at: Optional[float] = None
 
         from evdev import ecodes as ec  # noqa: PLC0415
         all_meta_codes = {
@@ -251,6 +259,7 @@ class HotkeyWorker(QObject):
                 fd_to_dev = {dev.fd: dev for dev in devices}
                 pressed.clear()
                 _hold_active = None
+                _hold_started_at = None
                 next_device_refresh = time.monotonic() + DEVICE_REFRESH_SECONDS
                 logger.debug("Keyboard devices reconnected after select error: %s", _device_paths(devices))
                 continue
@@ -263,6 +272,7 @@ class HotkeyWorker(QObject):
                     fd_to_dev = new_fd_to_dev
                     pressed.clear()
                     _hold_active = None
+                    _hold_started_at = None
                 next_device_refresh = time.monotonic() + DEVICE_REFRESH_SECONDS
 
             for fd in rlist:
@@ -279,6 +289,7 @@ class HotkeyWorker(QObject):
                             fd_to_dev = new_fd_to_dev
                             pressed.clear()
                             _hold_active = None
+                            _hold_started_at = None
                         continue
 
                     for event in events:
@@ -306,8 +317,20 @@ class HotkeyWorker(QObject):
                         if self._mode == "hold" and value == 0 and _hold_active is not None:
                             for wf, tcode, _, _ in hotkeys:
                                 if wf == _hold_active and code == tcode:
-                                    self.recording_stop.emit()
+                                    held_seconds = (
+                                        time.monotonic() - _hold_started_at
+                                        if _hold_started_at is not None else 0.0
+                                    )
+                                    if classify_hold_release(held_seconds) == "process":
+                                        self.recording_stop.emit()
+                                    else:
+                                        logger.info(
+                                            "Accidental hold press ignored: %.3fs < %.3fs",
+                                            held_seconds, MIN_HOLD_PRESS_SECONDS,
+                                        )
+                                        self.recording_discard.emit()
                                     _hold_active = None
+                                    _hold_started_at = None
                                     break
 
                         if value != 1:
@@ -330,6 +353,7 @@ class HotkeyWorker(QObject):
                             self.workflow_triggered.emit(workflow)
                             if self._mode == "hold":
                                 _hold_active = workflow
+                                _hold_started_at = now
                             break
 
                 except OSError:
@@ -339,6 +363,7 @@ class HotkeyWorker(QObject):
                     )
                     pressed.clear()
                     _hold_active = None
+                    _hold_started_at = None
                     break
 
     def stop(self) -> None:

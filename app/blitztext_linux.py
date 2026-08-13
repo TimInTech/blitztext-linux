@@ -549,6 +549,7 @@ class _WorkerSignals(QObject):
     """Signals for background transcription/rewrite tasks."""
     status_changed = pyqtSignal(str)  # "transcribing" | "rewriting"
     result = pyqtSignal(str)
+    no_speech = pyqtSignal()
     error = pyqtSignal(str)
     finished = pyqtSignal(object)
 
@@ -600,7 +601,8 @@ class _TranscribeWorker(QRunnable):
             )
 
             if not transcript or not transcript.strip():
-                raise TranscribeError("Keine Sprache im Audio erkannt.")
+                self._emit("no_speech")
+                return
 
             # Compose routing always receives the raw recognized text; the
             # compose window owns any later rewrite workflow selected there.
@@ -926,6 +928,7 @@ class BlitztextApp(QObject):
         self.hotkey_thread.started.connect(self.hotkey_worker.run)
         self.hotkey_worker.workflow_triggered.connect(self._on_workflow_triggered)
         self.hotkey_worker.recording_stop.connect(self._on_recording_stop)
+        self.hotkey_worker.recording_discard.connect(self.gui_discard)
         self.hotkey_worker.error.connect(self._on_hotkey_error)
 
         self.hotkey_thread.start()
@@ -1070,6 +1073,7 @@ class BlitztextApp(QObject):
                     result_text, route_to_compose=routed
                 )
             )
+            worker.signals.no_speech.connect(self._on_no_speech)
             worker.signals.error.connect(self._on_worker_error)
             worker.signals.finished.connect(self._on_worker_finished)
 
@@ -1105,12 +1109,20 @@ class BlitztextApp(QObject):
         self.current_workflow = None
         self._set_state("IDLE", "worker result")
 
+    @pyqtSlot()
+    def _on_no_speech(self) -> None:
+        logger.info("No speech detected; returning to idle without persistent error")
+        self.current_workflow = None
+        self._tray_error_message = None
+        self.show_tray_warning(t("app.name"), t("notify.no_speech.message"))
+        self._set_state("IDLE", "no speech detected")
+
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
         logger.error("Worker error: %s", err_msg)
+        self.current_workflow = None
         self.show_tray_error(t("notify.error.title"), err_msg)
         notify_service.notify(t("notify.error.title"), err_msg, urgency="critical")
-        self.current_workflow = None
         self._set_state("IDLE", "worker error", keep_error=True)
 
     # ------------------------------------------------------------------

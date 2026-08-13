@@ -53,7 +53,7 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 
 | Workflow | Hotkey | LLM? | Description |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Alt</kbd> (hold) | ❌ | Default: records while the key is held, transcribes, and pastes the text. Recording key and hold/toggle mode are configurable under **Settings → Speech Recognition**. |
+| **Blitztext** | <kbd>Alt</kbd> (hold) | ❌ | Default: records while the key is held, transcribes, and pastes the text. Very short presses below 150 ms are discarded as accidental taps in hold mode. Recording key and hold/toggle mode are configurable under **Settings → Speech Recognition**. |
 | **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
 | **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
 | **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
@@ -408,7 +408,7 @@ The settings dialog has three tabs:
 - **backend**: `openai-whisper` or `faster-whisper`.
 - **hotkey_mode**:
   - `toggle`: press once to start, press again to stop.
-  - `hold`: recording runs as long as the hotkey is held.
+  - `hold`: recording runs as long as the hotkey is held. Presses below 150 ms are discarded; empty recordings return to ready without a persistent error state.
 - **transcription_hotkey**: Recording key captured by the global hotkey daemon. Default: `KEY_LEFTALT`.
 - **openai_api_key_env**: Name of the environment variable for the API key. Default: `OPENAI_API_KEY`. For OpenRouter use `OPENROUTER_API_KEY`.
 - **llm_provider**: `openai` (default), `openrouter`, or `custom`.

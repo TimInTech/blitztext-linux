@@ -53,7 +53,7 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 
 | Workflow | Hotkey | LLM? | Beschreibung |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
+| **Blitztext** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Sehr kurze Tastendrücke unter 150 ms werden im Halten-Modus als Fehldruck verworfen. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
 | **Blitztext Lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
 | **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Formuliert deine Aufnahme professionell via LLM um. |
 | **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |
@@ -410,7 +410,7 @@ Der Einstellungs-Dialog hat drei Tabs:
 - **backend**: `openai-whisper` oder `faster-whisper`.
 - **hotkey_mode**:
   - `toggle`: Einmal drücken startet, erneutes Drücken beendet.
-  - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird.
+  - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird. Tastendrücke unter 150 ms werden verworfen; leere Aufnahmen kehren ohne dauerhaften Fehlerzustand zu Bereit zurück.
 - **transcription_hotkey**: Aufnahmetaste, die vom globalen Hotkey-Daemon überwacht wird. Standard: `KEY_LEFTALT`.
 - **openai_api_key_env**: Name der Umgebungsvariable für den API-Key. Standard: `OPENAI_API_KEY`. Für OpenRouter: `OPENROUTER_API_KEY`.
 - **llm_provider**: `openai` (Standard), `openrouter` oder `custom`.
