@@ -130,6 +130,32 @@ class TestPasteTimeouts:
 
 
 class TestComposeVoiceRoutingWorker:
+    def test_empty_transcript_uses_dedicated_signal(self, tmp_path):
+        from app.blitztext_linux import _TranscribeWorker
+
+        wav_path = tmp_path / "recording.wav"
+        wav_path.write_bytes(b"fake audio")
+        worker = _TranscribeWorker(
+            wav_file=wav_path,
+            model="base",
+            language="de",
+            backend="openai-whisper",
+            workflow=WorkflowType.TRANSCRIPTION,
+            llm_service=MagicMock(),
+            autopaste=True,
+            paste_service=MagicMock(),
+        )
+        empty_transcripts = []
+        errors = []
+        worker.signals.empty_transcript.connect(empty_transcripts.append)
+        worker.signals.error.connect(errors.append)
+
+        with patch("app.blitztext_linux.transcribe", return_value="   "):
+            worker.run()
+
+        assert empty_transcripts == ["Keine Sprache im Audio erkannt."]
+        assert errors == []
+
     def test_unrouted_transcription_keeps_standard_autopaste(self, tmp_path):
         from app.blitztext_linux import _TranscribeWorker
 
@@ -384,6 +410,41 @@ class TestStateMachine:
             gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
             start_mock.assert_called_once()
         assert gui_app.state == "RECORDING"
+
+    def test_empty_transcript_releases_state_and_next_hotkey_starts_without_window(self, gui_app, tmp_path):
+        wav_path = tmp_path / "empty.wav"
+        wav_path.write_bytes(b"fake audio")
+        pool = MagicMock()
+
+        gui_app.config.hotkey_mode = "toggle"
+        assert gui_app._main_window is None
+        with patch.object(gui_app.audio_recorder, "start") as start_mock, \
+             patch.object(gui_app.audio_recorder, "stop", return_value=wav_path), \
+             patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+            assert gui_app.state == "RECORDING"
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["RECORDING"].cacheKey()
+
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+            worker = pool.start.call_args.args[0]
+            with patch("app.blitztext_linux.transcribe", return_value=""):
+                worker.run()
+
+            assert gui_app.state == "IDLE"
+            assert gui_app.current_workflow is None
+            assert gui_app._tray_error_message == "Keine Sprache im Audio erkannt."
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["ERROR"].cacheKey()
+            assert gui_app._main_window is None
+
+            gui_app.update_tray_state()
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["ERROR"].cacheKey()
+
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+
+        assert start_mock.call_count == 2
+        assert gui_app.state == "RECORDING"
+        assert gui_app._tray_error_message is None
+        assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["RECORDING"].cacheKey()
 
     def test_routed_worker_result_reaches_compose_draft(self, gui_app):
         window = gui_app._ensure_compose_window()
