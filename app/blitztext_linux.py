@@ -39,7 +39,7 @@ from app.writing_presets import (
 )
 from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
-from app.transcribe import transcribe, TranscribeError
+from app.transcribe import transcribe
 from app.paste_service import PasteService, PasteServiceError
 from app.history_panel import HistoryPanel
 from app.compose_window import ComposeWindow
@@ -971,7 +971,15 @@ class BlitztextApp(QObject):
 
     @pyqtSlot(object)
     def _on_workflow_triggered(self, workflow: WorkflowType) -> None:
-        logger.info("Workflow triggered: %s (current state: %s)", workflow, self.state)
+        logger.info(
+            "Workflow trigger received: workflow=%s state=%s current_workflow=%s "
+            "tray_error=%s main_window_visible=%s",
+            workflow,
+            self.state,
+            self.current_workflow,
+            bool(self._tray_error_message),
+            bool(self._main_window and self._main_window.isVisible()),
+        )
 
         if self.state == "IDLE":
             self._start_recording(workflow)
@@ -993,6 +1001,13 @@ class BlitztextApp(QObject):
             logger.info("Ignored hotkey trigger %s while busy", workflow)
 
     def _start_recording(self, workflow: WorkflowType) -> None:
+        had_tray_error = self._tray_error_message is not None
+        self._tray_error_message = None
+        logger.info(
+            "Starting recording: workflow=%s clearing_prior_tray_error=%s",
+            workflow,
+            had_tray_error,
+        )
         self._recording_routes_to_compose = False
         try:
             self.audio_recorder.start(device=self.config.audio_device)
@@ -1120,10 +1135,14 @@ class BlitztextApp(QObject):
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
         logger.error("Worker error: %s", err_msg)
-        self.current_workflow = None
+        self._finish_worker_with_error(err_msg, "worker error")
+
+    def _finish_worker_with_error(self, err_msg: str, reason: str) -> None:
         self.show_tray_error(t("notify.error.title"), err_msg)
         notify_service.notify(t("notify.error.title"), err_msg, urgency="critical")
-        self._set_state("IDLE", "worker error", keep_error=True)
+        self._recording_routes_to_compose = False
+        self.current_workflow = None
+        self._set_state("IDLE", reason)
 
     # ------------------------------------------------------------------
     # Diktat / Verlauf / Vorlesen
@@ -1269,10 +1288,8 @@ class BlitztextApp(QObject):
         except ValueError:
             pass
 
-    def _set_state(self, new_state: str, reason: str, keep_error: bool = False) -> None:
+    def _set_state(self, new_state: str, reason: str) -> None:
         old_state = self.state
-        if not keep_error and new_state != "IDLE":
-            self._tray_error_message = None
         if old_state != new_state:
             logger.debug("State changed: %s -> %s (%s)", old_state, new_state, reason)
         else:

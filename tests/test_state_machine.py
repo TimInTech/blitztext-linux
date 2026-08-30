@@ -477,6 +477,41 @@ class TestStateMachine:
             start_mock.assert_called_once()
         assert gui_app.state == "RECORDING"
 
+    def test_empty_transcript_is_neutral_and_next_hotkey_starts_without_window(self, gui_app, tmp_path):
+        wav_path = tmp_path / "empty.wav"
+        wav_path.write_bytes(b"fake audio")
+        pool = MagicMock()
+
+        gui_app.config.hotkey_mode = "toggle"
+        assert gui_app._main_window is None
+        with patch.object(gui_app.audio_recorder, "start") as start_mock, \
+             patch.object(gui_app.audio_recorder, "stop", return_value=wav_path), \
+             patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+            assert gui_app.state == "RECORDING"
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["RECORDING"].cacheKey()
+
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+            worker = pool.start.call_args.args[0]
+            with patch("app.blitztext_linux.transcribe", return_value=""):
+                worker.run()
+
+            assert gui_app.state == "IDLE"
+            assert gui_app.current_workflow is None
+            assert gui_app._tray_error_message is None
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["IDLE"].cacheKey()
+            assert gui_app._main_window is None
+
+            gui_app.update_tray_state()
+            assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["IDLE"].cacheKey()
+
+            gui_app._on_workflow_triggered(WorkflowType.TRANSCRIPTION)
+
+        assert start_mock.call_count == 2
+        assert gui_app.state == "RECORDING"
+        assert gui_app._tray_error_message is None
+        assert gui_app.tray_icon.icon().cacheKey() == gui_app._tray_icons["RECORDING"].cacheKey()
+
     def test_routed_worker_result_reaches_compose_draft(self, gui_app):
         window = gui_app._ensure_compose_window()
         window.show()
