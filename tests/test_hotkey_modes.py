@@ -66,6 +66,23 @@ class TestToggleMode:
         assert callbacks["stop"].call_count == 1
 
 
+class TestHoldMinimumPressDuration:
+    def test_short_hold_requests_discard_instead_of_processing(self):
+        from app.hotkey_service import classify_hold_release
+
+        assert classify_hold_release(0.149) == "discard"
+
+    def test_hold_at_threshold_requests_processing(self):
+        from app.hotkey_service import classify_hold_release
+
+        assert classify_hold_release(0.150) == "process"
+
+    def test_normal_hold_requests_processing(self):
+        from app.hotkey_service import classify_hold_release
+
+        assert classify_hold_release(0.8) == "process"
+
+
 class TestHoldMode:
     def test_keydown_starts(self, hold_service, callbacks):
         hold_service.simulate_key_down()

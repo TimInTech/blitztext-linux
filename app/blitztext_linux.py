@@ -549,7 +549,7 @@ class _WorkerSignals(QObject):
     """Signals for background transcription/rewrite tasks."""
     status_changed = pyqtSignal(str)  # "transcribing" | "rewriting"
     result = pyqtSignal(str)
-    empty_transcript = pyqtSignal(str)
+    no_speech = pyqtSignal()
     error = pyqtSignal(str)
     finished = pyqtSignal(object)
 
@@ -601,7 +601,7 @@ class _TranscribeWorker(QRunnable):
             )
 
             if not transcript or not transcript.strip():
-                self._emit("empty_transcript", "Keine Sprache im Audio erkannt.")
+                self._emit("no_speech")
                 return
 
             # Compose routing always receives the raw recognized text; the
@@ -928,6 +928,7 @@ class BlitztextApp(QObject):
         self.hotkey_thread.started.connect(self.hotkey_worker.run)
         self.hotkey_worker.workflow_triggered.connect(self._on_workflow_triggered)
         self.hotkey_worker.recording_stop.connect(self._on_recording_stop)
+        self.hotkey_worker.recording_discard.connect(self.gui_discard)
         self.hotkey_worker.error.connect(self._on_hotkey_error)
 
         self.hotkey_thread.start()
@@ -1087,7 +1088,7 @@ class BlitztextApp(QObject):
                     result_text, route_to_compose=routed
                 )
             )
-            worker.signals.empty_transcript.connect(self._on_empty_transcript)
+            worker.signals.no_speech.connect(self._on_no_speech)
             worker.signals.error.connect(self._on_worker_error)
             worker.signals.finished.connect(self._on_worker_finished)
 
@@ -1123,13 +1124,13 @@ class BlitztextApp(QObject):
         self.current_workflow = None
         self._set_state("IDLE", "worker result")
 
-    @pyqtSlot(str)
-    def _on_empty_transcript(self, err_msg: str) -> None:
-        logger.warning(
-            "Empty transcription received; releasing recording state for the next hotkey: %s",
-            err_msg,
-        )
-        self._finish_worker_with_error(err_msg, "empty transcription")
+    @pyqtSlot()
+    def _on_no_speech(self) -> None:
+        logger.info("No speech detected; returning to idle without persistent error")
+        self.current_workflow = None
+        self._tray_error_message = None
+        self.show_tray_warning(t("app.name"), t("notify.no_speech.message"))
+        self._set_state("IDLE", "no speech detected")
 
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
