@@ -25,7 +25,13 @@ _REDACTED = "[REDACTED]"
 _URL_USERINFO_PATTERN = re.compile(
     r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@]*:[^\s/@]+@", re.IGNORECASE
 )
-_BEARER_TOKEN_PATTERN = re.compile(r"\bBearer\s+[^\s,;]+", re.IGNORECASE)
+_BEARER_TOKEN_VALUE_PATTERN = r"[A-Za-z0-9._~+/=-]{12,}"
+_BEARER_TOKEN_PATTERN = re.compile(
+    rf"\bBearer\s+{_BEARER_TOKEN_VALUE_PATTERN}(?![A-Za-z0-9._~+/=-])", re.IGNORECASE
+)
+_OBFUSCATED_BEARER_DELIMITER_PATTERN = re.compile(
+    rf"\bBearer{_BEARER_TOKEN_VALUE_PATTERN}(?![A-Za-z0-9._~+/=-])", re.IGNORECASE
+)
 _SK_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
 _NAMED_SECRET_PATTERN = re.compile(
     r"\b(?P<name>api_key|apikey|token|secret|password)(?P<quote>[\"']?)\s*"
@@ -114,6 +120,15 @@ def _contains_control_obfuscated_secret(text: str) -> bool:
                 and pattern.fullmatch(_canonicalize_external_error(source_text)) is None
             ):
                 return True
+
+    for match in _OBFUSCATED_BEARER_DELIMITER_PATTERN.finditer(compact_text):
+        bearer_end = source_positions[match.start() + len("Bearer") - 1] + 1
+        token_start = source_positions[match.start() + len("Bearer")]
+        if any(
+            unicodedata.category(character) == "Cf"
+            for character in text[bearer_end:token_start]
+        ):
+            return True
     return False
 
 

@@ -92,6 +92,7 @@ class TestExternalErrorSanitizing:
     @pytest.mark.parametrize(
         "message",
         [
+            "Bearer status",
             "Unsupported locale sk-SK",
             "Provider returned 👨\u200d💻 error",
         ],
@@ -112,6 +113,18 @@ class TestExternalErrorSanitizing:
         ],
     )
     def test_sanitize_external_error_replaces_control_obfuscated_secret_atoms(
+        self, hostile_error
+    ):
+        assert sanitize_external_error(hostile_error) == "Unbekannter Fehler"
+
+    @pytest.mark.parametrize(
+        "hostile_error",
+        [
+            "Bearer\u200bDUMMY_BEARER_TOKEN_123456",
+            "Bearer\u200dDUMMY_BEARER_TOKEN_123456",
+        ],
+    )
+    def test_sanitize_external_error_replaces_format_obfuscated_bearer_delimiters(
         self, hostile_error
     ):
         assert sanitize_external_error(hostile_error) == "Unbekannter Fehler"
