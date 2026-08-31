@@ -95,11 +95,6 @@ def _detect_active_window_class() -> Optional[str]:
     return window_class or None
 
 
-def _is_terminal_active() -> bool:
-    window_class = _detect_active_window_class()
-    return bool(window_class and window_class in _KNOWN_TERMINAL_WINDOW_CLASSES)
-
-
 class PasteServiceError(Exception):
     """Raised when clipboard write or key injection fails hard."""
 

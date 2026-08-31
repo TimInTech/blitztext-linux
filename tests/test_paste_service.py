@@ -15,7 +15,6 @@ from app.paste_service import (
     PasteService,
     PasteServiceError,
     _detect_active_window_class,
-    _is_terminal_active,
 )
 
 
@@ -79,20 +78,6 @@ class TestDetectActiveWindowClass:
                     assert _detect_active_window_class() is None
         which_mock.assert_not_called()
         run_mock.assert_not_called()
-
-
-class TestIsTerminalActive:
-    def test_returns_true_for_terminal_window(self):
-        with patch("app.paste_service._detect_active_window_class", return_value="konsole"):
-            assert _is_terminal_active() is True
-
-    def test_returns_false_for_non_terminal_window(self):
-        with patch("app.paste_service._detect_active_window_class", return_value="firefox"):
-            assert _is_terminal_active() is False
-
-    def test_returns_false_when_detection_is_none(self):
-        with patch("app.paste_service._detect_active_window_class", return_value=None):
-            assert _is_terminal_active() is False
 
 
 class TestYdotoolPaste:
