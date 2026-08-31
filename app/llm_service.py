@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from typing import Any, Optional
 
 from app.config import DEFAULTS
@@ -18,6 +20,31 @@ logger = logging.getLogger("blitztext.llm_service")
 
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
 DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
+
+_REDACTED = "[REDACTED]"
+_URL_USERINFO_PATTERN = re.compile(
+    r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@]*:[^\s/@]+@", re.IGNORECASE
+)
+_BEARER_TOKEN_VALUE_PATTERN = r"[A-Za-z0-9._~+/=-]{12,}"
+_BEARER_TOKEN_PATTERN = re.compile(
+    rf"\bBearer\s+{_BEARER_TOKEN_VALUE_PATTERN}(?![A-Za-z0-9._~+/=-])", re.IGNORECASE
+)
+_OBFUSCATED_BEARER_DELIMITER_PATTERN = re.compile(
+    rf"\bBearer{_BEARER_TOKEN_VALUE_PATTERN}(?![A-Za-z0-9._~+/=-])", re.IGNORECASE
+)
+_SK_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
+_NAMED_SECRET_PATTERN = re.compile(
+    r"\b(?P<name>api_key|apikey|token|secret|password)(?P<quote>[\"']?)\s*"
+    r"(?P<separator>[:=])\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}\]]+)",
+    re.IGNORECASE,
+)
+_EMPTY_EXTERNAL_ERROR = "Unbekannter Fehler"
+_SECRET_PATTERNS = (
+    _URL_USERINFO_PATTERN,
+    _BEARER_TOKEN_PATTERN,
+    _SK_KEY_PATTERN,
+    _NAMED_SECRET_PATTERN,
+)
 
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
@@ -59,6 +86,74 @@ _EMOJI_SYSTEM_TEMPLATE = (
     "(wenig = 1-2 pro Absatz, mittel = 3-5 pro Absatz, viel = 6+ pro Absatz). "
     "Gib NUR den Text mit Emojis zurück."
 )
+
+
+def _canonicalize_external_error(text: str) -> str:
+    return "".join(
+        character
+        if character == "\u200d" or not unicodedata.category(character).startswith("C")
+        else " " if unicodedata.category(character) == "Cc" else ""
+        for character in text
+    )
+
+
+def _contains_control_obfuscated_secret(text: str) -> bool:
+    compact_characters: list[str] = []
+    source_positions: list[int] = []
+    for position, character in enumerate(text):
+        if unicodedata.category(character).startswith("C"):
+            continue
+        compact_characters.append(character)
+        source_positions.append(position)
+
+    if len(compact_characters) == len(text):
+        return False
+
+    compact_text = "".join(compact_characters)
+    for pattern in _SECRET_PATTERNS:
+        for match in pattern.finditer(compact_text):
+            source_start = source_positions[match.start()]
+            source_end = source_positions[match.end() - 1] + 1
+            source_text = text[source_start:source_end]
+            if (
+                any(unicodedata.category(character).startswith("C") for character in source_text)
+                and pattern.fullmatch(_canonicalize_external_error(source_text)) is None
+            ):
+                return True
+
+    for match in _OBFUSCATED_BEARER_DELIMITER_PATTERN.finditer(compact_text):
+        bearer_end = source_positions[match.start() + len("Bearer") - 1] + 1
+        token_start = source_positions[match.start() + len("Bearer")]
+        if any(
+            unicodedata.category(character) == "Cf"
+            for character in text[bearer_end:token_start]
+        ):
+            return True
+    return False
+
+
+def sanitize_external_error(message: object, max_length: int = 240) -> str:
+    """Return a safe, compact representation of an external error message."""
+    raw_text = str(message)
+    if _contains_control_obfuscated_secret(raw_text):
+        text = _EMPTY_EXTERNAL_ERROR
+    else:
+        text = _canonicalize_external_error(raw_text)
+        text = _URL_USERINFO_PATTERN.sub(rf"\1{_REDACTED}@", text)
+        text = _BEARER_TOKEN_PATTERN.sub(f"Bearer {_REDACTED}", text)
+        text = _SK_KEY_PATTERN.sub(_REDACTED, text)
+        text = _NAMED_SECRET_PATTERN.sub(
+            lambda match: (
+                f"{match.group('name')}{match.group('quote')}"
+                f"{match.group('separator')}{_REDACTED}"
+            ),
+            text,
+        )
+    text = " ".join(text.split()) or _EMPTY_EXTERNAL_ERROR
+    limit = max(1, int(max_length))
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
 class LLMServiceError(Exception):

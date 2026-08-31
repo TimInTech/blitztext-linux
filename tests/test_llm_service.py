@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import DEFAULTS
-from app.llm_service import LLMService, LLMServiceError, _NullLLMClient
+from app.llm_service import LLMService, LLMServiceError, _NullLLMClient, sanitize_external_error
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESETS
 
@@ -36,6 +36,98 @@ def service(mock_client):
 HANDOVER_TRANSCRIPT = (
     "Erstelle eine kurze Übergabe prompt damit der Plan in neuer Session ausgeführt wird"
 )
+
+
+class TestExternalErrorSanitizing:
+    def test_sanitize_external_error_masks_secrets_and_normalizes_spacing(self):
+        hostile_error = (
+            "  request\x00 failed\tBearer DUMMY_BEARER_TOKEN_123456\n"
+            "sk-DUMMYKEY1234567890\rapi_key=DUMMY_API_KEY_123456\x1f"
+            "https://alice:dummy-password@example.invalid/v1  "
+        )
+
+        assert sanitize_external_error(hostile_error) == (
+            "request failed Bearer [REDACTED] [REDACTED] api_key=[REDACTED] "
+            "https://[REDACTED]@example.invalid/v1"
+        )
+
+    def test_sanitize_external_error_truncates_within_default_limit(self):
+        result = sanitize_external_error("x" * 300)
+
+        assert len(result) <= 240
+        assert result.endswith("…")
+
+    def test_sanitize_external_error_canonicalizes_hidden_characters_before_masking(self):
+        hostile_error = (
+            "Bearer\x00DUMMY_BEARER_TOKEN_123456 "
+            "api_key\u200b=\u200bDUMMY_API_KEY_123456"
+        )
+
+        assert sanitize_external_error(hostile_error) == (
+            "Bearer [REDACTED] api_key=[REDACTED]"
+        )
+
+    @pytest.mark.parametrize(
+        ("hostile_error", "expected"),
+        [
+            (
+                '{"api_key": "DUMMY_API_KEY_123456"}',
+                '{"api_key":[REDACTED]}',
+            ),
+            (
+                "postgresql://alice:dummy-password@example.invalid/db",
+                "postgresql://[REDACTED]@example.invalid/db",
+            ),
+            (
+                "https://:dummy-password@example.invalid/v1",
+                "https://[REDACTED]@example.invalid/v1",
+            ),
+        ],
+    )
+    def test_sanitize_external_error_masks_common_secret_representations(
+        self, hostile_error, expected
+    ):
+        assert sanitize_external_error(hostile_error) == expected
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Bearer status",
+            "Unsupported locale sk-SK",
+            "Provider returned 👨\u200d💻 error",
+        ],
+    )
+    def test_sanitize_external_error_preserves_legitimate_non_secrets(self, message):
+        assert sanitize_external_error(message) == message
+
+    @pytest.mark.parametrize(
+        "hostile_error",
+        [
+            "Bear\x00er DUMMY_BEARER_TOKEN_123456",
+            "api\x00_key=DUMMY_API_KEY_123456",
+            "Bear\u200der DUMMY_BEARER_TOKEN_123456",
+            "api\u200d_key=DUMMY_API_KEY_123456",
+            "postgresql\x00://user:dummy-password@example.invalid/db",
+            "postgresql:/\x00/user:dummy-password@example.invalid/db",
+            "postgresql://us\x00er:dummy-password@example.invalid/db",
+        ],
+    )
+    def test_sanitize_external_error_replaces_control_obfuscated_secret_atoms(
+        self, hostile_error
+    ):
+        assert sanitize_external_error(hostile_error) == "Unbekannter Fehler"
+
+    @pytest.mark.parametrize(
+        "hostile_error",
+        [
+            "Bearer\u200bDUMMY_BEARER_TOKEN_123456",
+            "Bearer\u200dDUMMY_BEARER_TOKEN_123456",
+        ],
+    )
+    def test_sanitize_external_error_replaces_format_obfuscated_bearer_delimiters(
+        self, hostile_error
+    ):
+        assert sanitize_external_error(hostile_error) == "Unbekannter Fehler"
 
 
 class TestLLMServiceInit:
