@@ -99,6 +99,23 @@ class TestExternalErrorSanitizing:
     def test_sanitize_external_error_preserves_legitimate_non_secrets(self, message):
         assert sanitize_external_error(message) == message
 
+    @pytest.mark.parametrize(
+        "hostile_error",
+        [
+            "Bear\x00er DUMMY_BEARER_TOKEN_123456",
+            "api\x00_key=DUMMY_API_KEY_123456",
+            "Bear\u200der DUMMY_BEARER_TOKEN_123456",
+            "api\u200d_key=DUMMY_API_KEY_123456",
+            "postgresql\x00://user:dummy-password@example.invalid/db",
+            "postgresql:/\x00/user:dummy-password@example.invalid/db",
+            "postgresql://us\x00er:dummy-password@example.invalid/db",
+        ],
+    )
+    def test_sanitize_external_error_replaces_control_obfuscated_secret_atoms(
+        self, hostile_error
+    ):
+        assert sanitize_external_error(hostile_error) == "Unbekannter Fehler"
+
 
 class TestLLMServiceInit:
     def test_empty_api_key_is_not_available(self, mock_client):

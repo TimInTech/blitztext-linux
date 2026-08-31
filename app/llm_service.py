@@ -33,6 +33,12 @@ _NAMED_SECRET_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _EMPTY_EXTERNAL_ERROR = "Unbekannter Fehler"
+_SECRET_PATTERNS = (
+    _URL_USERINFO_PATTERN,
+    _BEARER_TOKEN_PATTERN,
+    _SK_KEY_PATTERN,
+    _NAMED_SECRET_PATTERN,
+)
 
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
@@ -85,19 +91,49 @@ def _canonicalize_external_error(text: str) -> str:
     )
 
 
+def _contains_control_obfuscated_secret(text: str) -> bool:
+    compact_characters: list[str] = []
+    source_positions: list[int] = []
+    for position, character in enumerate(text):
+        if unicodedata.category(character).startswith("C"):
+            continue
+        compact_characters.append(character)
+        source_positions.append(position)
+
+    if len(compact_characters) == len(text):
+        return False
+
+    compact_text = "".join(compact_characters)
+    for pattern in _SECRET_PATTERNS:
+        for match in pattern.finditer(compact_text):
+            source_start = source_positions[match.start()]
+            source_end = source_positions[match.end() - 1] + 1
+            source_text = text[source_start:source_end]
+            if (
+                any(unicodedata.category(character).startswith("C") for character in source_text)
+                and pattern.fullmatch(_canonicalize_external_error(source_text)) is None
+            ):
+                return True
+    return False
+
+
 def sanitize_external_error(message: object, max_length: int = 240) -> str:
     """Return a safe, compact representation of an external error message."""
-    text = _canonicalize_external_error(str(message))
-    text = _URL_USERINFO_PATTERN.sub(rf"\1{_REDACTED}@", text)
-    text = _BEARER_TOKEN_PATTERN.sub(f"Bearer {_REDACTED}", text)
-    text = _SK_KEY_PATTERN.sub(_REDACTED, text)
-    text = _NAMED_SECRET_PATTERN.sub(
-        lambda match: (
-            f"{match.group('name')}{match.group('quote')}"
-            f"{match.group('separator')}{_REDACTED}"
-        ),
-        text,
-    )
+    raw_text = str(message)
+    if _contains_control_obfuscated_secret(raw_text):
+        text = _EMPTY_EXTERNAL_ERROR
+    else:
+        text = _canonicalize_external_error(raw_text)
+        text = _URL_USERINFO_PATTERN.sub(rf"\1{_REDACTED}@", text)
+        text = _BEARER_TOKEN_PATTERN.sub(f"Bearer {_REDACTED}", text)
+        text = _SK_KEY_PATTERN.sub(_REDACTED, text)
+        text = _NAMED_SECRET_PATTERN.sub(
+            lambda match: (
+                f"{match.group('name')}{match.group('quote')}"
+                f"{match.group('separator')}{_REDACTED}"
+            ),
+            text,
+        )
     text = " ".join(text.split()) or _EMPTY_EXTERNAL_ERROR
     limit = max(1, int(max_length))
     if len(text) <= limit:
