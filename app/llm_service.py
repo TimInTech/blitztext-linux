@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Optional
 import unicodedata
+from typing import Any, Optional
 
 from app.config import DEFAULTS
 from app.workflows import WorkflowType
@@ -22,11 +22,14 @@ LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, Workfl
 DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
 
 _REDACTED = "[REDACTED]"
-_URL_USERINFO_PATTERN = re.compile(r"(https?://)[^\s/@:]+:[^\s/@]+@", re.IGNORECASE)
+_URL_USERINFO_PATTERN = re.compile(
+    r"\b([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@]*:[^\s/@]+@", re.IGNORECASE
+)
 _BEARER_TOKEN_PATTERN = re.compile(r"\bBearer\s+[^\s,;]+", re.IGNORECASE)
-_SK_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]+")
+_SK_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
 _NAMED_SECRET_PATTERN = re.compile(
-    r"\b(api_key|apikey|token|secret|password)\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)",
+    r"\b(?P<name>api_key|apikey|token|secret|password)(?P<quote>[\"']?)\s*"
+    r"(?P<separator>[:=])\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}\]]+)",
     re.IGNORECASE,
 )
 _EMPTY_EXTERNAL_ERROR = "Unbekannter Fehler"
@@ -73,16 +76,27 @@ _EMOJI_SYSTEM_TEMPLATE = (
 )
 
 
+def _canonicalize_external_error(text: str) -> str:
+    return "".join(
+        character
+        if character == "\u200d" or not unicodedata.category(character).startswith("C")
+        else " " if unicodedata.category(character) == "Cc" else ""
+        for character in text
+    )
+
+
 def sanitize_external_error(message: object, max_length: int = 240) -> str:
     """Return a safe, compact representation of an external error message."""
-    text = str(message)
+    text = _canonicalize_external_error(str(message))
     text = _URL_USERINFO_PATTERN.sub(rf"\1{_REDACTED}@", text)
     text = _BEARER_TOKEN_PATTERN.sub(f"Bearer {_REDACTED}", text)
     text = _SK_KEY_PATTERN.sub(_REDACTED, text)
-    text = _NAMED_SECRET_PATTERN.sub(lambda match: f"{match.group(1)}={_REDACTED}", text)
-    text = "".join(
-        " " if unicodedata.category(character).startswith("C") else character
-        for character in text
+    text = _NAMED_SECRET_PATTERN.sub(
+        lambda match: (
+            f"{match.group('name')}{match.group('quote')}"
+            f"{match.group('separator')}{_REDACTED}"
+        ),
+        text,
     )
     text = " ".join(text.split()) or _EMPTY_EXTERNAL_ERROR
     limit = max(1, int(max_length))

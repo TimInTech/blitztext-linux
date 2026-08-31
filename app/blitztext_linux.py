@@ -52,6 +52,9 @@ from app import __version__ as APP_VERSION
 # Set up module logger
 logger = logging.getLogger("blitztext.main")
 
+_WORKER_ERROR_LOG_PREFIX = "Worker error: "
+_MAX_ERROR_LOG_LENGTH = 240
+
 
 def _configure_qt_platform() -> None:
     """Prefer native Wayland when a Wayland session is available."""
@@ -1146,8 +1149,10 @@ class BlitztextApp(QObject):
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
         logger.debug("Raw worker error: %s", err_msg)
-        safe_error = sanitize_external_error(err_msg)
-        logger.error("Worker error: %s", safe_error)
+        safe_error = sanitize_external_error(
+            err_msg, max_length=_MAX_ERROR_LOG_LENGTH - len(_WORKER_ERROR_LOG_PREFIX)
+        )
+        logger.error("%s%s", _WORKER_ERROR_LOG_PREFIX, safe_error)
         self._finish_worker_with_error(safe_error, "worker error")
 
     def _finish_worker_with_error(self, err_msg: str, reason: str) -> None:

@@ -57,6 +57,48 @@ class TestExternalErrorSanitizing:
         assert len(result) <= 240
         assert result.endswith("…")
 
+    def test_sanitize_external_error_canonicalizes_hidden_characters_before_masking(self):
+        hostile_error = (
+            "Bearer\x00DUMMY_BEARER_TOKEN_123456 "
+            "api_key\u200b=\u200bDUMMY_API_KEY_123456"
+        )
+
+        assert sanitize_external_error(hostile_error) == (
+            "Bearer [REDACTED] api_key=[REDACTED]"
+        )
+
+    @pytest.mark.parametrize(
+        ("hostile_error", "expected"),
+        [
+            (
+                '{"api_key": "DUMMY_API_KEY_123456"}',
+                '{"api_key":[REDACTED]}',
+            ),
+            (
+                "postgresql://alice:dummy-password@example.invalid/db",
+                "postgresql://[REDACTED]@example.invalid/db",
+            ),
+            (
+                "https://:dummy-password@example.invalid/v1",
+                "https://[REDACTED]@example.invalid/v1",
+            ),
+        ],
+    )
+    def test_sanitize_external_error_masks_common_secret_representations(
+        self, hostile_error, expected
+    ):
+        assert sanitize_external_error(hostile_error) == expected
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "Unsupported locale sk-SK",
+            "Provider returned 👨\u200d💻 error",
+        ],
+    )
+    def test_sanitize_external_error_preserves_legitimate_non_secrets(self, message):
+        assert sanitize_external_error(message) == message
+
 
 class TestLLMServiceInit:
     def test_empty_api_key_is_not_available(self, mock_client):

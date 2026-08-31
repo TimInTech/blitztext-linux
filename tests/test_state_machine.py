@@ -477,6 +477,23 @@ class TestStateMachine:
         assert tray_error.call_args.args[1] == expected_message
         assert notify.call_args.args[1] == expected_message
 
+    def test_worker_error_limits_the_complete_error_log_record(self, gui_app, caplog):
+        hostile_error = "x" * 300
+        expected_message = "x" * 225 + "…"
+        caplog.set_level(logging.DEBUG, logger="blitztext.main")
+
+        with patch.object(gui_app, "show_tray_error") as tray_error, \
+             patch("app.blitztext_linux.notify_service.notify") as notify:
+            gui_app._on_worker_error(hostile_error)
+
+        error_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.ERROR
+        ]
+        assert error_messages == [f"Worker error: {expected_message}"]
+        assert len(error_messages[0]) <= 240
+        assert tray_error.call_args.args[1] == expected_message
+        assert notify.call_args.args[1] == expected_message
+
     def test_state_returns_to_idle_after_result(self, gui_app):
         gui_app.state = "LLM_REWRITING"
         gui_app.current_workflow = WorkflowType.TEXT_IMPROVER
