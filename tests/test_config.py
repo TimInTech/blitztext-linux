@@ -200,6 +200,65 @@ class TestLLMProvider:
         assert saved["llm_provider"] == "openrouter"
 
 
+class TestLLMBaseUrlSecurity:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("https://api.example.com/v1", "https://api.example.com/v1"),
+            ("https://8.8.8.8/v1", "https://8.8.8.8/v1"),
+            ("https://[2001:4860:4860::8888]/v1", "https://[2001:4860:4860::8888]/v1"),
+            ("http://localhost:11434/v1", "http://localhost:11434/v1"),
+            ("http://127.0.0.1:11434/v1", "http://127.0.0.1:11434/v1"),
+            ("http://[::1]:11434/v1", "http://[::1]:11434/v1"),
+            ("http://10.0.0.1/v1", "http://10.0.0.1/v1"),
+            ("http://172.16.0.1/v1", "http://172.16.0.1/v1"),
+            ("http://192.168.1.1/v1", "http://192.168.1.1/v1"),
+        ],
+    )
+    def test_direct_setter_accepts_https_and_explicit_local_http_ranges(self, config, value, expected):
+        config.llm_base_url = value
+        assert config.llm_base_url == expected
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "http://api.example.com/v1",
+            "http://8.8.8.8/v1",
+            "http://172.32.0.1/v1",
+            "http://127.0.0.2/v1",
+            "http://169.254.1.1/v1",
+            "http://[::ffff:127.0.0.1]/v1",
+            "http://2130706433/v1",
+            "http://0x7f000001/v1",
+            "http://0177.0.0.1/v1",
+            "http://%31%32%37.0.0.1/v1",
+            "http:///v1",
+            "http://local\nhost/v1",
+            "https://user:password@example.com/v1",
+            "https://example.com:99999/v1",
+        ],
+    )
+    def test_direct_setter_rejects_unsafe_or_malformed_urls(self, config, value):
+        with pytest.raises(ValueError, match="LLM base URL"):
+            config.llm_base_url = value
+
+    def test_legacy_public_http_url_is_cleared_and_warned_without_echoing_url(self, config_dir, caplog):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        unsafe_url = "http://api.example.com/v1"
+        (config_dir / "config.json").write_text(
+            json.dumps({"llm_base_url": unsafe_url}), encoding="utf-8"
+        )
+
+        with caplog.at_level(logging.WARNING, logger="blitztext.config"):
+            loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.llm_base_url == ""
+        assert loaded.has_unsafe_llm_base_url is True
+        records = [record for record in caplog.records if "unsafe LLM base URL" in record.message]
+        assert len(records) == 1
+        assert unsafe_url not in records[0].message
+
+
 class TestTranscriptionHotkey:
     def test_valid_hotkey_is_accepted(self, config):
         config.transcription_hotkey = "KEY_F13"

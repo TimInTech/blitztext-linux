@@ -275,6 +275,17 @@ class SettingsDialog(QDialog):
         self.edit_base_url.setText(self.config.llm_base_url)
         self.edit_base_url.setPlaceholderText("https://openrouter.ai/api/v1")
         self.edit_base_url.setEnabled(self.config.llm_provider != "openai")
+        base_url_layout = QVBoxLayout()
+        base_url_layout.addWidget(self.edit_base_url)
+        if self.config.has_unsafe_llm_base_url:
+            self.lbl_unsafe_llm_base_url_notice = QLabel(
+                t("settings.base_url.unsafe_legacy_notice")
+            )
+            self.lbl_unsafe_llm_base_url_notice.setWordWrap(True)
+            self.lbl_unsafe_llm_base_url_notice.setStyleSheet("color: #b26a00; font-size: 10px;")
+            base_url_layout.addWidget(self.lbl_unsafe_llm_base_url_notice)
+        else:
+            self.lbl_unsafe_llm_base_url_notice = None
 
         self.edit_llm_model = QLineEdit()
         self.edit_llm_model.setText(self.config.llm_model)
@@ -347,7 +358,7 @@ class SettingsDialog(QDialog):
 
         form_llm.addRow(t("settings.llm_provider.label"), self.combo_llm_provider)
         form_llm.addRow(create_help_label(t("settings.llm_provider.help")))
-        form_llm.addRow(t("settings.base_url.label"), self.edit_base_url)
+        form_llm.addRow(t("settings.base_url.label"), base_url_layout)
         form_llm.addRow(create_help_label(t("settings.base_url.help")))
         form_llm.addRow(t("settings.llm_model.label"), self.edit_llm_model)
         form_llm.addRow(create_help_label(t("settings.llm_model.help")))

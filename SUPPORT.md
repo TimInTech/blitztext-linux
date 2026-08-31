@@ -5,7 +5,7 @@ BlitztextLinux is an experimental Linux desktop app. There is no service-level a
 ## Before Asking For Help
 
 - Make sure you can install the app with `bash scripts/install.sh`.
-- Confirm that your OpenAI API key is entered in the app settings if you use online workflows.
+- Set your API key in the environment variable configured in the app settings before using online workflows. Settings stores only that variable's name, not the API key itself.
 - Verify that `bash scripts/verify.sh` succeeds.
 - If you expect auto-paste, make sure `ydotool.service` is running and your session has access to the `input` group.
 - Read [docs/privacy.md](docs/privacy.md) before testing with sensitive content.

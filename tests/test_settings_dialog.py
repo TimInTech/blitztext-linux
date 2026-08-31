@@ -5,6 +5,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
 from app.blitztext_linux import SettingsDialog
 from app.config import BlitztextConfig
 from app.i18n import DEFAULT_LANGUAGE, get_language, set_language
@@ -189,6 +191,20 @@ def test_save_settings_persists_llm_provider_fields(tmp_path):
     assert reloaded.llm_model == "openai/gpt-4o"
 
 
+def test_save_settings_rejects_public_http_base_url_without_saving_or_accepting(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+    fake.edit_base_url = _Edit("http://api.example.com/v1")
+    fake.accept = Mock()
+
+    with patch("app.blitztext_linux.QMessageBox") as message_box:
+        SettingsDialog.save_settings(fake)
+
+    message_box.critical.assert_called_once()
+    fake.accept.assert_not_called()
+    assert not fake.config.config_file.exists()
+
+
 def test_save_settings_persists_and_applies_ui_language(tmp_path):
     config_dir = tmp_path / ".config" / "blitztext-linux"
     fake = _fake_save_self(config_dir, "standard", ui_language="en")
@@ -284,6 +300,43 @@ def test_build_llm_service_ignores_base_url_when_provider_is_openai(tmp_path):
 
     assert service.base_url == ""
     assert service.model == "gpt-4o"
+
+
+@pytest.mark.parametrize(
+    ("language", "expected_notice"),
+    [
+        ("de", "Eine unsichere HTTP-Basis-URL aus der Konfiguration wurde entfernt. Verwende für öffentliche Endpunkte HTTPS."),
+        ("en", "An unsafe HTTP base URL from the configuration was removed. Use HTTPS for public endpoints."),
+    ],
+)
+def test_migrated_unsafe_base_url_shows_bilingual_notice_and_uses_empty_service_url(
+    tmp_path, language, expected_notice
+):
+    from PyQt6.QtWidgets import QApplication
+    from app.blitztext_linux import BlitztextApp
+
+    qapp = QApplication.instance() or QApplication([])
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.json").write_text(
+        json.dumps({"llm_provider": "custom", "llm_base_url": "http://api.example.com/v1"}),
+        encoding="utf-8",
+    )
+
+    try:
+        set_language(language)
+        config = BlitztextConfig(config_dir=config_dir)
+        dialog = SettingsDialog(config)
+        service = BlitztextApp._build_llm_service(SimpleNamespace(config=config))
+
+        assert config.has_unsafe_llm_base_url is True
+        assert dialog.lbl_unsafe_llm_base_url_notice is not None
+        assert dialog.lbl_unsafe_llm_base_url_notice.text() == expected_notice
+        assert service.base_url == ""
+    finally:
+        dialog.close()
+        qapp.processEvents()
+        set_language(DEFAULT_LANGUAGE)
 
 
 def test_provider_change_prefills_openrouter_base_url():

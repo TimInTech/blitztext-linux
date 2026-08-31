@@ -2,18 +2,18 @@
 
 ## BlitztextLinux
 
-BlitztextLinux stores the OpenAI API key in:
+BlitztextLinux stores only the configured API-key environment-variable name in:
 
 ```text
 ~/.config/blitztext-linux/config.json
 ```
 
-That file is written with restrictive permissions (`0600`) so only the current user can read it.
+That file is written with restrictive permissions (`0600`) so only the current user can read it. The API key itself is read from the configured environment variable or from `~/.config/blitztext-linux/secrets.env`, which must use permissions `0600`.
 
 ## Data flow
 
 - Local transcription workflows stay on the machine.
-- LLM workflows send the transcribed text to OpenAI for rewriting.
+- LLM workflows optionally send the transcribed text to OpenAI, OpenRouter, or a configured custom endpoint for rewriting.
 - Temporary audio files are created during processing and are removed when the workflow finishes or is cancelled.
 - Workflow output may be placed on the clipboard so you can paste it into another app.
 
