@@ -259,7 +259,7 @@ _KEYCODES = {
 
 def _make_fake_ecodes():
     ec = types.SimpleNamespace(**_KEYCODES)
-    # _key_name() greift auf ecodes.KEY zu
+    # _FakeDevice.capabilities() uses ecodes.KEY.
     ec.KEY = {code: name for name, code in _KEYCODES.items() if name != "EV_KEY"}
     return ec
 
@@ -383,6 +383,21 @@ class TestHoldWorkerEvents:
 
 
 class TestLeftAltEvents:
+    def test_worker_debug_logs_exclude_raw_key_events_and_still_trigger_hotkeys(self, caplog):
+        """Debug diagnostics must not expose arbitrary key events."""
+        caplog.set_level(logging.DEBUG, logger="blitztext.hotkey")
+
+        triggered = _run_worker_with_events([
+            (_KEYCODES["KEY_E"], 1),
+            (_KEYCODES["KEY_LEFTALT"], 1),
+        ])
+
+        log_messages = [record.getMessage() for record in caplog.records]
+        assert triggered == [WorkflowType.TRANSCRIPTION]
+        assert all("KEY_E" not in message for message in log_messages)
+        assert all("code=18" not in message for message in log_messages)
+        assert all("evdev key event" not in message for message in log_messages)
+
     def test_leftalt_keydown_triggers_toggle(self):
         """value=1 (key-down) loest die Transkription aus."""
         triggered = _run_worker_with_events([(_KEYCODES["KEY_LEFTALT"], 1)])

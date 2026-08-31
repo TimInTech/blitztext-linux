@@ -27,7 +27,7 @@ Include:
 
 ## Security Notes
 
-- The app sends audio and text directly to OpenAI when you use the remote workflows.
+- Normal transcription is performed locally. Only transcribed text is optionally sent to OpenAI, OpenRouter, or a configured custom LLM endpoint for rewrite workflows.
 - Your OpenAI API key is read from the environment. Put it in `~/.config/blitztext-linux/secrets.env` (chmod `600`) or export the configured environment variable before launch.
 - Temporary audio files may exist briefly during processing.
 - Auto-paste uses `ydotool` to inject `Ctrl+V` into the focused application.

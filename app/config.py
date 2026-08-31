@@ -7,12 +7,15 @@ Berechtigungen: 0o600. Der eigentliche OpenAI-Key wird nur noch zur Laufzeit
 from __future__ import annotations
 
 import copy
+import ipaddress
 import json
 import logging
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.writing_presets import (
     DEFAULT_PRESET_KEY,
@@ -69,7 +72,12 @@ VALID_LLM_PROVIDERS = {"openai", "openrouter", "custom"}
 VALID_TTS_PROVIDERS = {"piper", "openai"}
 VALID_OPENAI_TTS_VOICES = {"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"}
 VALID_UI_LANGUAGES = set(I18N_LANGUAGES)
-BASE_URL_RE = re.compile(r"^https?://", re.IGNORECASE)
+PRIVATE_IPV4_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
+NUMERIC_HOST_PART_RE = re.compile(r"(?:0x[0-9a-f]+|0[0-7]*|[0-9]+)", re.IGNORECASE)
 VALID_HOTKEY_KEYS = {
     "KEY_LEFTALT", "KEY_RIGHTALT", "KEY_RIGHTCTRL", "KEY_LEFTCTRL",
     "KEY_F13", "KEY_F14", "KEY_F15", "KEY_F16",
@@ -93,6 +101,7 @@ class BlitztextConfig:
         self.config_file = self.config_dir / "config.json"
         self._legacy_openai_api_key_present = False
         self._legacy_openai_api_key_value = ""
+        self._has_unsafe_llm_base_url = False
 
         self._data = self._load()
         self._validate_and_sanitize()
@@ -144,6 +153,7 @@ class BlitztextConfig:
             self._data = payload
             self._legacy_openai_api_key_present = False
             self._legacy_openai_api_key_value = ""
+            self._has_unsafe_llm_base_url = False
         except OSError as exc:
             raise ConfigError(f"Config konnte nicht gespeichert werden: {exc}") from exc
 
@@ -171,6 +181,10 @@ class BlitztextConfig:
         return self._legacy_openai_api_key_present
 
     @property
+    def has_unsafe_llm_base_url(self) -> bool:
+        return self._has_unsafe_llm_base_url
+
+    @property
     def llm_provider(self) -> str:
         value = self._data.get("llm_provider", DEFAULTS["llm_provider"])
         return value if value in VALID_LLM_PROVIDERS else DEFAULTS["llm_provider"]
@@ -183,7 +197,7 @@ class BlitztextConfig:
 
     @property
     def llm_base_url(self) -> str:
-        return _normalize_base_url(self._data.get("llm_base_url", ""))
+        return self._data.get("llm_base_url", "")
 
     @llm_base_url.setter
     def llm_base_url(self, value: str) -> None:
@@ -489,7 +503,12 @@ class BlitztextConfig:
 
         if self._data.get("llm_provider") not in VALID_LLM_PROVIDERS:
             self._data["llm_provider"] = DEFAULTS["llm_provider"]
-        self._data["llm_base_url"] = _normalize_base_url(self._data.get("llm_base_url", ""))
+        try:
+            self._data["llm_base_url"] = _normalize_base_url(self._data.get("llm_base_url", ""))
+        except ValueError:
+            self._data["llm_base_url"] = ""
+            self._has_unsafe_llm_base_url = True
+            logger.warning("Removed unsafe LLM base URL from configuration")
         self._data["llm_model"] = _normalize_model(self._data.get("llm_model", DEFAULTS["llm_model"]))
 
         if "workflows" not in self._data or not isinstance(self._data["workflows"], dict):
@@ -528,11 +547,62 @@ def _normalize_env_var_name(value: Any) -> str:
 
 def _normalize_base_url(value: Any) -> str:
     if not isinstance(value, str):
-        return ""
+        raise ValueError("LLM base URL must be a string")
     candidate = value.strip()
-    if not candidate or not BASE_URL_RE.match(candidate):
+    if not candidate:
         return ""
-    return candidate
+    if any(char.isspace() or unicodedata.category(char) in {"Cc", "Cf"} for char in candidate):
+        raise ValueError("LLM base URL must not contain whitespace or control characters")
+
+    try:
+        parsed = urlsplit(candidate)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("LLM base URL must contain a valid host and port") from exc
+
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise ValueError("LLM base URL must use http or https")
+    if not hostname or parsed.username is not None or parsed.password is not None:
+        raise ValueError("LLM base URL must not contain credentials and requires a host")
+    if "%" in hostname:
+        raise ValueError("LLM base URL must not use an encoded host")
+    if port is not None and not 0 <= port <= 65535:
+        raise ValueError("LLM base URL must contain a valid port")
+
+    if _looks_like_alternate_numeric_ipv4(hostname):
+        raise ValueError("LLM base URL must use a canonical IP address")
+    if parsed.scheme.lower() == "https":
+        return candidate
+
+    if hostname.lower() == "localhost":
+        return candidate
+
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError as exc:
+        raise ValueError("LLM base URL requires HTTPS for non-local endpoints") from exc
+
+    if str(address) != hostname:
+        raise ValueError("LLM base URL must use a canonical IP address")
+    if address.version == 6 and str(address) == "::1":
+        return candidate
+    if address.version == 4 and (
+        str(address) == "127.0.0.1" or any(address in network for network in PRIVATE_IPV4_NETWORKS)
+    ):
+        return candidate
+    raise ValueError("LLM base URL requires HTTPS for non-local endpoints")
+
+
+def _looks_like_alternate_numeric_ipv4(hostname: str) -> bool:
+    parts = hostname.split(".")
+    if not parts or not all(NUMERIC_HOST_PART_RE.fullmatch(part) for part in parts):
+        return False
+    try:
+        address = ipaddress.IPv4Address(hostname)
+    except ValueError:
+        return True
+    return str(address) != hostname
 
 
 def _normalize_model(value: Any) -> str:

@@ -58,12 +58,6 @@ _HOTKEY_MAP = [
 # Alle bekannten Meta- und Shift-Keycodes (als Namen; werden zur Laufzeit in Codes umgewandelt)
 _ALL_META_KEY_NAMES = ("KEY_LEFTMETA", "KEY_RIGHTMETA")
 _ALL_SHIFT_KEY_NAMES = ("KEY_LEFTSHIFT", "KEY_RIGHTSHIFT")
-_DEBUG_MODIFIER_KEY_NAMES = (
-    "KEY_LEFTALT", "KEY_RIGHTALT",
-    "KEY_LEFTCTRL", "KEY_RIGHTCTRL",
-    "KEY_LEFTMETA", "KEY_RIGHTMETA",
-    "KEY_LEFTSHIFT", "KEY_RIGHTSHIFT",
-)
 
 
 def _modifier_match(
@@ -96,11 +90,7 @@ def _modifier_match(
         result = False
         reason = "unexpected_shift"
 
-    logger.debug(
-        "modifier_match result=%s reason=%s pressed=%s required_meta=%s required_shift=%s all_meta=%s all_shift=%s",
-        result, reason, sorted(pressed), sorted(meta_codes), sorted(shift_codes),
-        sorted(all_meta_codes), sorted(all_shift_codes),
-    )
+    logger.debug("modifier_match result=%s reason=%s", result, reason)
     return result
 
 
@@ -216,10 +206,6 @@ class HotkeyWorker(QObject):
         all_shift_codes = {
             getattr(ec, k) for k in _ALL_SHIFT_KEY_NAMES if hasattr(ec, k)
         }
-        debug_modifier_codes = {
-            getattr(ec, k): k for k in _DEBUG_MODIFIER_KEY_NAMES if hasattr(ec, k)
-        }
-
         hotkeys = []
         for workflow, tkey, mod_names in _HOTKEY_MAP:
             if workflow == WorkflowType.TRANSCRIPTION:
@@ -302,16 +288,6 @@ class HotkeyWorker(QObject):
                             pressed.add(code)
                         elif value == 0:
                             pressed.discard(code)
-
-                        key_name = _key_name(ec, code)
-                        active_modifiers = sorted(
-                            name for mod_code, name in debug_modifier_codes.items()
-                            if mod_code in pressed
-                        )
-                        logger.debug(
-                            "evdev key event device=%s key=%s code=%s value=%s active_modifiers=%s",
-                            getattr(dev, "path", "<unknown>"), key_name, code, value, active_modifiers,
-                        )
 
                         # --- Hold-Modus: KEY_UP des aktiven Trigger-Keys stoppt ---
                         if self._mode == "hold" and value == 0 and _hold_active is not None:
@@ -454,15 +430,6 @@ def _refresh_keyboard_devices(fd_to_dev: Dict[int, Any], transcription_key: str,
     )
     _close_devices(fd_to_dev.values())
     return {dev.fd: dev for dev in devices}
-
-
-def _key_name(ecodes, code: int) -> str:
-    name = ecodes.KEY.get(code) if hasattr(ecodes, "KEY") else None
-    if isinstance(name, list):
-        return "/".join(str(part) for part in name)
-    if name:
-        return str(name)
-    return str(code)
 
 
 def _group_names() -> Set[str]:
