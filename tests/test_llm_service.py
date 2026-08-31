@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import DEFAULTS
-from app.llm_service import LLMService, LLMServiceError, _NullLLMClient
+from app.llm_service import LLMService, LLMServiceError, _NullLLMClient, sanitize_external_error
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESETS
 
@@ -36,6 +36,26 @@ def service(mock_client):
 HANDOVER_TRANSCRIPT = (
     "Erstelle eine kurze Übergabe prompt damit der Plan in neuer Session ausgeführt wird"
 )
+
+
+class TestExternalErrorSanitizing:
+    def test_sanitize_external_error_masks_secrets_and_normalizes_spacing(self):
+        hostile_error = (
+            "  request\x00 failed\tBearer DUMMY_BEARER_TOKEN_123456\n"
+            "sk-DUMMYKEY1234567890\rapi_key=DUMMY_API_KEY_123456\x1f"
+            "https://alice:dummy-password@example.invalid/v1  "
+        )
+
+        assert sanitize_external_error(hostile_error) == (
+            "request failed Bearer [REDACTED] [REDACTED] api_key=[REDACTED] "
+            "https://[REDACTED]@example.invalid/v1"
+        )
+
+    def test_sanitize_external_error_truncates_within_default_limit(self):
+        result = sanitize_external_error("x" * 300)
+
+        assert len(result) <= 240
+        assert result.endswith("…")
 
 
 class TestLLMServiceInit:

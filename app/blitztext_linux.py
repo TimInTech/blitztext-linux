@@ -31,7 +31,7 @@ if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
 from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
-from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS
+from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, sanitize_external_error
 from app.writing_presets import (
     CUSTOM_PRESET_KEY,
     WRITING_PRESET_KEYS,
@@ -1145,8 +1145,10 @@ class BlitztextApp(QObject):
 
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
-        logger.error("Worker error: %s", err_msg)
-        self._finish_worker_with_error(err_msg, "worker error")
+        logger.debug("Raw worker error: %s", err_msg)
+        safe_error = sanitize_external_error(err_msg)
+        logger.error("Worker error: %s", safe_error)
+        self._finish_worker_with_error(safe_error, "worker error")
 
     def _finish_worker_with_error(self, err_msg: str, reason: str) -> None:
         self.show_tray_error(t("notify.error.title"), err_msg)

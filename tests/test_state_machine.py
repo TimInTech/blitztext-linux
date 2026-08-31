@@ -449,6 +449,34 @@ def gui_app():
 
 @gui_only
 class TestStateMachine:
+    def test_worker_error_sanitizes_log_tray_and_desktop_notification(self, gui_app, caplog):
+        hostile_error = (
+            "  request\x00 failed\tBearer DUMMY_BEARER_TOKEN_123456\n"
+            "sk-DUMMYKEY1234567890\rapi_key=DUMMY_API_KEY_123456\x1f"
+            "https://alice:dummy-password@example.invalid/v1  "
+        )
+        expected_message = (
+            "request failed Bearer [REDACTED] [REDACTED] api_key=[REDACTED] "
+            "https://[REDACTED]@example.invalid/v1"
+        )
+        caplog.set_level(logging.DEBUG, logger="blitztext.main")
+
+        with patch.object(gui_app, "show_tray_error") as tray_error, \
+             patch("app.blitztext_linux.notify_service.notify") as notify:
+            gui_app._on_worker_error(hostile_error)
+
+        error_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.ERROR
+        ]
+        debug_messages = [
+            record.getMessage() for record in caplog.records if record.levelno == logging.DEBUG
+        ]
+        assert error_messages == [f"Worker error: {expected_message}"]
+        assert any(hostile_error in message for message in debug_messages)
+        assert all(hostile_error not in record.getMessage() for record in caplog.records if record.levelno != logging.DEBUG)
+        assert tray_error.call_args.args[1] == expected_message
+        assert notify.call_args.args[1] == expected_message
+
     def test_state_returns_to_idle_after_result(self, gui_app):
         gui_app.state = "LLM_REWRITING"
         gui_app.current_workflow = WorkflowType.TEXT_IMPROVER

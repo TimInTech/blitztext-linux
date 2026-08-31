@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
+import unicodedata
 
 from app.config import DEFAULTS
 from app.workflows import WorkflowType
@@ -18,6 +20,16 @@ logger = logging.getLogger("blitztext.llm_service")
 
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
 DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
+
+_REDACTED = "[REDACTED]"
+_URL_USERINFO_PATTERN = re.compile(r"(https?://)[^\s/@:]+:[^\s/@]+@", re.IGNORECASE)
+_BEARER_TOKEN_PATTERN = re.compile(r"\bBearer\s+[^\s,;]+", re.IGNORECASE)
+_SK_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]+")
+_NAMED_SECRET_PATTERN = re.compile(
+    r"\b(api_key|apikey|token|secret|password)\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)",
+    re.IGNORECASE,
+)
+_EMPTY_EXTERNAL_ERROR = "Unbekannter Fehler"
 
 _DAMPF_SYSTEM = (
     "Du erhältst ein emotional gesprochenes Transkript. Erkenne zuerst das eigentliche "
@@ -59,6 +71,24 @@ _EMOJI_SYSTEM_TEMPLATE = (
     "(wenig = 1-2 pro Absatz, mittel = 3-5 pro Absatz, viel = 6+ pro Absatz). "
     "Gib NUR den Text mit Emojis zurück."
 )
+
+
+def sanitize_external_error(message: object, max_length: int = 240) -> str:
+    """Return a safe, compact representation of an external error message."""
+    text = str(message)
+    text = _URL_USERINFO_PATTERN.sub(rf"\1{_REDACTED}@", text)
+    text = _BEARER_TOKEN_PATTERN.sub(f"Bearer {_REDACTED}", text)
+    text = _SK_KEY_PATTERN.sub(_REDACTED, text)
+    text = _NAMED_SECRET_PATTERN.sub(lambda match: f"{match.group(1)}={_REDACTED}", text)
+    text = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in text
+    )
+    text = " ".join(text.split()) or _EMPTY_EXTERNAL_ERROR
+    limit = max(1, int(max_length))
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
 class LLMServiceError(Exception):
