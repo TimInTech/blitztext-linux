@@ -236,11 +236,34 @@ class TestLLMBaseUrlSecurity:
             "http://local\nhost/v1",
             "https://user:password@example.com/v1",
             "https://example.com:99999/v1",
+            "https://0177.0.0.1/v1",
+            "https://127.000.000.001/v1",
+            "https://999.1.1.1/v1",
+            "https://api.example.com/\x7f",
+            "https://api.example.com/\u0080",
         ],
     )
     def test_direct_setter_rejects_unsafe_or_malformed_urls(self, config, value):
         with pytest.raises(ValueError, match="LLM base URL"):
             config.llm_base_url = value
+
+    @pytest.mark.parametrize(
+        "unsafe_url",
+        [
+            "https://0177.0.0.1/v1",
+            "https://999.1.1.1/v1",
+        ],
+    )
+    def test_stored_noncanonical_numeric_https_url_is_cleared(self, config_dir, unsafe_url):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"llm_base_url": unsafe_url}), encoding="utf-8"
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.llm_base_url == ""
+        assert loaded.has_unsafe_llm_base_url is True
 
     def test_legacy_public_http_url_is_cleared_and_warned_without_echoing_url(self, config_dir, caplog):
         config_dir.mkdir(parents=True, exist_ok=True)

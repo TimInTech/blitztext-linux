@@ -205,6 +205,29 @@ def test_save_settings_rejects_public_http_base_url_without_saving_or_accepting(
     assert not fake.config.config_file.exists()
 
 
+@pytest.mark.parametrize(
+    "unsafe_url",
+    [
+        "https://0177.0.0.1/v1",
+        "https://999.1.1.1/v1",
+        "https://api.example.com/\x7f",
+        "https://api.example.com/\u0080",
+    ],
+)
+def test_save_settings_rejects_invalid_https_url_without_saving_or_accepting(tmp_path, unsafe_url):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+    fake.edit_base_url = _Edit(unsafe_url)
+    fake.accept = Mock()
+
+    with patch("app.blitztext_linux.QMessageBox") as message_box:
+        SettingsDialog.save_settings(fake)
+
+    message_box.critical.assert_called_once()
+    fake.accept.assert_not_called()
+    assert not fake.config.config_file.exists()
+
+
 def test_save_settings_persists_and_applies_ui_language(tmp_path):
     config_dir = tmp_path / ".config" / "blitztext-linux"
     fake = _fake_save_self(config_dir, "standard", ui_language="en")

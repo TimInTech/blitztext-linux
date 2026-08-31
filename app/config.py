@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -550,7 +551,7 @@ def _normalize_base_url(value: Any) -> str:
     candidate = value.strip()
     if not candidate:
         return ""
-    if any(char.isspace() or ord(char) < 32 for char in candidate):
+    if any(char.isspace() or unicodedata.category(char) in {"Cc", "Cf"} for char in candidate):
         raise ValueError("LLM base URL must not contain whitespace or control characters")
 
     try:
@@ -595,9 +596,13 @@ def _normalize_base_url(value: Any) -> str:
 
 def _looks_like_alternate_numeric_ipv4(hostname: str) -> bool:
     parts = hostname.split(".")
-    return bool(parts) and all(NUMERIC_HOST_PART_RE.fullmatch(part) for part in parts) and not (
-        len(parts) == 4 and all(part.isdecimal() for part in parts)
-    )
+    if not parts or not all(NUMERIC_HOST_PART_RE.fullmatch(part) for part in parts):
+        return False
+    try:
+        address = ipaddress.IPv4Address(hostname)
+    except ValueError:
+        return True
+    return str(address) != hostname
 
 
 def _normalize_model(value: Any) -> str:
