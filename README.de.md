@@ -300,7 +300,7 @@ sudo apt install pulseaudio-utils wl-clipboard xclip ydotool ffmpeg python3-venv
 | :--- | :--- |
 | `pulseaudio-utils` | `parec` für die Audioaufnahme via PulseAudio/PipeWire |
 | `wl-clipboard` / `xclip` | Zwischenablage unter Wayland (`wl-copy`) bzw. X11-Fallback |
-| `ydotool` (≥ 1.0) | Simuliert `Ctrl+V` für automatisches Einfügen (Auto-Paste). Ab Version 1.0 werden rohe Keycodes verwendet. **Ubuntu 25.10/26.04** liefern ydotool ≥ 1.0 (1.0.4) direkt via `apt`. **Ubuntu 24.04 und 22.04** liefern per `apt` nur 0.1.x (z. B. 0.1.8), das keine Keycodes unterstützt und damit kein Auto-Paste – dort ydotool ≥ 1.0 aus dem Quellcode bauen (siehe unten). Auto-Paste auf 24.04, 25.10 und 26.04 verifiziert. |
+| `ydotool` | Simuliert automatisches Einfügen. Blitztext verwendet symbolische Tastenkombinationen, die mit Ubuntu 24.04s ydotool 0.1.8 und ydotool ≥ 1.0 funktionieren: `Ctrl+Shift+V` als terminalkompatibler Wayland-Fallback, sonst `Ctrl+V`. |
 | `ffmpeg` | Audio-Konvertierungen |
 | `python3-evdev` | Eingabegeräte-Zugriff für den systemweiten Hotkey-Daemon |
 | `socat` | Optionale Socket-Kommunikation |

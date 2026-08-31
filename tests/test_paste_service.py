@@ -86,9 +86,10 @@ class TestYdotoolPaste:
         result = MagicMock(returncode=0, stderr=b"")
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
             with patch("app.paste_service._detect_active_window_class", return_value="konsole"):
-                with patch("app.paste_service.time.sleep"):
-                    with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
-                        assert service._ydotool_paste() is True
+                with patch.object(service, "_ydotool_uses_legacy_key_syntax", return_value=False):
+                    with patch("app.paste_service.time.sleep"):
+                        with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
+                            assert service._ydotool_paste() is True
         run_mock.assert_called_once_with(
             ["ydotool", "key", "--key-delay", "135", *_CTRL_SHIFT_V_KEYCODES],
             check=False,
@@ -102,9 +103,10 @@ class TestYdotoolPaste:
         result = MagicMock(returncode=0, stderr=b"")
         with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
             with patch("app.paste_service._detect_active_window_class", return_value="firefox"):
-                with patch("app.paste_service.time.sleep"):
-                    with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
-                        assert service._ydotool_paste() is True
+                with patch.object(service, "_ydotool_uses_legacy_key_syntax", return_value=False):
+                    with patch("app.paste_service.time.sleep"):
+                        with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
+                            assert service._ydotool_paste() is True
         run_mock.assert_called_once_with(
             ["ydotool", "key", "--key-delay", "246", *_CTRL_V_KEYCODES],
             check=False,
@@ -119,9 +121,10 @@ class TestYdotoolPaste:
         with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}, clear=True):
             with patch("app.paste_service.shutil.which", return_value="/usr/bin/ydotool"):
                 with patch("app.paste_service._detect_active_window_class", return_value=None):
-                    with patch("app.paste_service.time.sleep"):
-                        with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
-                            assert service._ydotool_paste() is False
+                    with patch.object(service, "_ydotool_uses_legacy_key_syntax", return_value=False):
+                        with patch("app.paste_service.time.sleep"):
+                            with patch("app.paste_service.subprocess.run", return_value=result) as run_mock:
+                                assert service._ydotool_paste() is False
         run_mock.assert_called_once_with(
             ["ydotool", "key", "--key-delay", "80", *_CTRL_SHIFT_V_KEYCODES],
             check=False,

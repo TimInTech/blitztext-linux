@@ -22,16 +22,14 @@ logger = logging.getLogger("blitztext.paste_service")
 _PASTE_DELAY = 0.15
 # ydotool key-delay in ms.
 _KEY_DELAY_MS = 80
-# Strg+V als rohe Keycodes (`<keycode>:<pressed>`). ydotool >=1.0
-# interpretiert KEINE Tastennamen mehr wie "ctrl+v" -- solche Werte werden
-# stillschweigend als "nicht interpretierbar" behandelt und erzeugen nur einen
-# Delay (rc=0, KEIN Fehler), sodass Auto-Paste unbemerkt ausbleibt.
-# KEY_LEFTCTRL=29, KEY_V=47 (siehe /usr/include/linux/input-event-codes.h).
-# Sequenz: Strg down, V down, V up, Strg up.
+# ydotool >=1.0 expects raw Linux input keycodes.
 _CTRL_V_KEYCODES = ["29:1", "47:1", "47:0", "29:0"]
-# Strg+Shift+V fuer Terminals (dort ist Strg+V meist "nichts tun" oder Copy).
-# KEY_LEFTSHIFT=42 zusaetzlich zu KEY_LEFTCTRL=29, KEY_V=47.
 _CTRL_SHIFT_V_KEYCODES = ["29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+# Ubuntu 24.04's ydotool 0.1.x parses raw keycodes as text, so it needs
+# symbolic shortcuts instead.
+_CTRL_V_NAMED_KEYS = ["ctrl+v"]
+_CTRL_SHIFT_V_NAMED_KEYS = ["ctrl+shift+v"]
+_YDOTOOL_LEGACY_HELP_MARKER = "each key sequence"
 # Bekannte Terminal-Emulator-Fensterklassen (lowercase-Vergleich).
 # Unter Wayland kann xdotool die aktive native Fensterklasse oft nicht erkennen;
 # dann nutzt Auto-Paste einen sicheren Terminal-Fallback und laesst das Clipboard stehen.
@@ -65,6 +63,7 @@ _YDOTOOL_TIMEOUT = 5.0
 _WL_PASTE_TIMEOUT = 5.0
 _XCLIP_PASTE_TIMEOUT = 5.0
 _XDOTOOL_TIMEOUT = 2.0
+_YDOTOOL_HELP_TIMEOUT = 2.0
 _COPYQ_TIMEOUT = 2.0
 _YDOTOOL_MISSING_DAEMON_MARKERS = (
     "failed to connect",
@@ -115,6 +114,7 @@ class PasteService:
         """
         self.autopaste = autopaste
         self.key_delay_ms = max(0, int(key_delay_ms))
+        self._ydotool_uses_legacy_keys: Optional[bool] = None
 
     def paste(self, text: str, force_autopaste: Optional[bool] = None) -> None:
         """Text ins Clipboard schreiben und optional einfuegen.
@@ -302,15 +302,19 @@ class PasteService:
         window_class = _detect_active_window_class()
         wayland_unknown = window_class is None and bool(os.environ.get("WAYLAND_DISPLAY"))
         is_terminal = bool(window_class and window_class in _KNOWN_TERMINAL_WINDOW_CLASSES)
+        uses_legacy_keys = self._ydotool_uses_legacy_key_syntax()
         if wayland_unknown:
-            keycodes = _CTRL_SHIFT_V_KEYCODES
+            key_sequence = _CTRL_SHIFT_V_NAMED_KEYS if uses_legacy_keys else _CTRL_SHIFT_V_KEYCODES
             shortcut = "Ctrl+Shift+V"
             logger.warning(
                 "Active window could not be detected under Wayland -- sending Ctrl+Shift+V "
                 "fallback and keeping the new text in the clipboard."
             )
         else:
-            keycodes = _CTRL_SHIFT_V_KEYCODES if is_terminal else _CTRL_V_KEYCODES
+            if is_terminal:
+                key_sequence = _CTRL_SHIFT_V_NAMED_KEYS if uses_legacy_keys else _CTRL_SHIFT_V_KEYCODES
+            else:
+                key_sequence = _CTRL_V_NAMED_KEYS if uses_legacy_keys else _CTRL_V_KEYCODES
             shortcut = "Ctrl+Shift+V" if is_terminal else "Ctrl+V"
             logger.info(
                 "Auto-paste sending %s via ydotool (active_window_class=%s).",
@@ -319,7 +323,7 @@ class PasteService:
             )
         try:
             result = subprocess.run(
-                ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *keycodes],
+                ["ydotool", "key", "--key-delay", str(self.key_delay_ms), *key_sequence],
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
@@ -347,6 +351,27 @@ class PasteService:
             return False
         logger.info("Auto-paste key injection completed with %s.", shortcut)
         return not wayland_unknown
+
+    def _ydotool_uses_legacy_key_syntax(self) -> bool:
+        """Detect ydotool 0.1.x from its key command help output."""
+        if self._ydotool_uses_legacy_keys is not None:
+            return self._ydotool_uses_legacy_keys
+        try:
+            result = subprocess.run(
+                ["ydotool", "key", "--help"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=_YDOTOOL_HELP_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            logger.warning("ydotool version could not be detected; using current keycode syntax.")
+            self._ydotool_uses_legacy_keys = False
+            return False
+        output = result.stdout.lower() if isinstance(result.stdout, str) else ""
+        self._ydotool_uses_legacy_keys = _YDOTOOL_LEGACY_HELP_MARKER in output
+        return self._ydotool_uses_legacy_keys
 
     def _qt_copy(self, text: str) -> None:
         try:
