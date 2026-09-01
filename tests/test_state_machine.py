@@ -75,7 +75,12 @@ class TestPasteTimeouts:
             run_mock.side_effect = side_effect
             svc.paste("hallo welt")
 
-        ydotool_call = run_mock.call_args_list[1]
+        ydotool_calls = [
+            call for call in run_mock.call_args_list
+            if call.args[0][:3] == ["ydotool", "key", "--key-delay"]
+        ]
+        assert len(ydotool_calls) == 1
+        ydotool_call = ydotool_calls[0]
         assert ydotool_call.args[0][:4] == ["ydotool", "key", "--key-delay", "135"]
 
     def test_paste_missing_ydotoold_does_not_raise(self, caplog):
@@ -112,10 +117,13 @@ class TestPasteTimeouts:
                 return subprocess.CompletedProcess(cmd, 0, b"", b"")
             run_mock.side_effect = side_effect
             svc.paste("hallo welt", force_autopaste=True)
-        assert run_mock.call_count == 3
         cmd_names = [call.args[0][0] for call in run_mock.call_args_list]
         assert any(name in ("wl-copy", "xclip") for name in cmd_names)
-        assert "ydotool" in cmd_names
+        ydotool_calls = [
+            call for call in run_mock.call_args_list
+            if call.args[0][:3] == ["ydotool", "key", "--key-delay"]
+        ]
+        assert len(ydotool_calls) == 1
 
     def test_autopaste_false_without_override_skips_ydotool(self):
         """autopaste=False ohne force_autopaste: nur Clipboard-Write, kein ydotool."""
