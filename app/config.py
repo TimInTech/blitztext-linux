@@ -358,11 +358,11 @@ class BlitztextConfig:
     @property
     def tts_openai_consent(self) -> bool:
         """Einmalige Nutzer-Bestaetigung, dass lokale Texte an OpenAI gesendet werden duerfen."""
-        return bool(self._data.get("tts_openai_consent", DEFAULTS["tts_openai_consent"]))
+        return self._data.get("tts_openai_consent") is True
 
     @tts_openai_consent.setter
     def tts_openai_consent(self, value: bool) -> None:
-        self._data["tts_openai_consent"] = bool(value)
+        self._data["tts_openai_consent"] = value is True
 
     @property
     def tts_speed(self) -> float:
@@ -488,7 +488,7 @@ class BlitztextConfig:
             self._data["tts_openai_model"] = DEFAULTS["tts_openai_model"]
         if self._data.get("tts_openai_voice") not in VALID_OPENAI_TTS_VOICES:
             self._data["tts_openai_voice"] = DEFAULTS["tts_openai_voice"]
-        self._data["tts_openai_consent"] = bool(self._data.get("tts_openai_consent", False))
+        self._data["tts_openai_consent"] = self._data.get("tts_openai_consent") is True
 
         if not isinstance(self._data.get("compose_signature_text", ""), str):
             self._data["compose_signature_text"] = ""

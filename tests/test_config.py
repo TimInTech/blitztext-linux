@@ -41,6 +41,20 @@ class TestDefaults:
         assert config.autopaste is True
 
 
+class TestTtsConsent:
+    @pytest.mark.parametrize("stored_value", ["true", "false", "no", 1, [], {}])
+    def test_non_boolean_openai_tts_consent_is_sanitized_to_false(self, config_dir, stored_value):
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"tts_openai_consent": stored_value}),
+            encoding="utf-8",
+        )
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.tts_openai_consent is False
+
+
 class TestPersistence:
     def test_save_load_roundtrip(self, config, config_dir):
         config.model = "small"
