@@ -229,6 +229,36 @@ class TestNotify:
 # ---------------------------------------------------------------------------
 
 class TestTtsAvailability:
+    def test_detaching_cloud_thread_disconnects_late_worker_callbacks(self):
+        finished_signal = MagicMock()
+        error_signal = MagicMock()
+        worker = SimpleNamespace(
+            request_cancel=MagicMock(),
+            finished=finished_signal,
+            error=error_signal,
+        )
+        thread = SimpleNamespace(
+            requestInterruption=MagicMock(),
+            quit=MagicMock(),
+            wait=MagicMock(return_value=True),
+        )
+        finished_handler = object()
+        error_handler = object()
+        fake_window = SimpleNamespace(
+            _cloud_worker=worker,
+            _cloud_thread=thread,
+            _detached_cloud_threads=[],
+            _on_cloud_finished=finished_handler,
+            _on_cloud_error=error_handler,
+            _cleanup_cloud_state=MagicMock(),
+        )
+
+        tts_window.TtsWindow._detach_cloud_thread(fake_window)
+
+        finished_signal.disconnect.assert_called_once_with(finished_handler)
+        error_signal.disconnect.assert_called_once_with(error_handler)
+        fake_window._cleanup_cloud_state.assert_called_once()
+
     def test_is_piper_available_false_when_missing(self):
         with patch("app.tts_window._find_piper", return_value=None):
             assert tts_window.is_piper_available() is False
