@@ -143,7 +143,7 @@ def _fake_save_self(config_dir, preset_key, ui_language="de"):
         edit_audio_device=_Edit("@DEFAULT_SOURCE@"),
         combo_hotkey_mode=_Combo("hold"),
         combo_transcription_key=_Combo("KEY_LEFTALT"),
-        edit_api_key_env=_Edit("OPENAI_API_KEY"),
+        edit_api_key_env=_Edit("OPENROUTER_API_KEY"),
         combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
         edit_base_url=_Edit("https://openrouter.ai/api/v1"),
         edit_llm_model=_Edit("openai/gpt-4o"),
@@ -202,6 +202,24 @@ def test_save_settings_rejects_public_http_base_url_without_saving_or_accepting(
 
     message_box.critical.assert_called_once()
     fake.accept.assert_not_called()
+    assert not fake.config.config_file.exists()
+
+
+def test_save_settings_rejects_empty_non_openai_endpoint_without_mutating_config(tmp_path):
+    config_dir = tmp_path / ".config" / "blitztext-linux"
+    fake = _fake_save_self(config_dir, "standard")
+    fake.combo_llm_provider = _Combo(text="Eigener Endpunkt", data="custom")
+    fake.edit_base_url = _Edit("")
+    fake.edit_api_key_env = _Edit("CUSTOM_LLM_API_KEY")
+    fake.accept = Mock()
+
+    with patch("app.blitztext_linux.QMessageBox") as message_box:
+        SettingsDialog.save_settings(fake)
+
+    message_box.critical.assert_called_once()
+    fake.accept.assert_not_called()
+    assert fake.config.llm_provider == "openai"
+    assert fake.config.llm_base_url == ""
     assert not fake.config.config_file.exists()
 
 
@@ -333,7 +351,7 @@ def test_build_llm_service_ignores_base_url_when_provider_is_openai(tmp_path):
     ],
 )
 def test_migrated_unsafe_base_url_shows_bilingual_notice_and_uses_empty_service_url(
-    tmp_path, language, expected_notice
+    tmp_path, language, expected_notice, monkeypatch
 ):
     from PyQt6.QtWidgets import QApplication
     from app.blitztext_linux import BlitztextApp
@@ -347,6 +365,7 @@ def test_migrated_unsafe_base_url_shows_bilingual_notice_and_uses_empty_service_
     )
 
     try:
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-key-must-not-leave-the-app")
         set_language(language)
         config = BlitztextConfig(config_dir=config_dir)
         dialog = SettingsDialog(config)
@@ -356,6 +375,7 @@ def test_migrated_unsafe_base_url_shows_bilingual_notice_and_uses_empty_service_
         assert dialog.lbl_unsafe_llm_base_url_notice is not None
         assert dialog.lbl_unsafe_llm_base_url_notice.text() == expected_notice
         assert service.base_url == ""
+        assert service.api_key == ""
     finally:
         dialog.close()
         qapp.processEvents()
@@ -366,9 +386,11 @@ def test_provider_change_prefills_openrouter_base_url():
     fake = SimpleNamespace(
         combo_llm_provider=_Combo(text="OpenRouter", data="openrouter"),
         edit_base_url=_Edit(""),
+        edit_api_key_env=_Edit("OPENAI_API_KEY"),
     )
     SettingsDialog._on_llm_provider_changed(fake)
     assert fake.edit_base_url.text() == "https://openrouter.ai/api/v1"
+    assert fake.edit_api_key_env.text() == "OPENROUTER_API_KEY"
 
 
 def test_provider_change_to_openai_clears_and_disables_base_url():

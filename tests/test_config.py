@@ -222,6 +222,13 @@ class TestLLMProvider:
         assert saved["openai_api_key_env"] == "OPENROUTER_API_KEY"
         assert saved["llm_provider"] == "openrouter"
 
+    def test_non_openai_provider_never_uses_default_openai_key_env(self, config, monkeypatch):
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-key-must-not-leave-the-app")
+
+        assert config.resolve_llm_api_key() == ""
+
 
 class TestLLMBaseUrlSecurity:
     @pytest.mark.parametrize(

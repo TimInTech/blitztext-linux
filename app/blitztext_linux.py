@@ -30,7 +30,13 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
-from app.config import Config, DEFAULTS, VALID_HOTKEY_KEYS
+from app.config import (
+    Config,
+    DEFAULTS,
+    VALID_HOTKEY_KEYS,
+    normalize_llm_api_key_env,
+    validate_llm_provider_settings,
+)
 from app.llm_service import LLMService, WorkflowType, LLM_WORKFLOWS, sanitize_external_error
 from app.writing_presets import (
     CUSTOM_PRESET_KEY,
@@ -457,6 +463,13 @@ class SettingsDialog(QDialog):
 
     def _on_llm_provider_changed(self) -> None:
         provider = self.combo_llm_provider.currentData()
+        api_key_field = getattr(self, "edit_api_key_env", None)
+        if api_key_field is not None:
+            current_env = normalize_llm_api_key_env(api_key_field.text())
+            if provider == "openrouter" and current_env == DEFAULTS["openai_api_key_env"]:
+                api_key_field.setText("OPENROUTER_API_KEY")
+            elif provider == "openai" and current_env == "OPENROUTER_API_KEY":
+                api_key_field.setText(DEFAULTS["openai_api_key_env"])
         if provider == "openrouter":
             if not self.edit_base_url.text().strip():
                 self.edit_base_url.setText("https://openrouter.ai/api/v1")
@@ -523,6 +536,15 @@ class SettingsDialog(QDialog):
 
     def save_settings(self) -> None:
         try:
+            provider, base_url = validate_llm_provider_settings(
+                self.combo_llm_provider.currentData(), self.edit_base_url.text()
+            )
+            api_key_env = normalize_llm_api_key_env(self.edit_api_key_env.text())
+            if provider != "openai" and api_key_env == DEFAULTS["openai_api_key_env"]:
+                raise ValueError(
+                    "Für externe LLM-Anbieter muss eine eigene API-Key-Umgebungsvariable gesetzt sein"
+                )
+
             self.config.model = self.combo_model.currentText()
             self.config.backend = self.combo_backend.currentText()
             self.config.language = self.edit_language.text().strip()
@@ -530,9 +552,9 @@ class SettingsDialog(QDialog):
             self.config.hotkey_mode = self.combo_hotkey_mode.currentText()
             self.config.transcription_hotkey = self.combo_transcription_key.currentText()
 
-            self.config.openai_api_key_env = self.edit_api_key_env.text().strip()
-            self.config.llm_provider = self.combo_llm_provider.currentData()
-            self.config.llm_base_url = self.edit_base_url.text().strip()
+            self.config.openai_api_key_env = api_key_env
+            self.config.llm_provider = provider
+            self.config.llm_base_url = base_url
             self.config.llm_model = self.edit_llm_model.text().strip()
             self.config.text_improver_tone = self.combo_tone.currentData()
             self.config.writing_preset = self.combo_writing_preset.currentData()
@@ -692,9 +714,13 @@ class BlitztextApp(QObject):
         autoritativ: bei "openai" wird eine evtl. gespeicherte base_url ignoriert,
         damit der OpenAI-Standardendpunkt genutzt wird (OpenRouter nur bei Auswahl).
         """
-        base_url = "" if self.config.llm_provider == "openai" else self.config.llm_base_url
+        provider = self.config.llm_provider
+        base_url = "" if provider == "openai" else self.config.llm_base_url
+        api_key = self.config.resolve_llm_api_key()
+        if provider != "openai" and not base_url:
+            api_key = ""
         return LLMService(
-            api_key=self.config.resolve_openai_api_key(),
+            api_key=api_key,
             tone=self.config.text_improver_tone,
             emoji_density=self.config.emoji_density,
             dampf_system_prompt=self.config.dampf_system_prompt,

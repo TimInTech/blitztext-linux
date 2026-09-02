@@ -176,6 +176,15 @@ class BlitztextConfig:
             return env_value
         return self._legacy_openai_api_key_value
 
+    def resolve_llm_api_key(self) -> str:
+        """Return a key only when it is safe for the selected LLM provider."""
+        if (
+            self.llm_provider != "openai"
+            and self.openai_api_key_env == DEFAULTS["openai_api_key_env"]
+        ):
+            return ""
+        return self.resolve_openai_api_key()
+
     @property
     def has_legacy_openai_api_key(self) -> bool:
         return self._legacy_openai_api_key_present
@@ -592,6 +601,23 @@ def _normalize_base_url(value: Any) -> str:
     ):
         return candidate
     raise ValueError("LLM base URL requires HTTPS for non-local endpoints")
+
+
+def normalize_llm_api_key_env(value: Any) -> str:
+    """Return the canonical environment-variable name used for an LLM key."""
+    return _normalize_env_var_name(value)
+
+
+def validate_llm_provider_settings(provider: Any, base_url: Any) -> tuple[str, str]:
+    """Validate a provider candidate without mutating a live configuration."""
+    if provider not in VALID_LLM_PROVIDERS:
+        raise ValueError(f"Ungueltiger LLM-Anbieter: {provider!r}")
+    if provider == "openai":
+        return provider, ""
+    normalized_base_url = _normalize_base_url(base_url)
+    if not normalized_base_url:
+        raise ValueError("LLM base URL is required for non-OpenAI providers")
+    return provider, normalized_base_url
 
 
 def _looks_like_alternate_numeric_ipv4(hostname: str) -> bool:
