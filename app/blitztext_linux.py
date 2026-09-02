@@ -927,6 +927,23 @@ class BlitztextApp(QObject):
         if action is not None:
             action.setChecked(True)
 
+    def _persist_writing_preset(self, key: str) -> bool:
+        """Persist a preset change or restore the previous in-memory selection."""
+        previous_key = self.config.writing_preset
+        self.config.writing_preset = key
+        try:
+            self.config.save()
+        except Exception as exc:
+            self.config.writing_preset = previous_key
+            self._refresh_preset_menu()
+            logger.error("Failed to save writing preset: %s", exc)
+            self.show_tray_error(
+                t("settings.save_error.title"),
+                t("settings.save_error.message").format(error=exc),
+            )
+            return False
+        return True
+
     def _on_writing_preset_selected(self, key: str) -> None:
         """Übernimmt die im Tray gewählte Schreibstil-Vorlage.
 
@@ -936,8 +953,8 @@ class BlitztextApp(QObject):
         """
         if key == self.config.writing_preset:
             return
-        self.config.writing_preset = key
-        self.config.save()
+        if not self._persist_writing_preset(key):
+            return
         self._rebuild_llm_service()
         self.update_menu_availability()
         if self._main_window is not None:
@@ -948,8 +965,10 @@ class BlitztextApp(QObject):
         """Vom Hauptfenster aufgerufen, wenn die Preset-Combo geändert wird."""
         if key == self.config.writing_preset:
             return
-        self.config.writing_preset = key
-        self.config.save()
+        if not self._persist_writing_preset(key):
+            if self._main_window is not None:
+                self._main_window.set_preset(self.config.writing_preset)
+            return
         self._rebuild_llm_service()
         self.update_menu_availability()
         self._refresh_preset_menu()

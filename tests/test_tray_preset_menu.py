@@ -16,6 +16,7 @@ QActionGroup auf und benötigt eine (Offscreen-)QApplication, analog zu
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 
 import pytest
 
@@ -79,6 +80,21 @@ class TestPresetMenu:
         assert tray_app.llm_service is old_service
         # Kein Disk-Write erfolgt -> keine Config-Datei angelegt.
         assert not tray_app.config.config_file.is_file()
+
+    def test_handler_reverts_selection_when_preset_save_fails(self, tray_app):
+        original = tray_app.config.writing_preset
+        target = _other_key(original)
+        tray_app.preset_actions[target].setChecked(True)
+        old_service = tray_app.llm_service
+
+        with patch.object(tray_app.config, "save", side_effect=OSError("disk full")), \
+             patch.object(tray_app, "show_tray_error") as tray_error:
+            tray_app._on_writing_preset_selected(target)
+
+        assert tray_app.config.writing_preset == original
+        assert tray_app.preset_actions[original].isChecked() is True
+        assert tray_app.llm_service is old_service
+        tray_error.assert_called_once()
 
     def test_menu_mirrors_config(self, tray_app):
         """Das Häkchen folgt der Config nach ``_refresh_preset_menu``."""
