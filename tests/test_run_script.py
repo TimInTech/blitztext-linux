@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 def _prepare_run_script(tmp_path: Path, repo_root: Path) -> Path:
     script_path = tmp_path / "run.sh"
@@ -58,6 +60,28 @@ def test_run_script_warns_when_file_is_more_permissive_than_0600(tmp_path: Path)
     assert result.returncode == 0
     assert "BT_SAMPLE_VAR=from-env" in result.stdout
     assert "644" in result.stderr
+    assert "600" in result.stderr
+
+
+@pytest.mark.parametrize("mode", [0o440, 0o604])
+def test_run_script_warns_when_secrets_file_has_group_or_other_permissions(
+    tmp_path: Path, mode: int
+):
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path = _prepare_run_script(tmp_path, repo_root)
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    env_file = home_dir / ".config" / "blitztext-linux" / "secrets.env"
+    env_file.parent.mkdir(parents=True, exist_ok=True)
+    env_file.write_text("BT_SAMPLE_VAR=from-env\n", encoding="utf-8")
+    env_file.chmod(mode)
+
+    result = _run_script(script_path, home_dir, runtime_dir)
+
+    assert result.returncode == 0
+    assert "BT_SAMPLE_VAR=from-env" in result.stdout
+    assert f"{mode:o}" in result.stderr
     assert "600" in result.stderr
 
 

@@ -27,7 +27,7 @@ if [[ -f "${SECRETS_FILE}" ]]; then
         echo "WARNUNG: ${SECRETS_FILE} gehört nicht dem aktuellen Nutzer und wird nicht geladen." >&2
     else
         SECRETS_PERMS=$(stat -c '%a' "${SECRETS_FILE}" 2>/dev/null || true)
-        if [[ -n "${SECRETS_PERMS}" ]] && (( 10#${SECRETS_PERMS} > 600 )); then
+        if [[ -n "${SECRETS_PERMS}" ]] && (( (8#${SECRETS_PERMS} & 8#077) != 0 )); then
             echo "WARNUNG: ${SECRETS_FILE} hat zu offene Rechte (${SECRETS_PERMS}); erwartet 600 oder restriktiver." >&2
         fi
         set -a
