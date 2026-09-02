@@ -571,7 +571,6 @@ class SettingsDialog(QDialog):
             self.config.compose_signature_auto_append = self.check_compose_signature_auto_append.isChecked()
 
             self.config.save()
-            set_language(self.config.ui_language)
             self.accept()
         except Exception as e:
             QMessageBox.critical(

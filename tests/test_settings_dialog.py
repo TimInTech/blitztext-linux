@@ -246,7 +246,7 @@ def test_save_settings_rejects_invalid_https_url_without_saving_or_accepting(tmp
     assert not fake.config.config_file.exists()
 
 
-def test_save_settings_persists_and_applies_ui_language(tmp_path):
+def test_save_settings_persists_ui_language_for_the_next_start(tmp_path):
     config_dir = tmp_path / ".config" / "blitztext-linux"
     fake = _fake_save_self(config_dir, "standard", ui_language="en")
 
@@ -256,7 +256,7 @@ def test_save_settings_persists_and_applies_ui_language(tmp_path):
 
         reloaded = BlitztextConfig(config_dir=config_dir)
         assert reloaded.ui_language == "en"
-        assert get_language() == "en"
+        assert get_language() == "de"
     finally:
         set_language(DEFAULT_LANGUAGE)
 

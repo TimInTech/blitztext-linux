@@ -57,6 +57,10 @@ class TestTranslations:
             for key, value in strings.items():
                 assert value.strip(), f"{lang}[{key!r}] ist leer"
 
+    def test_ui_language_help_explains_that_restart_applies_the_change(self):
+        assert "Neustart" in TRANSLATIONS["de"]["settings.ui_language.help"]
+        assert "restart" in TRANSLATIONS["en"]["settings.ui_language.help"].lower()
+
     def test_translation_placeholders_match_between_languages(self):
         """Format-Placeholders sind in de/en identisch."""
         for key in TRANSLATIONS["de"]:
