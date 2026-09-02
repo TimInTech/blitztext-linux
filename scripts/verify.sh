@@ -52,10 +52,17 @@ ydotoold_provider_exists() {
 }
 
 # ─── Session-Erkennung ────────────────────────────────────────────────────────
-# Die App wählt das Clipboard-Backend nach Umgebung: wl-copy, wenn
-# WAYLAND_DISPLAY gesetzt ist oder gar kein DISPLAY existiert; nur in einer
-# reinen X11-Session (DISPLAY ohne WAYLAND_DISPLAY) ist xclip das Pflicht-Backend.
-if [[ -z "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" ]]; then
+# Die App wählt das Clipboard-Backend nach Umgebung: wl-copy bei einem
+# erreichbaren Wayland-Socket oder ohne DISPLAY. Wenn nur X11 erreichbar ist,
+# ist xclip das Pflicht-Backend. WAYLAND_DISPLAY allein kann aus einer alten
+# oder weitergereichten Sitzung stammen und reicht deshalb nicht aus.
+wayland_socket_available() {
+    [[ -n "${WAYLAND_DISPLAY:-}" ]] \
+        && [[ -n "${XDG_RUNTIME_DIR:-}" ]] \
+        && [[ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]]
+}
+
+if [[ -n "${DISPLAY:-}" ]] && ! wayland_socket_available; then
     CLIPBOARD_REQUIRED="xclip"
     CLIPBOARD_OPTIONAL="wl-copy"
 else

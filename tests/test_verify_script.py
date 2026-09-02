@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import socket
 import subprocess
 from pathlib import Path
 
@@ -239,7 +240,7 @@ def test_verify_x11_session_requires_xclip_not_wl_copy(tmp_path: Path):
     assert "[FAIL]  wl-copy nicht gefunden" not in stdout
 
 
-def test_verify_wayland_session_requires_wl_copy_not_xclip(tmp_path: Path):
+def test_verify_stale_wayland_display_falls_back_to_xclip(tmp_path: Path):
     repo_root = Path(__file__).resolve().parents[1]
     script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root, present_checked_tools=())
     home_dir = tmp_path / "home"
@@ -253,6 +254,32 @@ def test_verify_wayland_session_requires_wl_copy_not_xclip(tmp_path: Path):
         stub_bin,
         extra_env={"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"},
     )
+    stdout = _strip_ansi(result.stdout)
+
+    assert "[FAIL]  xclip nicht gefunden" in stdout
+    assert "[WARN]  wl-copy nicht gefunden" in stdout
+    assert "[FAIL]  wl-copy nicht gefunden" not in stdout
+
+
+def test_verify_wayland_session_requires_wl_copy_not_xclip(tmp_path: Path):
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path, stub_bin = _prepare_verify_script(tmp_path, repo_root, present_checked_tools=())
+    home_dir = tmp_path / "home"
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
+    wayland_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    wayland_socket.bind(str(runtime_dir / "wayland-0"))
+    try:
+        result = _run_script(
+            script_path,
+            home_dir,
+            runtime_dir,
+            stub_bin,
+            extra_env={"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"},
+        )
+    finally:
+        wayland_socket.close()
     stdout = _strip_ansi(result.stdout)
 
     assert "[FAIL]  wl-copy nicht gefunden" in stdout
