@@ -491,12 +491,8 @@ class TestStateMachine:
         error_messages = [
             record.getMessage() for record in caplog.records if record.levelno == logging.ERROR
         ]
-        debug_messages = [
-            record.getMessage() for record in caplog.records if record.levelno == logging.DEBUG
-        ]
         assert error_messages == [f"Worker error: {expected_message}"]
-        assert any(hostile_error in message for message in debug_messages)
-        assert all(hostile_error not in record.getMessage() for record in caplog.records if record.levelno != logging.DEBUG)
+        assert all(hostile_error not in record.getMessage() for record in caplog.records)
         assert tray_error.call_args.args[1] == expected_message
         assert notify.call_args.args[1] == expected_message
 

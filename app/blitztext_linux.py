@@ -1148,7 +1148,6 @@ class BlitztextApp(QObject):
 
     @pyqtSlot(str)
     def _on_worker_error(self, err_msg: str) -> None:
-        logger.debug("Raw worker error: %s", err_msg)
         safe_error = sanitize_external_error(
             err_msg, max_length=_MAX_ERROR_LOG_LENGTH - len(_WORKER_ERROR_LOG_PREFIX)
         )
