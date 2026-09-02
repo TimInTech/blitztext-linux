@@ -81,6 +81,15 @@ class TestPersistence:
         assert loaded.language == "de"
         assert loaded.openai_api_key_env == "OPENAI_API_KEY"
 
+    def test_non_utf8_config_falls_back_to_defaults(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_bytes(b"\xff\xfe")
+
+        loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.model == "base"
+        assert loaded.language == "de"
+
 
 class TestWorkflowConfig:
     def test_workflows_dict_created_when_missing(self, config_dir):

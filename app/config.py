@@ -130,7 +130,7 @@ class BlitztextConfig:
             sanitized = dict(data)
             sanitized.pop("openai_api_key", None)
             return _deep_merge(DEFAULTS, sanitized)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             logger.warning("Config file is not valid JSON, using defaults", exc_info=True)
             return _deep_merge(DEFAULTS, {})
         except OSError:
