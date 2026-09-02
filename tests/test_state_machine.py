@@ -378,6 +378,21 @@ class TestHoldWorkerEvents:
         assert stopped == []
         assert discarded == [True]
 
+    def test_short_hold_allows_immediate_corrective_hold(self):
+        result = _run_worker_with_events(
+            [
+                (_KEYCODES["KEY_LEFTALT"], 1),
+                (_KEYCODES["KEY_LEFTALT"], 0),
+                (_KEYCODES["KEY_LEFTALT"], 1),
+            ],
+            hotkey_mode="hold",
+            monotonic_values=[10.0, 10.0, 10.0, 10.149, 10.200],
+        )
+        triggered, stopped, discarded = result
+        assert triggered == [WorkflowType.TRANSCRIPTION, WorkflowType.TRANSCRIPTION]
+        assert stopped == []
+        assert discarded == [True]
+
     def test_hold_at_threshold_emits_stop_not_discard(self):
         result = _run_worker_with_events(
             [(_KEYCODES["KEY_LEFTALT"], 1), (_KEYCODES["KEY_LEFTALT"], 0)],

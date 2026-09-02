@@ -304,6 +304,7 @@ class HotkeyWorker(QObject):
                                             "Accidental hold press ignored: %.3fs < %.3fs",
                                             held_seconds, MIN_HOLD_PRESS_SECONDS,
                                         )
+                                        last_trigger.pop(wf, None)
                                         self.recording_discard.emit()
                                     _hold_active = None
                                     _hold_started_at = None
