@@ -188,4 +188,7 @@ def test_install_completes_and_enables_autostart_when_not_yet_enabled(tmp_path: 
     assert "blitztext-linux.service für Autostart aktiviert" in result.stdout
     service_dst = home_dir / ".config" / "systemd" / "user" / "blitztext-linux.service"
     assert service_dst.exists()
-    assert "%BLITZTEXT_DIR%" not in service_dst.read_text(encoding="utf-8")
+    service_text = service_dst.read_text(encoding="utf-8")
+    assert "%BLITZTEXT_DIR%" not in service_text
+    assert f"ExecStart={script_path.parents[1]}/run.sh" in service_text
+    assert ".venv/bin/python app/blitztext_linux.py" not in service_text

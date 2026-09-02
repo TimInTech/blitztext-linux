@@ -7,7 +7,7 @@
 #
 # Manuelle Laufzeit-Konfiguration:
 #   Optionale Secrets liegen in ~/.config/blitztext-linux/secrets.env.
-#   Datei mit chmod 600 schützen; sie wird per EnvironmentFile geladen.
+#   Datei mit chmod 600 schützen; run.sh lädt sie vor dem App-Start.
 #
 # Manueller Start (nach install.sh und erfolgreichem Test):
 #   systemctl --user start blitztext-linux
@@ -30,8 +30,8 @@ Type=simple
 # z. B. /home/benutzer/git/blitztext-linux
 WorkingDirectory=%BLITZTEXT_DIR%
 
-EnvironmentFile=-%h/.config/blitztext-linux/secrets.env
-ExecStart=%BLITZTEXT_DIR%/.venv/bin/python app/blitztext_linux.py
+# run.sh is the single launch path and enforces the shared PID guard.
+ExecStart=%BLITZTEXT_DIR%/run.sh
 
 Restart=on-failure
 RestartSec=5

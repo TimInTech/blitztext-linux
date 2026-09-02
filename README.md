@@ -261,7 +261,7 @@ It is idempotent (safe to run repeatedly) and handles everything fully automatic
    ./run.sh
    ```
    *(Does the tray icon appear and do the hotkeys respond? Then everything went smoothly!)*
-3. **Start the already enabled autostart service now:**
+3. **Close the manual test app, then start the already enabled autostart service:**
    ```bash
    systemctl --user start blitztext-linux
    ```

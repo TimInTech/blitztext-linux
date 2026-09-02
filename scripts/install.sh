@@ -359,6 +359,7 @@ print_summary() {
     echo      "     ./run.sh"
     echo ""
     echo      "     (Falls Sie bereits im Projektverzeichnis sind, reicht: ./run.sh)"
+    echo      "     Beenden Sie den Test durch Schließen der App, bevor Sie den Dienst starten."
     echo ""
     echo -e "  ${YELLOW}3.${RESET}  ${BOLD}Wenn alles funktioniert — Dienst jetzt starten:${RESET}"
     echo      "     (Der Autostart wurde bereits durch den Installer aktiviert.)"
