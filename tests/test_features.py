@@ -883,6 +883,8 @@ class TestDetachCloudThread:
             _cloud_worker=MagicMock(),
             _cloud_thread=MagicMock(),
             _detached_cloud_threads=[],
+            _on_cloud_finished=MagicMock(),
+            _on_cloud_error=MagicMock(),
         )
 
         def _cleanup():
@@ -903,16 +905,21 @@ class TestDetachCloudThread:
         thread.deleteLater.assert_not_called()
         thread.finished.connect.assert_called_once()
         worker.request_cancel.assert_called_once()
+        worker.finished.disconnect.assert_called_once_with(fake._on_cloud_finished)
+        worker.error.disconnect.assert_called_once_with(fake._on_cloud_error)
         # Aktiver Slot ist frei, laufender detached Thread bleibt erhalten:
         assert fake._cloud_thread is None
 
     def test_quick_thread_is_not_detached(self):
         fake = self._fake_window()
         thread = fake._cloud_thread
+        worker = fake._cloud_worker
         thread.wait.return_value = True  # beendet sich rechtzeitig
         tts_window.TtsWindow._detach_cloud_thread(fake)
         assert fake._detached_cloud_threads == []
         thread.setParent.assert_not_called()
+        worker.finished.disconnect.assert_called_once_with(fake._on_cloud_finished)
+        worker.error.disconnect.assert_called_once_with(fake._on_cloud_error)
 
     def test_detach_is_idempotent_without_active_thread(self):
         fake = self._fake_window()
