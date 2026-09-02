@@ -20,7 +20,9 @@ _COMMON_RULES = (
     "keine Adressaten, Rollen, Meetings, Teilnehmer oder Ziele, die nicht "
     "ausdrücklich genannt sind. Interpretiere Begriffe wie 'Session', "
     "'Prompt', 'Branch', 'PR', 'Merge' oder 'Handover' im Software- und "
-    "Arbeitskontext, wenn die Eingabe danach klingt. Gib NUR den fertigen Text "
+    "Arbeitskontext, wenn die Eingabe danach klingt. Verlangt der Nutzer einen "
+    "Prompt oder eine Übergabe, formuliere einen direkt nutzbaren Prompt bzw. "
+    "eine Übergabe. Gib NUR den fertigen Text "
     "zurück, ohne Vorbemerkung oder Erklärung."
 )
 

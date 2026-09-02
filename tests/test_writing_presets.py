@@ -75,6 +75,8 @@ class TestPromptContracts:
         assert "Meetings" in prompt
         assert "'Session'" in prompt
         assert "Software- und Arbeitskontext" in prompt
+        assert "direkt nutzbaren" in prompt
+        assert "Übergabe" in prompt
 
     @pytest.mark.parametrize(
         "key, fragment",
