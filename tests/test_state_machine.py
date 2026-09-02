@@ -619,6 +619,35 @@ class TestStateMachine:
 
         assert gui_app._recording_routes_to_compose is False
 
+    def test_closing_compose_before_stop_cancels_captured_voice_routing(self, gui_app):
+        from pathlib import Path
+
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.chkVoiceRouting.setChecked(True)
+        pool = MagicMock()
+
+        with patch.object(gui_app.audio_recorder, "start"), \
+             patch.object(gui_app.audio_recorder, "stop", return_value=Path("/tmp/voice.wav")), \
+             patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._start_recording(WorkflowType.TRANSCRIPTION)
+            window.close()
+            gui_app._stop_recording_and_process()
+
+        worker = pool.start.call_args.args[0]
+        assert worker.route_to_compose is False
+
+    def test_routed_result_falls_back_to_paste_when_compose_closed_after_stop(self, gui_app):
+        window = gui_app._ensure_compose_window()
+        window.show()
+        window.close()
+
+        with patch.object(gui_app.paste_service, "paste") as paste:
+            gui_app._on_worker_result("Gerouteter Text", route_to_compose=True)
+
+        paste.assert_called_once_with("Gerouteter Text")
+        assert window.txtInput.toPlainText() == ""
+
     def test_stop_wires_routed_worker_result_into_compose(self, gui_app):
         from pathlib import Path
 

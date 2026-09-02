@@ -1066,7 +1066,9 @@ class BlitztextApp(QObject):
 
     def _stop_recording_and_process(self) -> None:
         try:
-            route_to_compose = self._recording_routes_to_compose
+            route_to_compose = (
+                self._recording_routes_to_compose and self._compose_voice_routing_enabled()
+            )
             self._recording_routes_to_compose = False
             wav_path = self.audio_recorder.stop()
             if not wav_path:
@@ -1128,7 +1130,13 @@ class BlitztextApp(QObject):
     def _on_worker_result(self, result_text: str, route_to_compose: bool = False) -> None:
         logger.info("Transcription/Rewrite success. Result length: %d chars", len(result_text))
         if route_to_compose:
-            self._ensure_compose_window().set_input_text(result_text)
+            window = self._compose_window
+            if window is not None and window.isVisible():
+                window.append_input_text(result_text)
+            elif self.config.autopaste:
+                self.paste_service.paste(result_text)
+            else:
+                self.paste_service.clipboard_only(result_text)
         self._add_to_history(result_text, is_dictation=self._dictation_mode)
         if self._dictation_mode:
             notify_service.notify(

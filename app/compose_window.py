@@ -612,6 +612,16 @@ class ComposeWindow(QDialog):
         self._hide_status()
         self._sync_state()
 
+    def append_input_text(self, text: str) -> None:
+        """Append routed speech without discarding an existing draft or result."""
+        addition = text.strip()
+        if not addition:
+            return
+        current = self.txtInput.toPlainText()
+        separator = "\n" if current and not current.endswith("\n") else ""
+        self.txtInput.setPlainText(f"{current}{separator}{addition}")
+        self._sync_state()
+
     def voice_routing_enabled(self) -> bool:
         """Return whether new recordings should target this draft window."""
         return self.chkVoiceRouting.isChecked()

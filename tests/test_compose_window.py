@@ -532,6 +532,20 @@ def test_set_input_text_clears_variant_history(compose_window, qapp):
 
 
 @gui_only
+def test_append_input_text_preserves_draft_output_and_variant_history(compose_window, qapp):
+    window, llm, _paste = compose_window
+
+    _run_generation(window, llm, qapp, "Bestehender Entwurf", "Bestehendes Ergebnis")
+    variants_before = list(window._variants)
+
+    window.append_input_text("Diktierter Nachtrag")
+
+    assert window.txtInput.toPlainText() == "Bestehender Entwurf\nDiktierter Nachtrag"
+    assert window.txtOutput.toPlainText() == "Bestehendes Ergebnis"
+    assert window._variants == variants_before
+
+
+@gui_only
 def test_error_run_creates_no_variant(qapp):
     llm = _FakeLLMService(error=RuntimeError("boom"))
     paste = _FakePasteService()
