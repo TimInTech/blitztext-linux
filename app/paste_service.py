@@ -142,8 +142,8 @@ class PasteService:
         if do_autopaste and self._ydotool_paste():
             # Kurze Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
             time.sleep(_PASTE_DELAY)
-            self._restore_clipboard(previous_clipboard)
             self._cleanup_copyq(text)
+            self._restore_clipboard(previous_clipboard)
 
     def clipboard_only(self, text: str) -> None:
         """Nur Clipboard, kein ydotool -- fuer Faelle wo Auto-Paste unterwuenscht."""

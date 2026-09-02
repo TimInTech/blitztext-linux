@@ -303,7 +303,7 @@ class TestCleanupCopyq:
 
 
 class TestPasteClipboardRestore:
-    def test_paste_restores_clipboard_and_cleans_up_copyq_after_successful_autopaste(self):
+    def test_paste_cleans_up_copyq_before_restoring_clipboard_after_successful_autopaste(self):
         service = PasteService(autopaste=True)
         calls: list[str] = []
 
@@ -324,7 +324,7 @@ class TestPasteClipboardRestore:
                                 ):
                                     service.paste("neu", force_autopaste=True)
 
-        assert calls == ["read", "copy:neu", "ydotool", "sleep", "restore:vorher", "cleanup:neu"]
+        assert calls == ["read", "copy:neu", "ydotool", "sleep", "cleanup:neu", "restore:vorher"]
 
     def test_paste_does_not_restore_or_cleanup_when_autopaste_disabled(self):
         service = PasteService(autopaste=True)
