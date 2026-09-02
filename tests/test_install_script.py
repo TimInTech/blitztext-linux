@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import pwd
 import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 # NOTE: tests/conftest.py's autouse `_block_real_notifications` fixture patches
 # `subprocess.run` process-wide (it patches the shared `subprocess` module via
@@ -100,8 +103,35 @@ def _run_script(
     )
     if extra_env:
         env.update(extra_env)
+    command = [BASH, str(script_path)]
+    if os.geteuid() == 0:
+        setpriv = shutil.which("setpriv")
+        if setpriv is None:
+            pytest.skip("setpriv is required to run install.sh tests without root privileges")
+
+        nobody = pwd.getpwnam("nobody")
+        home_dir.mkdir(parents=True, exist_ok=True)
+        for writable_dir in (home_dir, runtime_dir):
+            os.chown(writable_dir, nobody.pw_uid, nobody.pw_gid)
+            writable_dir.chmod(0o700)
+
+        repo_dir = script_path.parents[1]
+        current_dir = repo_dir
+        while current_dir != Path("/tmp"):
+            current_dir.chmod(current_dir.stat().st_mode | 0o005)
+            current_dir = current_dir.parent
+
+        command = [
+            setpriv,
+            f"--reuid={nobody.pw_uid}",
+            f"--regid={nobody.pw_gid}",
+            "--clear-groups",
+            "--",
+            *command,
+        ]
+
     proc = subprocess.Popen(
-        [BASH, str(script_path)],
+        command,
         cwd=str(script_path.parent),
         env=env,
         text=True,
