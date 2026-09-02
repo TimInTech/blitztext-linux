@@ -410,7 +410,7 @@ class PasteService:
     def _qt_read(self) -> Optional[str]:
         try:
             from PyQt6.QtWidgets import QApplication
-            from PyQt6.QtCore import QThread
+            from PyQt6.QtCore import QMetaObject, Q_RETURN_ARG, Qt, QThread, QObject, pyqtSlot
             app = QApplication.instance()
             if not app:
                 return None
@@ -420,8 +420,25 @@ class PasteService:
 
             if QThread.currentThread() == app.thread():
                 return cb.text()
-            else:
-                return None
+
+            class QtClipboardHelper(QObject):
+                @pyqtSlot(result=str)
+                def get_text(self) -> str:
+                    clipboard = QApplication.instance().clipboard()
+                    return clipboard.text() if clipboard else ""
+
+            helper = QtClipboardHelper()
+            helper.moveToThread(app.thread())
+            try:
+                result = QMetaObject.invokeMethod(
+                    helper,
+                    "get_text",
+                    Qt.ConnectionType.BlockingQueuedConnection,
+                    Q_RETURN_ARG(str),
+                )
+            finally:
+                helper.deleteLater()
+            return result if isinstance(result, str) else None
         except Exception as exc:
             logger.debug("Qt clipboard read failed: %s", exc)
             return None

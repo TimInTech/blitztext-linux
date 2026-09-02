@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
+import time
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.paste_service import (
     _CTRL_SHIFT_V_KEYCODES,
@@ -180,6 +184,27 @@ class TestReadClipboard:
         with patch("app.paste_service._has_wayland_clipboard", return_value=True):
             with patch("app.paste_service.subprocess.Popen", side_effect=OSError("boom")):
                 assert service._read_clipboard() is None
+
+    @pytest.mark.skipif(
+        os.environ.get("WHISPER_GUI_TESTS") != "1",
+        reason="benötigt WHISPER_GUI_TESTS=1 (Qt event loop)",
+    )
+    def test_qt_read_marshals_worker_thread_to_gui_thread(self):
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance() or QApplication([])
+        app.clipboard().setText("vorheriger Qt-Inhalt")
+        service = PasteService()
+        result: list[str | None] = []
+        reader = threading.Thread(target=lambda: result.append(service._qt_read()))
+
+        reader.start()
+        while reader.is_alive():
+            app.processEvents()
+            reader.join(0.01)
+            time.sleep(0.001)
+
+        assert result == ["vorheriger Qt-Inhalt"]
 
 
 class TestRestoreClipboard:
