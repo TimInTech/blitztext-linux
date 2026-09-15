@@ -139,8 +139,8 @@ def _wait_until(qapp, predicate, timeout_ms: int = 2500) -> None:
 @pytest.mark.parametrize(
     ("language", "title", "prompt_label"),
     [
-        ("de", "Text verfassen", "Schreibstil / Prompt bearbeiten"),
-        ("en", "Compose Text", "Edit style / prompt"),
+        ("de", "Text bearbeiten", "Prompt prüfen"),
+        ("en", "Edit text", "Inspect prompt"),
     ],
 )
 def test_window_texts_follow_language(qapp, language, title, prompt_label):
@@ -832,7 +832,7 @@ def _select_preset(window, preset_key: str) -> None:
 
 
 @gui_only
-def test_tone_selector_visible_and_enabled_for_standard(qapp):
+def test_tone_selector_hidden_for_standard(qapp):
     window = ComposeWindow(_FakeLLMService(), _FakePasteService(), Config())
     window.show()
     qapp.processEvents()
@@ -841,7 +841,7 @@ def test_tone_selector_visible_and_enabled_for_standard(qapp):
         _select_preset(window, "shorten")
         _select_preset(window, "standard")
         qapp.processEvents()
-        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isVisible() is False
         assert window.cmbTone.isEnabled() is True
         assert window.cmbTone.toolTip() == t("compose.tone.tooltip_active")
     finally:
@@ -858,7 +858,7 @@ def test_tone_selector_disabled_for_nonstandard_preset(qapp):
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
         _select_preset(window, "shorten")
         qapp.processEvents()
-        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isVisible() is False
         assert window.cmbTone.isEnabled() is False
         assert window.cmbTone.toolTip() == t("compose.tone.tooltip_preset_overrides")
     finally:
@@ -875,7 +875,7 @@ def test_tone_selector_disabled_for_custom_preset(qapp):
         _select_workflow(window, WorkflowType.TEXT_IMPROVER)
         _select_preset(window, CUSTOM_PRESET_KEY)
         qapp.processEvents()
-        assert window.cmbTone.isVisible() is True
+        assert window.cmbTone.isVisible() is False
         assert window.cmbTone.isEnabled() is False
     finally:
         window.close()
@@ -946,7 +946,7 @@ def test_selected_tone_is_passed_to_worker(qapp):
 
 
 @gui_only
-def test_custom_action_is_resolved_centrally_by_llm_service(qapp):
+def test_custom_action_passes_visible_instruction_to_llm_service(qapp):
     config = Config()
     config.compose_custom_preset_text = "FREITEXT-PROMPT"
     llm = _FakeLLMService()
@@ -960,7 +960,7 @@ def test_custom_action_is_resolved_centrally_by_llm_service(qapp):
         window.btnAction.click()
         _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
         assert llm.calls[-1][2] == "custom"
-        assert llm.last_custom_prompt is None
+        assert llm.last_custom_prompt == "FREITEXT-PROMPT"
     finally:
         window.close()
         qapp.processEvents()
@@ -1002,6 +1002,58 @@ def test_tone_i18n_keys_present_and_complete(qapp, language):
 # --- Goal 04: Compose zeigt dieselben fünf Aktionen -------------------------
 
 GOAL_VISIBLE_PRESET_KEYS = ("standard", "shorten", "expand", "change_tone", "custom")
+
+
+@gui_only
+def test_instruction_editor_is_available_without_draft(compose_window, qapp):
+    window, llm, _ = compose_window
+    assert not window.cmbWorkflow.isVisible()
+    window.btnOwnPrompt.click()
+    qapp.processEvents()
+    assert window.txtOwnPrompt.isVisible()
+    assert window._selected_preset() == "custom"
+    assert llm.calls == []
+
+
+@gui_only
+def test_empty_instruction_blocks_request(compose_window):
+    window, llm, _ = compose_window
+    window.btnOwnPrompt.click()
+    window.txtInput.setPlainText("A draft")
+    window.btnAction.click()
+    assert llm.calls == []
+    assert window.lblStatus.text() == t("compose.custom.empty")
+
+
+@gui_only
+def test_edited_instruction_is_used_and_saved_explicitly(compose_window, qapp):
+    window, llm, _ = compose_window
+    window.btnOwnPrompt.click()
+    window.txtOwnPrompt.setPlainText("Write a friendly reply.")
+    assert window._config.compose_custom_preset_text == ""
+    window.txtInput.setPlainText("My draft")
+    window.btnAction.click()
+    _wait_until(qapp, lambda: not window._busy and window._worker_thread is None and llm.calls)
+    assert llm.last_custom_prompt == "Write a friendly reply."
+    window.btnSavePrompt.click()
+    assert Config().compose_custom_preset_text == "Write a friendly reply."
+
+
+@gui_only
+def test_instruction_save_failure_preserves_draft_and_config(compose_window, monkeypatch):
+    from app.config import ConfigError
+    window, _, _ = compose_window
+    window._config.writing_preset = "shorten"
+    window.btnOwnPrompt.click()
+    window.txtOwnPrompt.setPlainText("Keep this draft")
+    def fail():
+        raise ConfigError("disk full")
+    monkeypatch.setattr(window._config, "save", fail)
+    window.btnSavePrompt.click()
+    assert window.txtOwnPrompt.toPlainText() == "Keep this draft"
+    assert window._config.compose_custom_preset_text == ""
+    assert window._config.writing_preset == "shorten"
+    assert window.lblStatus.text() == t("compose.custom.save_error")
 
 
 def _selectable_preset_values(combo):

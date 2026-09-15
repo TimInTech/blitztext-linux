@@ -109,6 +109,22 @@ Für OpenRouter `base_url` auf `https://openrouter.ai/api/v1` setzen und Modell 
 
 ### Compose-Fenster
 
+**Kompakte Bedienung:** Unter **Text bearbeiten** wählst du eine Text-Aktion:
+Text verbessern, Kürzen, Ausformulieren, Tonfall ändern oder Eigene Anweisung.
+Der Tonfall erscheint nur bei „Tonfall ändern“; eine zusätzliche Workflow-Auswahl entfällt.
+Entwurf und Ergebnis stehen nebeneinander (Startgröße 620 × 400).
+
+**Deinen Prompt eingeben:** Klicke **Eigene Anweisung …** und beschreibe im Feld
+**Wie soll dein Text klingen?** die gewünschte Ausgabe. Mit **Verbessern** wird
+diese Anweisung für den aktuellen Text verwendet. **Speichern & für Diktate verwenden**
+speichert sie für kommende Sitzungen und wählt „Eigene Anweisung“ für
+„Diktieren & verbessern“ aus. Ohne Speichern bleibt die Änderung nur im geöffneten Textfenster.
+**Prompt prüfen** zeigt den vollständigen Prompt für einen einzelnen Aufruf.
+
+Das Hauptfenster bietet **Diktieren** und **Diktieren & verbessern**.
+Die speziellen bisherigen Workflows bleiben über Tray und Tastenkürzel erreichbar.
+Die älteren Abbildungen unten zeigen noch die vorherige Oberfläche.
+
 Das **Compose-Fenster** (`✍ Compose…` im Tray-Kontextmenü) ermöglicht das Umschreiben beliebiger Texte mit der KI — ganz ohne Sprachaufnahme. Es eignet sich ideal zum Überarbeiten fertiger Entwürfe, E-Mails oder Notizen.
 
 <div align="center">

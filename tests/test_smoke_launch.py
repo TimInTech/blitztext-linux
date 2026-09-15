@@ -65,13 +65,15 @@ def test_app_boots_idles_and_exits_clean(ui_language, tmp_path):
         win = app._main_window
         assert win._btn_discard.text() == t("mainwindow.button.discard")
         assert win._btn_dictation.text() == t("mainwindow.button.dictation")
-        assert win._btn_history.text() == t("mainwindow.button.history").format(count=0)
-        assert win._btn_edit_text.text() == t("mainwindow.button.edit_text")
+        assert win._btn_history.accessibleName() == t("mainwindow.button.history").format(count=0)
+        # The compact gold trigger is icon-only; its accessible name carries
+        # the translated action text for screen readers and UI automation.
+        assert win._btn_edit_text.accessibleName() == t("mainwindow.button.edit_text")
         assert win._btn_edit_text.toolTip() == t("mainwindow.tooltip.edit_text")
         assert win._btn_tts.toolTip() == t("mainwindow.tooltip.tts")
         assert win._btn_settings.toolTip() == t("mainwindow.tooltip.settings")
         assert win._status_label.text() == t("mainwindow.status.ready")
-        assert app.action_compose.text() == f"✍  {t('tray.compose')}"
+        assert app.action_compose.text() == t("tray.compose")
         assert app.action_dictation.text() == t("tray.dictation_mode")
         assert app.action_history.text() == t("tray.history")
         assert app.action_tts.text() == t("tray.tts")
@@ -112,16 +114,21 @@ def test_secondary_windows_instantiate(tmp_path):
         app.show_history_panel()
         qapp.processEvents()
         assert app._history_panel is not None
+        assert app._history_panel.objectName() == "appWindow"
+        assert app._history_panel._empty_label.isVisible() is True
 
         # TTS-Fenster: lazy-init via show_tts_window().
         app.show_tts_window()
         qapp.processEvents()
         assert app._tts_window is not None
+        assert app._tts_window.objectName() == "appDialog"
+        assert app._tts_window._btn_speak.objectName() == "primaryAction"
+        assert app._tts_window._status_label.property("status") in {"success", "error"}
 
         # Settings-Dialog: direkt instanziieren, da show_settings_dialog() exec() aufruft.
         dlg = SettingsDialog(config)
         qapp.processEvents()
-        assert dlg is not None
+        assert dlg.objectName() == "appDialog"
         dlg.close()
 
     finally:
@@ -164,13 +171,13 @@ def test_compose_dialog_lifecycle(tmp_path):
         set_language("de")
         w1.retranslate_ui()
         qapp.processEvents()
-        assert "verfassen" in w1.windowTitle().lower()
+        assert "bearbeiten" in w1.windowTitle().lower()
 
         # Nach Sprachenwechsel auf EN werden übersetzte Texte gezeigt.
         set_language("en")
         w1.retranslate_ui()
         qapp.processEvents()
-        assert "Compose" in w1.windowTitle()
+        assert "Edit text" == w1.windowTitle()
 
     finally:
         if app is not None:

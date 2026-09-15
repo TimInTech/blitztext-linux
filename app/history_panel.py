@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.i18n import t
+from app import theme
 
 logger = logging.getLogger("blitztext.history")
 
@@ -159,11 +160,8 @@ class HistoryEntryWidget(QFrame):
     def __init__(self, entry: HistoryEntry, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.entry = entry
+        self.setObjectName("historyEntry")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(
-            "HistoryEntryWidget { background: palette(base); border-radius: 4px; "
-            "border: 1px solid palette(mid); margin: 1px 0; }"
-        )
 
         # Diese Timer muessen dem Widget gehoeren. Ein statischer
         # QTimer.singleShot mit Lambda kann nach deleteLater() noch feuern und
@@ -182,20 +180,25 @@ class HistoryEntryWidget(QFrame):
         top_row = QHBoxLayout()
         meta_text = t("history.entry.meta").format(timestamp=entry.timestamp, count=entry.word_count)
         if entry.is_dictation:
-            meta_text = f"\U0001f3a4 {meta_text}"
+            meta_text = t("history.entry.dictation").format(meta=meta_text)
         meta_label = QLabel(meta_text)
-        meta_label.setStyleSheet("color: palette(mid); font-size: 11px;")
+        meta_label.setProperty("role", "muted")
         top_row.addWidget(meta_label, 1)
 
-        self._btn_copy = QPushButton("\U0001f4cb")
+        self._btn_copy = QPushButton()
+        self._btn_copy.setObjectName("iconButton")
+        self._btn_copy.setIcon(theme.create_ui_icon("copy"))
         self._btn_copy.setToolTip(t("history.tooltip.copy"))
-        self._btn_copy.setFixedSize(28, 24)
+        self._btn_copy.setFixedSize(32, 30)
         self._btn_copy.clicked.connect(self._copy_to_clipboard)
         top_row.addWidget(self._btn_copy)
 
-        btn_delete = QPushButton("✕")
+        btn_delete = QPushButton()
+        btn_delete.setObjectName("iconButton")
+        btn_delete.setProperty("danger", True)
+        btn_delete.setIcon(theme.create_ui_icon("delete", theme.STATE_ERROR))
         btn_delete.setToolTip(t("history.tooltip.delete"))
-        btn_delete.setFixedSize(28, 24)
+        btn_delete.setFixedSize(32, 30)
         btn_delete.clicked.connect(lambda: self.deleted.emit(self.entry))
         top_row.addWidget(btn_delete)
 
@@ -203,31 +206,28 @@ class HistoryEntryWidget(QFrame):
 
         preview_label = QLabel(entry.preview)
         preview_label.setWordWrap(True)
-        preview_label.setStyleSheet("font-size: 12px;")
         layout.addWidget(preview_label)
 
     def _copy_to_clipboard(self) -> None:
         _clipboard_write(self.entry.text)
-        self._btn_copy.setText("✓")
-        self._btn_copy.setStyleSheet("color: #4caf50; font-weight: bold;")
+        self._btn_copy.setIcon(theme.create_ui_icon("check", theme.STATE_IDLE))
+        self._btn_copy.setProperty("success", True)
+        theme.repolish(self._btn_copy)
         self._copy_reset_timer.start(1500)
 
     def _reset_copy_button(self) -> None:
-        self._btn_copy.setText("\U0001f4cb")
-        self._btn_copy.setStyleSheet("")
+        self._btn_copy.setIcon(theme.create_ui_icon("copy"))
+        self._btn_copy.setProperty("success", False)
+        theme.repolish(self._btn_copy)
 
     def highlight(self) -> None:
-        self.setStyleSheet(
-            "HistoryEntryWidget { background: #fff3cd; border-radius: 4px; "
-            "border: 1px solid #ffc107; margin: 1px 0; }"
-        )
+        self.setProperty("highlighted", True)
+        theme.repolish(self)
         self._highlight_reset_timer.start(800)
 
     def _reset_highlight(self) -> None:
-        self.setStyleSheet(
-            "HistoryEntryWidget { background: palette(base); border-radius: 4px; "
-            "border: 1px solid palette(mid); margin: 1px 0; }"
-        )
+        self.setProperty("highlighted", False)
+        theme.repolish(self)
 
 
 class HistoryPanel(QWidget):
@@ -243,6 +243,7 @@ class HistoryPanel(QWidget):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("appWindow")
         self._max_entries = max(10, min(100, max_entries))
         self.notes_folder = notes_folder
         self._entries: List[HistoryEntry] = []
@@ -263,12 +264,12 @@ class HistoryPanel(QWidget):
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         header_row = QHBoxLayout()
         self._header_label = QLabel(t("history.header").format(count=0))
-        self._header_label.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self._header_label.setProperty("role", "title")
         header_row.addWidget(self._header_label, 1)
 
         self._btn_merge = QPushButton(t("history.button.merge"))
@@ -297,6 +298,12 @@ class HistoryPanel(QWidget):
         self._scroll.setWidget(self._list_container)
         layout.addWidget(self._scroll)
 
+        self._empty_label = QLabel(t("history.empty"), self._list_container)
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setProperty("role", "muted")
+        self._list_layout.insertWidget(0, self._empty_label, 1)
+
     def add_entry(self, text: str, is_dictation: bool = False, source: Optional[str] = None) -> None:
         if not text or not text.strip():
             return
@@ -306,6 +313,7 @@ class HistoryPanel(QWidget):
         if source == "dictation":
             save_dictation_note(self.notes_folder, entry.text)
         self._entries.insert(0, entry)
+        self._empty_label.hide()
 
         while len(self._entries) > self._max_entries:
             removed = self._entries.pop()
@@ -321,6 +329,7 @@ class HistoryPanel(QWidget):
 
         self._update_header()
         self._update_merge_button()
+        self._empty_label.setVisible(not self._entries)
 
     def _on_entry_deleted(self, entry: HistoryEntry) -> None:
         try:
@@ -330,6 +339,7 @@ class HistoryPanel(QWidget):
         self._remove_widget_for_entry(entry)
         self._update_header()
         self._update_merge_button()
+        self._empty_label.setVisible(not self._entries)
 
     def _remove_widget_for_entry(self, entry: HistoryEntry) -> None:
         for widget in self._entry_widgets:
@@ -343,7 +353,8 @@ class HistoryPanel(QWidget):
         if not self._clear_armed:
             self._clear_armed = True
             self._btn_clear.setText(t("history.button.confirm_clear"))
-            self._btn_clear.setStyleSheet("color: #f44336; font-weight: bold;")
+            self._btn_clear.setProperty("danger", True)
+            theme.repolish(self._btn_clear)
             self._clear_disarm_timer.start(3000)
         else:
             self.clear_all()
@@ -351,7 +362,8 @@ class HistoryPanel(QWidget):
     def _disarm_clear(self) -> None:
         self._clear_armed = False
         self._btn_clear.setText(t("history.button.clear_all"))
-        self._btn_clear.setStyleSheet("")
+        self._btn_clear.setProperty("danger", False)
+        theme.repolish(self._btn_clear)
 
     def clear_all(self) -> None:
         self._entries.clear()
@@ -361,9 +373,11 @@ class HistoryPanel(QWidget):
         self._entry_widgets.clear()
         self._clear_armed = False
         self._btn_clear.setText(t("history.button.clear_all"))
-        self._btn_clear.setStyleSheet("")
+        self._btn_clear.setProperty("danger", False)
+        theme.repolish(self._btn_clear)
         self._update_header()
         self._update_merge_button()
+        self._empty_label.show()
 
     def _merge_dictation(self) -> None:
         dictation_texts = [e.text for e in reversed(self._entries) if e.is_dictation]
@@ -376,12 +390,14 @@ class HistoryPanel(QWidget):
             self.merged.emit(path)
 
         self._btn_merge.setText(t("history.status.saved") if path else t("history.status.copied"))
-        self._btn_merge.setStyleSheet("color: #4caf50; font-weight: bold;")
+        self._btn_merge.setProperty("success", True)
+        theme.repolish(self._btn_merge)
         self._merge_reset_timer.start(2500)
 
     def _reset_merge_button(self) -> None:
         self._btn_merge.setText(t("history.button.merge"))
-        self._btn_merge.setStyleSheet("")
+        self._btn_merge.setProperty("success", False)
+        theme.repolish(self._btn_merge)
 
     def _update_header(self) -> None:
         count = len(self._entries)

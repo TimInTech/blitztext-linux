@@ -371,6 +371,8 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
             gui_toggle_recording=lambda *a, **k: None,
             gui_discard=lambda *a, **k: None,
             set_dictation_mode=lambda *a, **k: None,
+            show_compose_window=lambda *a, **k: None,
+            show_custom_prompt=lambda *a, **k: None,
             show_history_panel=lambda *a, **k: None,
             show_settings_dialog=lambda *a, **k: None,
             show_tts_window=lambda *a, **k: None,
@@ -429,7 +431,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     app = QApplication(sys.argv)
-    # Wie im echten App-Start (blitztext_linux.main): Breeze-Dark-Glass-Theme,
+    # Wie im echten App-Start (blitztext_linux.main): zentrales App-Theme,
     # damit die Screenshots die tatsaechliche Produkt-Optik zeigen.
     theme.apply_theme(app)
     for lang in ("en", "de"):

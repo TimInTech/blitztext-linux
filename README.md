@@ -108,6 +108,22 @@ For OpenRouter, set `base_url` to `https://openrouter.ai/api/v1` and choose your
 
 ### Compose window
 
+**Compact controls:** **Edit text** now has one action selector: Improve text,
+Shorten, Expand, Change tone, or Custom instruction. The tone selector appears
+only for Change tone; the separate workflow selector is removed. Draft and result
+are side by side (initial size 620 × 400).
+
+**Enter your prompt:** Click **Custom instruction …**, then describe the desired
+output under **How should your text sound?**. **Improve** uses this instruction
+for the current text. **Save & use for dictation** persists it for future
+sessions and selects Custom instruction for Dictate & improve. Unsaved changes
+remain in the open editor only. **Inspect prompt** shows the full prompt for a
+single request.
+
+The main window offers **Dictate** and **Dictate & improve**. Existing specialized
+workflows remain available through the tray and hotkeys. The older screenshots
+below still show the previous interface.
+
 The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
 
 <div align="center">

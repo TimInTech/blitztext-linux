@@ -672,7 +672,7 @@ class TestCloudTtsConsentGate:
         fake._cleanup_active_wav.assert_called_once()
         assert fake._pending_export_path is None
         fake._status_label.setText.assert_called_once_with("Export fehlgeschlagen")
-        fake._status_label.setStyleSheet.assert_called_once_with("color: #f44336;")
+        fake._status_label.setProperty.assert_called_once_with("status", "error")
         fake._btn_speak.setText.assert_called_once_with(tts_window.t("tts.button.speak"))
         fake._btn_pause.setEnabled.assert_called_once_with(False)
         assert fake._is_paused is False

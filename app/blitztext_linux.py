@@ -53,6 +53,7 @@ from app.tts_window import TtsWindow
 from app.main_window import MainWindow
 from app.i18n import LANGUAGES, LANGUAGE_DISPLAY_NAMES, set_language, t
 from app import notify as notify_service
+from app import theme
 from app import __version__ as APP_VERSION
 
 # Set up module logger
@@ -155,12 +156,9 @@ class FormScrollArea(QScrollArea):
 
 def create_help_label(text: str) -> QLabel:
     """Create a styled small help label for config fields."""
-    from app import theme
-
     label = QLabel(text)
-    label.setStyleSheet(
-        f"color: {theme.APP_TEXT_DIM}; font-size: 11px; padding: 1px 0 8px 2px;"
-    )
+    label.setProperty("fieldHelp", True)
+    label.setProperty("role", "secondary")
     label.setWordWrap(True)
     return label
 
@@ -170,9 +168,10 @@ class SettingsDialog(QDialog):
 
     def __init__(self, config: Config, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.setObjectName("appDialog")
         self.config = config
         self.setWindowTitle(t("settings.window_title"))
-        self.resize(580, 560)
+        self.resize(520, 430)
         self.init_ui()
 
     @staticmethod
@@ -187,8 +186,8 @@ class SettingsDialog(QDialog):
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(15)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         # Tabs
         self.tabs = QTabWidget()
@@ -265,7 +264,7 @@ class SettingsDialog(QDialog):
                 t("settings.api_key.legacy_notice")
             )
             self.lbl_legacy_api_key_notice.setWordWrap(True)
-            self.lbl_legacy_api_key_notice.setStyleSheet("color: #b26a00; font-size: 10px;")
+            self.lbl_legacy_api_key_notice.setProperty("status", "warning")
             api_key_layout.addWidget(self.lbl_legacy_api_key_notice)
         else:
             self.lbl_legacy_api_key_notice = None
@@ -291,7 +290,7 @@ class SettingsDialog(QDialog):
                 t("settings.base_url.unsafe_legacy_notice")
             )
             self.lbl_unsafe_llm_base_url_notice.setWordWrap(True)
-            self.lbl_unsafe_llm_base_url_notice.setStyleSheet("color: #b26a00; font-size: 10px;")
+            self.lbl_unsafe_llm_base_url_notice.setProperty("status", "warning")
             base_url_layout.addWidget(self.lbl_unsafe_llm_base_url_notice)
         else:
             self.lbl_unsafe_llm_base_url_notice = None
@@ -373,16 +372,19 @@ class SettingsDialog(QDialog):
         form_llm.addRow(create_help_label(t("settings.llm_model.help")))
 
         form_llm.addRow(t("settings.tone.label"), self.combo_tone)
+        self._llm_form = form_llm
+        self.combo_writing_preset.currentIndexChanged.connect(self._update_settings_tone)
         form_llm.addRow(t("settings.writing_preset.label"), self.combo_writing_preset)
         form_llm.addRow(create_help_label(t("settings.writing_preset.help")))
-        form_llm.addRow(t("settings.compose_custom_preset.label"), self.edit_compose_custom_preset)
-        form_llm.addRow(create_help_label(t("settings.compose_custom_preset.help")))
+        form_llm.insertRow(0, t("compose.custom.label"), self.edit_compose_custom_preset)
+        form_llm.insertRow(1, create_help_label(t("compose.custom.settings_help")))
         form_llm.addRow(t("settings.emoji_density.label"), self.combo_emoji)
 
         form_llm.addRow(t("settings.dampf_prompt.label"), self.edit_dampf_prompt)
         form_llm.addRow(create_help_label(t("settings.dampf_prompt.help")))
         form_llm.addRow(t("settings.custom_terms.label"), custom_terms_widget)
         form_llm.addRow(create_help_label(t("settings.custom_terms.help")))
+        self._update_settings_tone()
 
         self.tabs.addTab(self._scrollable(tab_llm), t("settings.tab.workflows"))
 
@@ -433,7 +435,7 @@ class SettingsDialog(QDialog):
 
         # Dezente Versionsanzeige ganz unten auf der letzten Einstellungsseite
         version_label = QLabel(t("settings.version").format(version=APP_VERSION))
-        version_label.setStyleSheet("color: gray; font-size: 9px;")
+        version_label.setProperty("role", "muted")
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         form_general.addRow(version_label)
 
@@ -441,11 +443,31 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(self.tabs)
 
+        # Put supplemental explanations on their fields, keeping forms short.
+        # Security notices and the direct prompt-editor link remain visible.
+        for form in (form_whisper, form_llm, form_general):
+            form.setVerticalSpacing(8)
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.SpanningRole)
+                help_label = item.widget() if item is not None else None
+                if not isinstance(help_label, QLabel) or not help_label.property("fieldHelp"):
+                    continue
+                if help_label.text() in (t("compose.custom.settings_help"), t("settings.api_key_env.help")):
+                    continue
+                for role in (QFormLayout.ItemRole.LabelRole, QFormLayout.ItemRole.FieldRole):
+                    previous = form.itemAt(row - 1, role) if row else None
+                    widget = previous.widget() if previous is not None else None
+                    if widget is not None:
+                        widget.setToolTip(help_label.text())
+                        widget.setAccessibleDescription(help_label.text())
+                form.setRowVisible(row, False)
+
         # Dialog Button Box
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         button_save = button_box.button(QDialogButtonBox.StandardButton.Save)
         if button_save is not None:
             button_save.setText(t("button.save"))
+            button_save.setObjectName("primaryAction")
         button_cancel = button_box.button(QDialogButtonBox.StandardButton.Cancel)
         if button_cancel is not None:
             button_cancel.setText(t("button.cancel"))
@@ -453,12 +475,21 @@ class SettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+    def _update_settings_tone(self) -> None:
+        """Expose the tone control only when the selected action needs it."""
+        self._llm_form.setRowVisible(
+            self.combo_tone, self.combo_writing_preset.currentData() == "change_tone"
+        )
+
     def _refresh_api_key_status(self) -> None:
         env_name = self.edit_api_key_env.text().strip() or self.config.openai_api_key_env
         env_value = os.environ.get(env_name, "").strip()
         status = "gesetzt" if env_value else "nicht gesetzt"
         self.lbl_api_key_status.setText(
             t("settings.api_key.status").format(status=status, env_name=env_name)
+        )
+        theme.set_status_role(
+            self.lbl_api_key_status, "success" if env_value else "warning"
         )
 
     def _on_llm_provider_changed(self) -> None:
@@ -740,11 +771,11 @@ class BlitztextApp(QObject):
     def setup_tray(self) -> None:
         self.tray_icon = QSystemTrayIcon(self)
         self._tray_icons = {
-            "IDLE": self._create_microphone_icon(QColor("#2e7d32")),
-            "RECORDING": self._create_microphone_icon(QColor("#c62828")),
-            "TRANSCRIBING": self._create_microphone_icon(QColor("#ef6c00")),
-            "LLM_REWRITING": self._create_microphone_icon(QColor("#ef6c00")),
-            "ERROR": self._create_microphone_icon(QColor("#757575")),
+            "IDLE": self._create_microphone_icon(QColor(theme.STATE_IDLE)),
+            "RECORDING": self._create_microphone_icon(QColor(theme.STATE_RECORDING)),
+            "TRANSCRIBING": self._create_microphone_icon(QColor(theme.STATE_PROCESSING)),
+            "LLM_REWRITING": self._create_microphone_icon(QColor(theme.STATE_PROCESSING)),
+            "ERROR": self._create_microphone_icon(QColor(theme.STATE_ERROR)),
         }
 
         # Load standard icon fallback
@@ -761,14 +792,21 @@ class BlitztextApp(QObject):
 
         # Create menu
         self.menu = QMenu()
+        self.menu.setObjectName("trayMenu")
 
         # Fenster anzeigen (grafischer Fallback)
-        self.action_show_window = QAction(f"🪟  {t('tray.show_window')}", self)
+        self.action_show_window = QAction(t("tray.show_window"), self)
+        self.action_show_window.setIcon(theme.create_app_icon())
         self.action_show_window.triggered.connect(self.show_main_window)
         self.menu.addAction(self.action_show_window)
-        self.action_compose = QAction(f"✍  {t('tray.compose')}", self)
+        self.action_compose = QAction(t("tray.compose"), self)
+        self.action_compose.setIcon(theme.create_ui_icon("edit"))
         self.action_compose.triggered.connect(lambda _checked=False: self.show_compose_window())
         self.menu.addAction(self.action_compose)
+        self.action_custom_prompt = QAction(t("compose.custom.edit"), self)
+        self.action_custom_prompt.setIcon(theme.create_ui_icon("edit", theme.BLITZ_400))
+        self.action_custom_prompt.triggered.connect(self.show_custom_prompt)
+        self.menu.addAction(self.action_custom_prompt)
         self.menu.addSeparator()
 
         # Actions für die fünf Workflows
@@ -797,7 +835,7 @@ class BlitztextApp(QObject):
         # Submenu: Schreibstil-Vorlage für Blitztext+ (Text-Verbesserer).
         # Exklusive, abhakbare Auswahl gespeist aus dem Preset-Katalog; die
         # Vorauswahl spiegelt die persistierte config.writing_preset wider.
-        self.menu_preset = self.menu.addMenu(f"✨  {t('tray.writing_preset')}")
+        self.menu_preset = self.menu.addMenu(t("tray.writing_preset"))
         self.preset_action_group = QActionGroup(self)
         self.preset_action_group.setExclusive(True)
         self.preset_actions: dict[str, QAction] = {}
@@ -824,23 +862,26 @@ class BlitztextApp(QObject):
 
         # Verlauf anzeigen
         self.action_history = QAction(t("tray.history"), self)
+        self.action_history.setIcon(theme.create_ui_icon("history"))
         self.action_history.triggered.connect(self.show_history_panel)
         self.menu.addAction(self.action_history)
 
         # Vorlesen (TTS)
         self.action_tts = QAction(t("tray.tts"), self)
+        self.action_tts.setIcon(theme.create_ui_icon("speaker"))
         self.action_tts.triggered.connect(self.show_tts_window)
         self.menu.addAction(self.action_tts)
 
         self.menu.addSeparator()
 
         # Settings action
-        self.action_settings = QAction(f"⚙   {t('tray.settings')}...", self)
+        self.action_settings = QAction(f"{t('tray.settings')}…", self)
+        self.action_settings.setIcon(theme.create_ui_icon("settings"))
         self.action_settings.triggered.connect(self.show_settings_dialog)
         self.menu.addAction(self.action_settings)
 
         # Quit action
-        self.action_quit = QAction(f"✕   {t('tray.quit')}", self)
+        self.action_quit = QAction(t("tray.quit"), self)
         self.action_quit.triggered.connect(self.quit_app)
         self.menu.addAction(self.action_quit)
 
@@ -883,9 +924,11 @@ class BlitztextApp(QObject):
         """Aktualisiert Texte, die nach Settings-Save bereits existieren."""
         self.app.setApplicationName(t("app.name"))
         if hasattr(self, "action_show_window"):
-            self.action_show_window.setText(f"🪟  {t('tray.show_window')}")
+            self.action_show_window.setText(t("tray.show_window"))
         if hasattr(self, "action_compose"):
-            self.action_compose.setText(f"✍  {t('tray.compose')}")
+            self.action_compose.setText(t("tray.compose"))
+        if hasattr(self, "action_custom_prompt"):
+            self.action_custom_prompt.setText(t("compose.custom.edit"))
         if hasattr(self, "action_transcription"):
             self.action_transcription.setText(
                 f"{t('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}"
@@ -899,9 +942,9 @@ class BlitztextApp(QObject):
         if hasattr(self, "action_emoji"):
             self.action_emoji.setText(f"{t('workflow.emoji_text.name')}\tMeta+Shift+E")
         if hasattr(self, "menu_preset"):
-            self.menu_preset.setTitle(f"✨  {t('tray.writing_preset')}")
-        self.action_settings.setText(f"⚙   {t('tray.settings')}...")
-        self.action_quit.setText(f"✕   {t('tray.quit')}")
+            self.menu_preset.setTitle(t("tray.writing_preset"))
+        self.action_settings.setText(f"{t('tray.settings')}…")
+        self.action_quit.setText(t("tray.quit"))
         if hasattr(self, "preset_actions"):
             self._refresh_preset_menu()
         if self._main_window is not None:
@@ -1224,7 +1267,7 @@ class BlitztextApp(QObject):
                 notes_folder=self.config.notes_folder,
             )
             panel.setWindowTitle(t("history.window_title"))
-            panel.resize(320, 440)
+            panel.resize(420, 500)
             panel.merged.connect(self._on_dictation_merged)
             panel.count_changed.connect(self._on_history_count_changed)
             self._history_panel = panel
@@ -1285,8 +1328,8 @@ class BlitztextApp(QObject):
     def _ensure_compose_window(self) -> ComposeWindow:
         if self._compose_window is None:
             window = ComposeWindow(self.llm_service, self.paste_service, self.config)
+            window.prompt_saved.connect(self._on_custom_prompt_saved)
             try:
-                from app import theme
                 window.setWindowIcon(theme.create_app_icon())
             except Exception:  # pragma: no cover - rein kosmetisch
                 pass
@@ -1300,6 +1343,18 @@ class BlitztextApp(QObject):
         window.show()
         window.raise_()
         window.activateWindow()
+
+    def show_custom_prompt(self) -> None:
+        """Open the one shared instruction editor from the window or tray."""
+        self.show_compose_window()
+        self._ensure_compose_window().edit_custom_prompt()
+
+    def _on_custom_prompt_saved(self) -> None:
+        self._rebuild_llm_service()
+        self._refresh_preset_menu()
+        self.update_menu_availability()
+        if self._main_window is not None:
+            self._main_window.set_preset(CUSTOM_PRESET_KEY)
 
     def _compose_voice_routing_enabled(self) -> bool:
         window = self._compose_window
@@ -1324,7 +1379,6 @@ class BlitztextApp(QObject):
         if self._main_window is None:
             window = MainWindow(self)
             try:
-                from app import theme
                 window.setWindowIcon(theme.create_app_icon())
             except Exception:  # pragma: no cover - rein kosmetisch
                 pass
@@ -1338,7 +1392,11 @@ class BlitztextApp(QObject):
 
     def show_main_window(self) -> None:
         window = self._ensure_main_window()
-        window.show()
+        # The frameless panel can be minimized; show() alone would keep it iconified.
+        if window.isMinimized():
+            window.showNormal()
+        else:
+            window.show()
         window.raise_()
         window.activateWindow()
 
@@ -1454,9 +1512,8 @@ def main() -> int:
     app.setApplicationName(t("app.name"))
     app.setQuitOnLastWindowClosed(False)
 
-    # Design-System: Glass-Theme + Marken-App-Icon (Mikrofon + Blitz)
+    # Central design system and branded application icon.
     try:
-        from app import theme
         theme.apply_theme(app)
         app.setWindowIcon(theme.create_app_icon())
     except Exception as exc:  # pragma: no cover - rein kosmetisch

@@ -55,6 +55,21 @@ def _other_key(current: str) -> str:
 
 @gui_only
 class TestPresetMenu:
+    def test_saved_compose_instruction_rebuilds_shared_service(self, tray_app):
+        main = tray_app._ensure_main_window()
+        window = tray_app._ensure_compose_window()
+        window.edit_custom_prompt()
+        window.txtOwnPrompt.setPlainText("Keep every fact. Use short sentences.")
+        window.btnSavePrompt.click()
+        assert tray_app.llm_service.writing_custom_prompt == "Keep every fact. Use short sentences."
+        assert window._llm_service is tray_app.llm_service
+        assert tray_app.config.writing_preset == "custom"
+        assert tray_app.llm_service.writing_preset == "custom"
+        assert tray_app.preset_actions["custom"].isChecked()
+        assert main._preset_combo.currentData() == "custom"
+        assert BlitztextConfig(config_dir=tray_app.config.config_dir).compose_custom_preset_text == "Keep every fact. Use short sentences."
+        window.close()
+
     def test_handler_persists_and_rebuilds_service(self, tray_app):
         """Auswahl im Tray: Config gesetzt + gespeichert + Service neu gebaut."""
         target = _other_key(tray_app.config.writing_preset)
@@ -225,10 +240,11 @@ class TestMainWindowPresetSync:
         assert window._preset_combo.currentData() == target
 
     def test_preset_combo_visible_only_for_text_improver(self, tray_app):
-        """Preset-Combo im Hauptfenster ist nur bei Blitztext+ sichtbar."""
+        """Preset-Combo im Options-Popup ist nur bei Blitztext+ sichtbar."""
         from app.workflows import WorkflowType
 
         window = self._open_window(tray_app)
+        window._btn_options.click()
 
         # Standard-Workflow ist TRANSCRIPTION → Combo unsichtbar
         for i in range(window._workflow_combo.count()):
@@ -239,6 +255,7 @@ class TestMainWindowPresetSync:
                 f"Workflow {wf}: Combo sichtbar={window._preset_combo.isVisible()}, "
                 f"erwartet={expected}"
             )
+        window._options_popup.hide()
 
 # --- Goal 04: Tray und Hauptfenster zeigen dieselben Kernaktionen -----------
 

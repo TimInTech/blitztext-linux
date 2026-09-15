@@ -299,8 +299,8 @@ def test_refresh_i18n_texts_updates_existing_shell():
         set_language("en")
         BlitztextApp._refresh_i18n_texts(fake)
 
-        fake.action_settings.setText.assert_called_once_with("⚙   Settings...")
-        fake.action_quit.setText.assert_called_once_with("✕   Quit")
+        fake.action_settings.setText.assert_called_once_with("Settings…")
+        fake.action_quit.setText.assert_called_once_with("Quit")
         fake._main_window.setWindowTitle.assert_called_once_with("Blitztext")
         fake.update_tray_state.assert_called_once()
     finally:
@@ -467,11 +467,13 @@ def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
         lbl_api_key_status=FakeLabel(),
     )
 
-    SettingsDialog._refresh_api_key_status(fake)
+    with patch("app.blitztext_linux.theme.set_status_role") as set_status_role:
+        SettingsDialog._refresh_api_key_status(fake)
 
     assert "CUSTOM_OPENAI_KEY" in fake.lbl_api_key_status.text
     assert "gesetzt" in fake.lbl_api_key_status.text
     assert secret_value not in fake.lbl_api_key_status.text
+    set_status_role.assert_called_once_with(fake.lbl_api_key_status, "success")
 
 # --- Goal 04: Settings nutzt dieselbe Auswahl und bestehende Prompt-Ablage --
 

@@ -225,21 +225,21 @@ class TestSetLanguage:
         (
             "de",
             (
-                "Standard / Text verbessern",
+                "Text verbessern",
                 "Kürzen",
                 "Ausformulieren",
                 "Tonfall ändern",
-                "Eigener Prompt",
+                "Eigene Anweisung",
             ),
         ),
         (
             "en",
             (
-                "Standard / Improve text",
+                "Improve text",
                 "Shorten",
                 "Expand",
                 "Change tone",
-                "Custom prompt",
+                "Custom instruction",
             ),
         ),
     ],
