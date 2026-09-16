@@ -19,7 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtWidgets import QApplication
 
 from app import theme
@@ -27,7 +27,7 @@ from app.blitztext_linux import BlitztextApp, Config, SettingsDialog
 from app.compose_window import ComposeWindow
 from app.config import BlitztextConfig
 from app.history_panel import HistoryPanel
-from app.i18n import set_language, t
+from app.i18n import set_language, t, tq
 from app.llm_service import LLMService, WorkflowType
 from app.main_window import MainWindow
 from app.paste_service import PasteService
@@ -47,15 +47,14 @@ LABEL_BG = (37, 174, 255, 220)
 LANG_COPY = {
     "en": {
         "banner": "Banner-en.png",
-        "social": "Banner.png",
-        "hero": "Your local AI voice assistant for KDE Plasma & Wayland",
+        "hero": "Your local AI voice assistant for Linux",
         "sub": "Record speech, transcribe locally or online, optionally rewrite it with AI, and paste it directly into the active app.",
         "flow": "Record  •  Transcribe  •  Rewrite  •  Paste",
-        "feature_title": "What is new in v0.8.0",
+        "feature_title": "Current highlights",
         "tag_new": "NEW",
         "chips": [
             ("Compose window", "Draft, refine and compare AI-rewritten text before pasting it anywhere."),
-            ("Preset in main window", "Pick your writing style in the main window — changes sync to the tray instantly."),
+            ("Single-panel widget", "Unified frameless surface with gold microphone, waves and tool row."),
             ("Tone & template control", "Choose tone and writing template directly inside the Compose window."),
             ("Prompt transparency", "Inspect and edit the AI system prompt before running a rewrite."),
         ],
@@ -67,24 +66,25 @@ LANG_COPY = {
         },
         "compose_input": "Please help me write a concise follow-up email for our product meeting earlier today.",
         "compose_output": "Hi team,\n\nThank you for the productive discussion today. Here are the key action items we agreed on:\n\n• Finalise the API contract by Friday\n• Schedule a follow-up review for next Tuesday\n• Share the updated roadmap with stakeholders\n\nLet me know if I missed anything.\n\nBest,",
+        "custom_prompt": "Write a friendly and concise message. Keep all key action items direct.",
         "history_entries": [
             ("Please move tomorrow's team sync to 10:00.", False),
             ("Could you send me the updated rollout plan afterwards?", True),
             ("The draft is ready and stored in the shared project folder.", False),
         ],
         "tts_text": "Read this short summary aloud with the current voice settings.",
+        "tts_voice": "en_US-amy-medium",
     },
     "de": {
         "banner": "Banner-de.png",
-        "social": None,
-        "hero": "Dein lokaler KI-Sprachassistent für KDE Plasma & Wayland",
+        "hero": "Dein lokaler KI-Sprachassistent für Linux",
         "sub": "Sprache aufnehmen, lokal oder online transkribieren, optional mit KI umformulieren und direkt in die aktive Anwendung einfügen.",
-        "flow": "Aufnehmen  •  Transkribieren  •  Umformulieren  •  Direkt einfügen",
-        "feature_title": "Neu in v0.8.0",
+        "flow": "Aufnehmen • Transkribieren • Umschreiben • Einfügen",
+        "feature_title": "Aktuelle Highlights",
         "tag_new": "NEU",
         "chips": [
             ("Entwurfsfenster", "Text entwerfen, verfeinern und KI-Varianten vergleichen, bevor du einfügst."),
-            ("Preset im Hauptfenster", "Schreibstil direkt im Hauptfenster wählen – Änderungen bleiben mit dem Tray synchron."),
+            ("Single-Panel-Widget", "Kompakte rahmenlose Einzelfläche mit Gold-Mikrofon, Wellen und Werkzeugleiste."),
             ("Tonfall & Vorlage", "Tonfall und Schreibvorlage direkt im Entwurfsfenster steuern."),
             ("Prompt-Transparenz", "KI-Systemprompt vor der Ausführung einsehen und anpassen."),
         ],
@@ -96,12 +96,14 @@ LANG_COPY = {
         },
         "compose_input": "Bitte hilf mir, eine knappe Nachfass-E-Mail zu unserem heutigen Produktmeeting zu schreiben.",
         "compose_output": "Hallo zusammen,\n\nvielen Dank für die produktive Diskussion heute. Hier die vereinbarten Aufgaben:\n\n• API-Vertrag bis Freitag finalisieren\n• Review-Termin für nächsten Dienstag eintragen\n• Aktualisierte Roadmap an Stakeholder verteilen\n\nBitte meldet euch, falls ich etwas vergessen habe.\n\nViele Grüße,",
+        "custom_prompt": "Formuliere eine freundliche, knappe Mitteilung. Halte alle Aufgaben direkt fest.",
         "history_entries": [
             ("Bitte verschiebe das Team-Meeting morgen auf 10 Uhr.", False),
             ("Kannst du mir danach den aktualisierten Rollout-Plan schicken?", True),
             ("Der Entwurf ist fertig und liegt im gemeinsamen Projektordner.", False),
         ],
         "tts_text": "Lies diese kurze Zusammenfassung mit den aktuellen Spracheinstellungen vor.",
+        "tts_voice": "de_DE-thorsten-medium",
     },
 }
 
@@ -117,13 +119,13 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.I
     return ImageFont.load_default()
 
 
-FONT_TITLE = _font(56, bold=True)
-FONT_SUBTITLE = _font(25, bold=False)
-FONT_FLOW = _font(24, bold=True)
-FONT_FEATURE_TITLE = _font(21, bold=True)
+FONT_TITLE = _font(52, bold=True)
+FONT_SUBTITLE = _font(21, bold=False)
+FONT_FLOW = _font(17, bold=True)
+FONT_FEATURE_TITLE = _font(20, bold=True)
 FONT_CARD_TITLE = _font(19, bold=True)
-FONT_CARD_TEXT = _font(15, bold=False)
-FONT_LABEL = _font(15, bold=True)
+FONT_CARD_TEXT = _font(14, bold=False)
+FONT_LABEL = _font(14, bold=True)
 
 
 app: QApplication | None = None
@@ -260,20 +262,25 @@ def _make_banner(lang: str, out_dir: Path) -> None:
     draw.rectangle((88, 94, 92, 116), fill=(8, 16, 30, 255))
     draw.arc((68, 100, 112, 132), 20, 160, fill=(70, 194, 255, 255), width=4)
 
-    draw.text((150, 54), "Blitztext Linux", font=FONT_TITLE, fill=TEXT_PRIMARY)
-    draw.text((150, 126), copy["hero"], font=FONT_SUBTITLE, fill=TEXT_SECONDARY)
-    draw.text((150, 170), copy["sub"], font=FONT_CARD_TEXT, fill="#c7d8ea")
-    draw.text((150, 208), copy["flow"], font=FONT_FLOW, fill=ACCENT)
-    draw.text((150, 258), copy["feature_title"], font=FONT_FEATURE_TITLE, fill=TEXT_PRIMARY)
+    y = 44
+    draw.text((150, y), "Blitztext Linux", font=FONT_TITLE, fill=TEXT_PRIMARY)
+    y += FONT_TITLE.size + 10
+    y = _draw_multiline(draw, copy["hero"], (150, y), 540, FONT_SUBTITLE, TEXT_SECONDARY, line_gap=4)
+    y += 8
+    y = _draw_multiline(draw, copy["sub"], (150, y), 540, FONT_CARD_TEXT, "#c7d8ea", line_gap=4)
+    y += 12
+    draw.text((150, y), copy["flow"], font=FONT_FLOW, fill=ACCENT)
+    y += FONT_FLOW.size + 12
+    draw.text((150, y), copy["feature_title"], font=FONT_FEATURE_TITLE, fill=TEXT_PRIMARY)
 
     card_positions = [
-        (60, 304),
-        (396, 304),
-        (60, 444),
-        (396, 444),
+        (60, 268),
+        (370, 268),
+        (60, 448),
+        (370, 448),
     ]
-    card_w = 304
-    card_h = 118
+    card_w = 290
+    card_h = 162
     for index, ((title, desc), (x0, y0)) in enumerate(zip(copy["chips"], card_positions, strict=False)):
         x1 = x0 + card_w
         y1 = y0 + card_h
@@ -284,17 +291,17 @@ def _make_banner(lang: str, out_dir: Path) -> None:
         _draw_multiline(draw, desc, (x0 + 16, y0 + 84), card_w - 30, FONT_CARD_TEXT, TEXT_SECONDARY, line_gap=4)
 
     screenshots = {
-        "main": out_dir / f"main-window-{lang}.png",
+        "main": out_dir / f"main-idle-{lang}.png",
         "compose": out_dir / f"compose-{lang}.png",
-        "workflows": out_dir / f"settings-ai-workflows-{lang}.png",
+        "workflows": out_dir / f"settings-ai-{lang}.png",
         "tray": out_dir / f"tray-menu-{lang}.png",
     }
 
     placements = [
-        (screenshots["main"], (824, 74), (220, 260), copy["labels"]["main"]),
-        (screenshots["compose"], (1046, 74), (194, 260), copy["labels"]["compose"]),
-        (screenshots["workflows"], (790, 350), (250, 236), copy["labels"]["workflows"]),
-        (screenshots["tray"], (1054, 332), (186, 254), copy["labels"]["tray"]),
+        (screenshots["main"], (730, 52), (230, 230), copy["labels"]["main"]),
+        (screenshots["compose"], (1000, 52), (230, 230), copy["labels"]["compose"]),
+        (screenshots["workflows"], (730, 342), (230, 230), copy["labels"]["workflows"]),
+        (screenshots["tray"], (1000, 342), (230, 230), copy["labels"]["tray"]),
     ]
 
     for image_path, (x, y), size, label in placements:
@@ -309,10 +316,64 @@ def _make_banner(lang: str, out_dir: Path) -> None:
     out_path = out_dir / copy["banner"]
     canvas.convert("RGB").save(out_path, quality=95)
     print(f"  ✓ {out_path.name}")
-    if copy["social"]:
-        social_path = out_dir / copy["social"]
-        canvas.convert("RGB").save(social_path, quality=95)
-        print(f"  ✓ {social_path.name}")
+
+
+def _make_social_preview(screenshot_dir: Path, out_path: Path) -> None:
+    canvas = Image.new("RGBA", CANVAS_SIZE, BACKGROUND_BOTTOM)
+    bg = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
+    bg_draw = ImageDraw.Draw(bg)
+    for i in range(CANVAS_SIZE[1]):
+        ratio = i / max(1, CANVAS_SIZE[1] - 1)
+        top = tuple(int(int(BACKGROUND_TOP[j:j + 2], 16) * (1 - ratio) + int(BACKGROUND_BOTTOM[j:j + 2], 16) * ratio) for j in (1, 3, 5))
+        bg_draw.line((0, i, CANVAS_SIZE[0], i), fill=top + (255,))
+    canvas.alpha_composite(bg)
+
+    draw = ImageDraw.Draw(canvas)
+    x_logo, y_logo = 70, 195
+    # Logo
+    draw.ellipse((x_logo, y_logo, x_logo + 88, y_logo + 88), fill=(13, 150, 255, 255), outline=(70, 194, 255, 255), width=3)
+    draw.ellipse((x_logo + 29, y_logo + 26, x_logo + 59, y_logo + 56), fill=(8, 16, 30, 255))
+    draw.rectangle((x_logo + 41, y_logo + 50, x_logo + 47, y_logo + 79), fill=(8, 16, 30, 255))
+    draw.arc((x_logo + 18, y_logo + 59, x_logo + 70, y_logo + 98), 20, 160, fill=(70, 194, 255, 255), width=4)
+
+    # Title & Subtitle
+    font_title = _font(56, bold=True)
+    draw.text((x_logo + 110, y_logo + 14), "Blitztext Linux", font=font_title, fill=TEXT_PRIMARY)
+    font_sub = _font(24, bold=False)
+    y_sub = y_logo + 118
+    draw.text((x_logo, y_sub), "Your local AI voice assistant for Linux", font=font_sub, fill=TEXT_SECONDARY)
+
+    # Flow
+    font_flow = _font(21, bold=True)
+    y_flow = y_sub + 46
+    draw.text((x_logo, y_flow), "Record  •  Transcribe  •  Rewrite  •  Paste", font=font_flow, fill=ACCENT)
+
+    def _add_window_shadow(base: Image.Image, img: Image.Image, x: int, y: int, radius: int = 30, offset: tuple[int, int] = (0, 15), opacity: int = 220) -> None:
+        shadow = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        s_draw = ImageDraw.Draw(shadow)
+        sx = x + offset[0]
+        sy = y + offset[1]
+        s_draw.rounded_rectangle((sx, sy, sx + img.width, sy + img.height), radius=20, fill=(0, 0, 0, opacity))
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius))
+        base.alpha_composite(shadow)
+        base.alpha_composite(img, (x, y))
+
+    img_compose = Image.open(screenshot_dir / "compose-en.png").convert("RGBA")
+    img_recording = Image.open(screenshot_dir / "main-recording-en.png").convert("RGBA")
+    img_idle = Image.open(screenshot_dir / "main-idle-en.png").convert("RGBA")
+
+    compose_scaled = img_compose.resize((550, 355), Image.Resampling.LANCZOS)
+    _add_window_shadow(canvas, compose_scaled, 660, 70, radius=30, offset=(0, 14), opacity=200)
+
+    rec_scaled = img_recording.resize((284, 252), Image.Resampling.LANCZOS)
+    _add_window_shadow(canvas, rec_scaled, 580, 295, radius=34, offset=(0, 16), opacity=230)
+
+    idle_scaled = img_idle.resize((242, 215), Image.Resampling.LANCZOS)
+    _add_window_shadow(canvas, idle_scaled, 920, 335, radius=28, offset=(0, 14), opacity=210)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(out_path, quality=95)
+    print(f"  ✓ {out_path.name}")
 
 
 class _FakeLLMService(LLMService):
@@ -347,7 +408,7 @@ class _FakePasteService(PasteService):
 
 def _tab_index(tabs, key: str) -> int:
     """Resolve a settings tab by its i18n key, independent of tab order or language."""
-    target = t(key)
+    target = tq(key)
     for index in range(tabs.count()):
         if tabs.tabText(index) == target:
             return index
@@ -361,11 +422,12 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
     with tempfile.TemporaryDirectory(prefix=f"blitztext-assets-{lang}-") as tmp_dir:
         config = BlitztextConfig(config_dir=Path(tmp_dir))
         config.ui_language = lang
-        config.writing_preset = "kurz_praezise"
+        config.writing_preset = "shorten"
         config.llm_provider = "openai"
-        config.tts_provider = "openai"
-        config.tts_openai_consent = True
-        config.notes_folder = str(Path.home() / "Blitztext-Notes")
+        # Piper is the default provider and keeps the shot free of cloud errors.
+        config.tts_provider = "piper"
+        config.notes_folder = "/home/user/Blitztext-Notes"
+        config.compose_custom_preset_text = copy.get("custom_prompt", "")
 
         controller = SimpleNamespace(
             gui_toggle_recording=lambda *a, **k: None,
@@ -379,49 +441,115 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
             main_window_preset_changed=lambda *a, **k: None,
         )
 
-        main_window = MainWindow(controller)
-        # Switch to TEXT_IMPROVER so the writing-style preset combo is visible
-        for i in range(main_window._workflow_combo.count()):
-            if main_window._workflow_combo.itemData(i) == WorkflowType.TEXT_IMPROVER:
-                main_window._workflow_combo.setCurrentIndex(i)
-                _process_events()
-                break
-        _grab(main_window, out_dir / f"main-window-{lang}.png")
-        main_window.update_state("RECORDING", None, None)
-        _grab(main_window, out_dir / f"main-window-recording-{lang}.png")
-        main_window.close()
+        # 1. Main Window States
+        main_win = MainWindow(controller)
+        main_win.set_history_count(3)
+        main_win.show()
 
+        # 1.1 Idle
+        main_win.update_state("IDLE", None, None)
+        _grab(main_win, out_dir / f"main-idle-{lang}.png")
+
+        # 1.2 Recording
+        main_win.update_state("RECORDING", None, None)
+        main_win._timer_label.setText("00:04")
+        main_win._btn_toggle._phase = 0.35
+        _grab(main_win, out_dir / f"main-recording-{lang}.png")
+
+        # 1.3 Processing
+        main_win.update_state("TRANSCRIBING", None, None)
+        main_win._btn_toggle._phase = 0.25
+        _grab(main_win, out_dir / f"main-processing-{lang}.png")
+
+        # 1.4 Main Menu (Popup open above the options button)
+        main_win.update_state("IDLE", None, None)
+        main_win._select_workflow(WorkflowType.TEXT_IMPROVER)
+        main_win._options_popup.show()
+        _process_events(12)
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f1:
+            w_tmp = Path(f1.name)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f2:
+            p_tmp = Path(f2.name)
+        try:
+            main_win.grab().save(str(w_tmp))
+            main_win._options_popup.grab().save(str(p_tmp))
+            img_w = Image.open(w_tmp).convert("RGBA")
+            img_p = Image.open(p_tmp).convert("RGBA")
+            btn_pos = main_win._btn_options.mapTo(main_win, QPoint(main_win._btn_options.width(), 0))
+            canvas_w = max(img_w.width, img_p.width + 20)
+            popup_x = max(0, btn_pos.x() - img_p.width + 16)
+            popup_y = 0
+            w_x = (canvas_w - img_w.width) // 2
+            w_y = img_p.height - 16
+            canvas_h = w_y + img_w.height
+            menu_comp = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+            menu_comp.alpha_composite(img_p, (popup_x, popup_y))
+            menu_comp.alpha_composite(img_w, (w_x, w_y))
+            menu_comp_path = out_dir / f"main-menu-{lang}.png"
+            menu_comp.save(str(menu_comp_path))
+            print(f"  ✓ {menu_comp_path.name}")
+        finally:
+            w_tmp.unlink(missing_ok=True)
+            p_tmp.unlink(missing_ok=True)
+            main_win._options_popup.hide()
+
+        main_win.close()
+
+        # 2. Compose Window
+        compose = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
+        compose.set_input_text(copy["compose_input"])
+        compose.txtOutput.setPlainText(copy["compose_output"])
+        _grab(compose, out_dir / f"compose-{lang}.png")
+
+        # 2.1 Compose with Prompt Editor expanded
+        compose.edit_custom_prompt()
+        compose.resize(620, 500)
+        _grab(compose, out_dir / f"compose-prompt-{lang}.png")
+        compose.close()
+
+        # 3. Settings Dialog
         settings = SettingsDialog(config)
+        # Per tab height so every form is fully visible without empty filler space.
         settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.general"))
+        settings.resize(560, 500)
         _grab(settings, out_dir / f"settings-general-{lang}.png")
-        settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.speech"))
-        _grab(settings, out_dir / f"settings-speech-{lang}.png")
         settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.workflows"))
-        _grab(settings, out_dir / f"settings-ai-workflows-{lang}.png")
+        settings.resize(560, 700)
+        _grab(settings, out_dir / f"settings-ai-{lang}.png")
+        settings.tabs.setCurrentIndex(_tab_index(settings.tabs, "settings.tab.speech"))
+        settings.resize(560, 440)
+        _grab(settings, out_dir / f"settings-speech-{lang}.png")
         settings.close()
 
+        # 4. History Panel
         history = HistoryPanel(max_entries=50, notes_folder="")
         history.resize(420, 460)
         for text, merged in copy["history_entries"]:
             history.add_entry(text, is_dictation=merged)
         _grab(history, out_dir / f"history-{lang}.png")
-        # Let entry-add animations settle before the panel is torn down
-        time.sleep(0.9)
+        time.sleep(0.5)
         _process_events(6)
         history.close()
 
+        # 5. TTS Window
         tts = TtsWindow(config)
+        tts.resize(520, 360)
         tts.set_text(copy["tts_text"])
+        # The build host has no Piper voices installed; show a representative
+        # entry instead of the empty-state label.
+        tts._voice_combo.blockSignals(True)
+        tts._voice_combo.clear()
+        tts._voice_combo.addItem(copy["tts_voice"], userData=copy["tts_voice"])
+        tts._voice_combo.setEnabled(True)
+        tts._voice_combo.blockSignals(False)
         _grab(tts, out_dir / f"tts-{lang}.png")
         tts.close()
 
-        compose = ComposeWindow(_FakeLLMService(), _FakePasteService(), config)
-        compose.set_input_text(copy["compose_input"])
-        compose.txtOutput.setPlainText(copy["compose_output"])
-        _grab(compose, out_dir / f"compose-{lang}.png")
-        compose.close()
-
+        # 6. Tray Menu
         _capture_tray_menu(config, lang, out_dir / f"tray-menu-{lang}.png")
+
+        # 7. Banner
         _make_banner(lang, out_dir)
 
 
@@ -437,6 +565,8 @@ def main() -> int:
     for lang in ("en", "de"):
         print(f"Generating assets for {lang} …")
         _render_language_set(out_dir, lang)
+    print("Generating social preview …")
+    _make_social_preview(out_dir, out_dir / "social-preview.png")
     print("Done.")
     return 0
 

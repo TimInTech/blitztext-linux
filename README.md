@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/screenshots/linux/Banner.png" alt="Blitztext Linux Banner" width="860">
+  <img src="docs/screenshots/linux/Banner-en.png" alt="Blitztext Linux Banner" width="860">
 
   <h1>Blitztext Linux</h1>
   <p><strong>Your local AI voice assistant for Linux desktops on Wayland</strong></p>
@@ -38,7 +38,7 @@ Blitztext Linux is a hotkey-driven voice assistant that turns speech into text a
 ## Features
 
 - **Multilingual interface (EN/DE):** Switch the app interface between German and English under **Settings → General → "Interface language"** (takes effect after restarting the app).
-- **Compose window:** Type or paste any text, select a workflow and writing style, and let the AI rewrite it — no microphone needed. Includes tone selector, custom preset, variant history, and signature support.
+- **Compose window:** Type, paste, or dictate any text, pick a text action, and let the AI rewrite it — no microphone needed. Includes tone selector, custom instruction with prompt inspection, variant navigation, and signature support.
 - **OpenRouter & custom LLM endpoints:** Use OpenRouter or any OpenAI-compatible API as an alternative to OpenAI for all AI workflows.
 - **Audio export:** Save read-aloud output as an audio file directly from the Read Aloud window.
 - **Custom names / terms:** Extend the AI's vocabulary with your own terms, names, or technical words for perfect transcriptions.
@@ -53,21 +53,21 @@ Blitztext registers global hotkeys via `evdev`. With these combinations you have
 
 | Workflow | Hotkey | LLM? | Description |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Alt</kbd> (hold) | ❌ | Default: records while the key is held, transcribes, and pastes the text. Very short presses below 150 ms are discarded as accidental taps in hold mode. Recording key and hold/toggle mode are configurable under **Settings → Speech Recognition**. |
-| **Blitztext Local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
-| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Rephrases your recording professionally via LLM. |
-| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
-| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
+| **Dictate** | <kbd>Alt</kbd> (hold) | ❌ | Default: records while the key is held, transcribes, and pastes the text. Very short presses below 150 ms are discarded as accidental taps in hold mode. Recording key and hold/toggle mode are configurable under **Settings → Speech Recognition**. |
+| **Dictate · local** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Forces a pure **offline transcription**. |
+| **Dictate & improve** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Transcribes and rewrites the result with the selected text action. |
+| **Make it factual** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotional release: turns frustration into a matter-of-fact message. |
+| **Add emojis** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Enriches your message with fitting emojis. |
 
 > [!NOTE]
-> **LLM workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) require a valid **API key**. See [Secrets](#secrets) below for how to configure it. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
+> **LLM workflows** (`Dictate & improve`, `Make it factual`, `Add emojis`) require a valid **API key**. See [Secrets](#secrets) below for how to configure it. Without a key, these functions are disabled in the menu and via hotkeys, or result in an error message.
 
 ### AI workflows
 
-The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → AI Workflows**:
+The AI workflows help with phrasing, tone, and emojis. You'll find the relevant settings under **Settings → Text & AI**:
 
 <div align="center">
-  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="AI workflow settings" width="480">
+  <img src="docs/screenshots/linux/settings-ai-en.png" alt="Settings: Text &amp; AI" width="480">
   <br><br>
 </div>
 
@@ -80,7 +80,7 @@ The AI workflows help with phrasing, tone, and emojis. You'll find the relevant 
 > and the systemd user service load that file on the next start. See
 > [Secrets](#secrets) for the complete file format and permission instructions.
 
-**LLM providers.** Blitztext supports three provider modes, selectable under **Settings → AI Workflows → "LLM provider"**:
+**LLM providers.** Blitztext supports three provider modes, selectable under **Settings → Text & AI → "LLM provider"**:
 
 | Provider | When to use |
 | :--- | :--- |
@@ -90,66 +90,55 @@ The AI workflows help with phrasing, tone, and emojis. You'll find the relevant 
 
 For OpenRouter, set `base_url` to `https://openrouter.ai/api/v1` and choose your model (e.g. `openai/gpt-4o`). The API key environment variable name is configured under "API key environment".
 
-**Writing-style presets.** For the **Blitztext+** workflow (text improver) there are ready-made writing-style presets that you select under **Settings → AI Workflows → "Writing-style preset"** or directly in the **Compose window**:
+**Text actions.** Rewriting is built around five clearly separated actions. You select them under **Settings → Text & AI → "Text action"**, in the Compose window, or in the ⋯ menu of the main widget:
 
-| Preset | Effect |
+| Text action | Effect |
 | --- | --- |
-| **Standard (improve text)** | Previous behavior – cleanly formatted text, the selected **tone** applies. |
-| **Email – formal** | Polite email in the formal form with a clear structure. |
-| **Email – casual** | Friendly email in the informal form. |
-| **Bullet points** | Structures the content into concise bullet points. |
-| **Summary** | Concise, factual summary of the key statements. |
-| **Personal (informal)** | Clear text in a personal, informal tone. |
-| **Polite (formal)** | Clear text in a polite, formal tone. |
-| **Short & precise** | As concise as possible, without filler words and repetitions. |
-| **Custom preset…** | A free-form system prompt you define yourself under **Settings → General → "Custom preset (Compose)"**. |
+| **Improve text** | Default: cleanly formatted text with corrected grammar and punctuation; the selected **target tone** applies. |
+| **Shorten** | Removes filler words, repetitions, and detours while keeping every essential piece of information. |
+| **Expand** | Turns notes and fragments into coherent prose — without adding new facts. |
+| **Change tone** | Changes the tone only (casual / neutral / professional) and leaves content, language, and intent untouched. |
+| **Custom instruction** | Your own instruction from the Compose window ("How should your text sound?"). **Save & use for dictation** also applies it to the Dictate & improve workflow. |
 
-> With **Standard**, the configured **tone** (casual / neutral / professional) is additionally applied. Every other preset brings its own writing style and overrides the tone setting. Custom names/terms are preserved in all presets.
+> The **target tone** applies to **Improve text** and **Change tone**. Older configurations with the previous nine writing-style presets are migrated automatically to the closest action (e.g. "Email – formal" → **Change tone**, professional). Custom names/terms are preserved in every action.
 
 ### Compose window
 
-**Compact controls:** **Edit text** now has one action selector: Improve text,
-Shorten, Expand, Change tone, or Custom instruction. The tone selector appears
-only for Change tone; the separate workflow selector is removed. Draft and result
-are side by side (initial size 620 × 400).
-
-**Enter your prompt:** Click **Custom instruction …**, then describe the desired
-output under **How should your text sound?**. **Improve** uses this instruction
-for the current text. **Save & use for dictation** persists it for future
-sessions and selects Custom instruction for Dictate & improve. Unsaved changes
-remain in the open editor only. **Inspect prompt** shows the full prompt for a
-single request.
-
-The main window offers **Dictate** and **Dictate & improve**. Existing specialized
-workflows remain available through the tray and hotkeys. The older screenshots
-below still show the previous interface.
-
-The **Compose window** (`✍ Compose…` in the tray menu) lets you rewrite any text using the AI — without recording your voice. It is ideal for editing existing drafts, emails, or notes.
+The **Compose window** (`✍ Edit text…` in the tray menu or the pen button in the main widget) lets you draft, rewrite, and refine text using the AI — without recording your voice. It is ideal for polishing emails, notes, or messages before pasting them anywhere.
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/compose-en.png" alt="Compose window" width="480">
+  <img src="docs/screenshots/linux/compose-en.png" alt="Compose window" width="540">
   <br><br>
 </div>
 
-**How to open:** Click the tray icon → **✍ Compose…**
+**How to open:** Click the tray icon → **✍ Edit text…** or click the gold pen button in the main window widget.
 
 **What you can do in the Compose window:**
 
 | Element | Description |
 | :--- | :--- |
-| **Draft (left pane)** | Type or paste the text you want to rewrite. |
-| **Workflow** | Choose between Blitztext+ (text improver), Blitztext $%&! (steam release), or Blitztext :) (emojis). |
-| **Writing-style preset** | Select a preset or **Custom preset…** for a fully custom system prompt. |
-| **Tone** | Choose casual, neutral, or professional. Active only when **Standard** preset + **Blitztext+** is selected; grayed out for all other presets (a tooltip explains why). |
-| **Improve** | Sends your draft to the AI and shows the result in the right pane. |
-| **Variant history** | The last 10 generated results within the current session are kept as a scrollable list — click any entry to restore it. |
-| **Signature** | Appends your saved signature (configured under **Settings → General**). Automatically replaces common AI-generated placeholders such as `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]`, and similar — so no stray placeholder is ever left behind. |
-| **Copy** | Copies the result to the clipboard. |
-| **Insert & Close** | Pastes the result directly into the active application and closes the window. |
+| **Text action selector** | Choose between *Improve text*, *Shorten*, *Expand*, *Change tone*, or *Custom instruction*. |
+| **Tone selector** | Appears dynamically when *Change tone* is selected (Casual, Neutral, Professional). |
+| **Custom instruction …** | Expands an inline prompt editor (*"How should your text sound?"*). **Improve** uses this instruction for the current draft; **Save & use for dictation** persists it for future sessions and selects it for dictation workflows. |
+| **Inspect prompt** | Inspect the exact system prompt and instructions before submitting to the LLM. |
+| **Route voice input here** | When checked, active voice dictations are inserted directly into the draft field instead of being pasted to the active application. |
+| **Draft (left pane)** | Type, paste, or dictate the text you want to rewrite. |
+| **Result (right pane)** | Shows the AI-generated output side by side with your draft. |
+| **Variant navigation** | The results generated in this session stay available — step through them with the ‹ › arrows above the result pane. |
+| **Copy** | Copies the generated result to the clipboard. |
+| **Insert & Close** | Pastes the result directly into the active application and closes the compose window. |
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/compose-prompt-en.png" alt="Compose window with custom prompt inspection" width="540">
+  <br>
+  <sub>Inspect and edit the LLM instruction directly inside the Compose window.</sub>
+  <br><br>
+</div>
 
 > [!NOTE]
-> The signature and custom preset text are configured under **Settings → General**. Set "Signature for Compose window" and toggle "Automatically append after generation" if you want the signature added to every result.
+> Signature and custom preset text are configured under **Settings → General**. Set "Compose Window Signature" and toggle "Auto-append after generation" if you want your signature automatically added to every result. Common AI placeholders (like `[Your Name]`) are cleanly replaced.
 
 ### Tray icon and context menu
 
@@ -182,35 +171,61 @@ The microphone in the system tray is your indicator of the current state:
   </table>
 </div>
 
-The tray context menu gives you quick access to all workflows, the compose window, writing-style presets, dictation mode, history, and settings:
+The tray context menu gives you quick access to all workflows, the compose window, text actions, dictation mode, history, and settings:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray context menu" width="280">
+  <img src="docs/screenshots/linux/tray-menu-en.png" alt="Tray context menu" width="300">
   <br><br>
 </div>
 
 > [!NOTE]
 > If no tray area is available in the desktop environment, the icon falls back to the system theme `audio-input-microphone`; the color coding may then not apply.
 
-### Main window
+### Main window: Single-panel widget
 
-The main window is your graphical control center — useful when hotkeys are blocked or you prefer mouse control:
+The main window is a compact, frameless desktop widget with a consistent dark look, gold accents, and immediate visual feedback:
 
 <div align="center">
-  <br>
-  <img src="docs/screenshots/linux/main-window-en.png" alt="Main window" width="300">
-  <br><br>
+  <table>
+    <tr>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-idle-en.png" width="170"><br><br>
+        <b>Idle</b><br>
+        <i>Ready, standing by for input.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-recording-en.png" width="170"><br><br>
+        <b>Recording</b><br>
+        <i>Live timer and stereo wave bars.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-processing-en.png" width="170"><br><br>
+        <b>Processing</b><br>
+        <i>Animated gold spinning ring.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-menu-en.png" width="170"><br><br>
+        <b>Options menu</b><br>
+        <i>Workflows and quick actions.</i>
+      </td>
+    </tr>
+  </table>
 </div>
 
-- **Workflow dropdown:** Select from all 5 recording modes.
-- **Writing-style preset:** Visible when **Blitztext+** is selected — pick your preset directly in the main window. Changes sync to the tray instantly.
-- **Start/Stop button:** Click to begin or end a recording.
-- **Discard:** Cancels the current recording without transcription.
-- **Dictation / History:** Quick access to dictation mode and the transcript history.
-- **Read aloud / Settings:** Open the read-aloud window or the settings dialog.
+- **Central gold microphone:** Prominent circular button with metallic gradient and lightning bolt cut-out. Click to toggle recording on and off.
+- **Dynamic visual feedback:**
+  - **Idle:** Green status dot with duration counter (`Ready: 00:00`).
+  - **Recording:** Amber indicator, live recording timer, and animated stereo wave bars flanking the mic.
+  - **Processing:** Rotating gold progress ring around the microphone (`Transcribing…`).
+- **Tool row:**
+  - ✍ **Compose button** (highlighted pen icon): Opens the Compose window for drafting and rewriting.
+  - 🕒 **History button** (with counter badge): Opens the transcript history with recent entries.
+  - 🔊 **Read aloud button** (speaker icon): Opens the TTS window to synthesize speech.
+  - ⚙ **Settings button** (gear icon): Opens the settings dialog.
+  - ⋯ **More options button**: Pops up quick access to *Dictate & improve*, text improvement presets (*Shorten*, *Expand*, *Change tone*), *Custom instruction*, *Batch dictation*, and *Discard*.
 
-*The window opens at startup and via the tray entry **Show window** or a click on the tray icon. Closing only hides the window — the app keeps running in the tray.*
+*The widget opens at startup, via the tray entry **Show window**, or by clicking the tray icon. Closing only hides the widget — the app keeps running in the background tray.*
 
 ### Dictation, history, and read-aloud
 
@@ -218,7 +233,8 @@ In addition to the workflows, the tool offers three convenience functions:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/history-en.png" alt="History" width="340">
+  <img src="docs/screenshots/linux/history-en.png" alt="History" width="320">
+  &nbsp;&nbsp;
   <img src="docs/screenshots/linux/tts-en.png" alt="Read aloud" width="340">
   <br><br>
 </div>
@@ -372,8 +388,8 @@ The settings dialog has three tabs:
 <div align="center">
   <img src="docs/screenshots/linux/settings-speech-en.png" alt="Settings: Speech Recognition" width="480">
   <br><i>Speech Recognition — Whisper model, backend, language, hotkey mode, and recording key.</i><br><br>
-  <img src="docs/screenshots/linux/settings-ai-workflows-en.png" alt="Settings: AI Workflows" width="480">
-  <br><i>AI Workflows — LLM provider, API key, base URL, model, tone, and writing-style preset.</i><br><br>
+  <img src="docs/screenshots/linux/settings-ai-en.png" alt="Settings: Text &amp; AI" width="480">
+  <br><i>Text &amp; AI — system prompt, API key environment, LLM provider, base URL, model, text action, and emoji density.</i><br><br>
   <img src="docs/screenshots/linux/settings-general-en.png" alt="Settings: General" width="480">
   <br><i>General — Auto-Paste, dictation folder, history size, interface language, and signature.</i><br><br>
 </div>
@@ -443,7 +459,7 @@ The settings dialog has three tabs:
 - **tts_openai_model** / **tts_openai_voice**: Model and voice for OpenAI Cloud TTS (default: `gpt-4o-mini-tts`, `marin`).
 - **tts_openai_consent**: `true` once the one-time privacy confirmation for Cloud TTS has been granted. Default: `false`.
 - **tts_speed**: Speech speed multiplier for "Read aloud". Default: `1.0`.
-- **workflows**: Fine-tuning of tonality (`text_improver_tone`), writing-style preset (`writing_preset`), emojis (`emoji_density`), and the steam-release prompt (`dampf_system_prompt`).
+- **workflows**: Fine-tuning of tonality (`text_improver_tone`), text action (`writing_preset`), emojis (`emoji_density`), and the steam-release prompt (`dampf_system_prompt`).
 </details>
 
 ---
@@ -452,7 +468,7 @@ The settings dialog has three tabs:
 
 API keys are never stored in `config.json` — they are read from environment variables at runtime.
 
-**Recommended: `secrets.env`.** Place your key(s) in `~/.config/blitztext-linux/secrets.env`, one `NAME=VALUE` pair per line — the variable name matches the provider selected under **Settings → AI Workflows → "API key environment"** (e.g. the OpenAI variable for OpenAI, the OpenRouter variable for OpenRouter), and `VALUE` is the secret key you got from that provider:
+**Recommended: `secrets.env`.** Place your key(s) in `~/.config/blitztext-linux/secrets.env`, one `NAME=VALUE` pair per line — the variable name matches the provider selected under **Settings → Text & AI → "API key environment"** (e.g. the OpenAI variable for OpenAI, the OpenRouter variable for OpenRouter), and `VALUE` is the secret key you got from that provider:
 
 ```bash
 <VARIABLE_NAME>=<your-secret-value>
@@ -460,8 +476,8 @@ API keys are never stored in `config.json` — they are read from environment va
 
 `./run.sh` and the systemd user service load this file automatically. `config.json` only stores the *name* of the environment variable to read (`openai_api_key_env`), never the key itself.
 
-- Which variable is used depends on **Settings → AI Workflows → "API key environment"** and the selected LLM provider (`OPENAI_API_KEY` for OpenAI, `OPENROUTER_API_KEY` for OpenRouter, or a custom name for a custom endpoint).
-- Without a valid key, the LLM workflows (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) and OpenAI Cloud TTS are disabled or fail with an error message; local transcription and Piper TTS keep working.
+- Which variable is used depends on **Settings → Text & AI → "API key environment"** and the selected LLM provider (`OPENAI_API_KEY` for OpenAI, `OPENROUTER_API_KEY` for OpenRouter, or a custom name for a custom endpoint).
+- Without a valid key, the LLM workflows (`Dictate & improve`, `Make it factual`, `Add emojis`) and OpenAI Cloud TTS are disabled or fail with an error message; local transcription and Piper TTS keep working.
 - Never commit `secrets.env`, API keys, or tokens to git. If a key is ever exposed (e.g. committed by accident or pasted into an issue), rotate it immediately with the provider.
 - `config.json` is written with restrictive permissions (`0o600`); keep the same expectation for `secrets.env`.
 
@@ -528,7 +544,7 @@ This project was designed with the support of artificial intelligence (AI-assist
 │   ├── transcribe.py       # Whisper transcription
 │   ├── tts_window.py       # Read Aloud window with audio export
 │   ├── workflows.py        # Workflow definitions
-│   └── writing_presets.py  # Writing-style preset definitions
+│   └── writing_presets.py  # Text action definitions and legacy preset migration
 ├── packaging/flatpak/      # Experimental Flatpak MVP spike (see above)
 ├── tests/                  # Test suite
 └── README.md               # This document (German version: README.de.md)
