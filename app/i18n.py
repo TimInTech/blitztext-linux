@@ -38,6 +38,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.api_key_env.label": "API-Key-Umgebung:",
         "settings.api_key_env.help": "Nur der Name der Umgebungsvariable wird gespeichert. Der Schlüssel selbst wird aus os.environ gelesen (secrets.env). Für OpenRouter z. B. OPENROUTER_API_KEY.",
         "settings.api_key.status": "Status: {status} ({env_name})",
+        "settings.api_key.status_set": "gesetzt",
+        "settings.api_key.status_unset": "nicht gesetzt",
         "settings.api_key.legacy_notice": "Legacy openai_api_key gefunden. Er wird beim nächsten Speichern entfernt.",
         "settings.llm_provider.label": "LLM-Anbieter:",
         "settings.llm_provider.custom_endpoint": "Eigener Endpunkt",
@@ -54,6 +56,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.compose_custom_preset.help": "Bestehender freier System-Prompt für die getrennte Aktion „Eigener Prompt“.",
         "settings.compose_custom_preset.placeholder": "z. B. Formuliere den Text als sachliche Pressemitteilung…",
         "settings.emoji_density.label": "Emoji-Dichte:",
+        "settings.emoji_density.low": "wenig",
+        "settings.emoji_density.medium": "mittel",
+        "settings.emoji_density.high": "viel",
         "settings.dampf_prompt.label": "Dampf-Umschreiber Prompt:",
         "settings.dampf_prompt.placeholder": "Standard-Systemprompt verwenden...",
         "settings.dampf_prompt.help": "Eigener System-Prompt, um wütende Aussagen in eine professionelle Form umzuschreiben.",
@@ -251,6 +256,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.api_key_env.label": "API key environment:",
         "settings.api_key_env.help": "Only the environment variable name is stored. The key itself is read from os.environ (secrets.env). For OpenRouter, for example OPENROUTER_API_KEY.",
         "settings.api_key.status": "Status: {status} ({env_name})",
+        "settings.api_key.status_set": "set",
+        "settings.api_key.status_unset": "not set",
         "settings.api_key.legacy_notice": "Legacy openai_api_key found. It will be removed the next time settings are saved.",
         "settings.llm_provider.label": "LLM provider:",
         "settings.llm_provider.custom_endpoint": "Custom endpoint",
@@ -267,7 +274,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.compose_custom_preset.help": "Existing free system prompt for the separate 'Custom prompt' action.",
         "settings.compose_custom_preset.placeholder": "e.g. Rewrite the text as a factual press release…",
         "settings.emoji_density.label": "Emoji density:",
-        "settings.dampf_prompt.label": "Dampf rewrite prompt:",
+        "settings.emoji_density.low": "few",
+        "settings.emoji_density.medium": "medium",
+        "settings.emoji_density.high": "many",
+        "settings.dampf_prompt.label": "Steam-release prompt:",
         "settings.dampf_prompt.placeholder": "Use default system prompt...",
         "settings.dampf_prompt.help": "Custom system prompt for rewriting angry statements into a professional form.",
         "settings.custom_terms.label": "Proper names / terms:",
@@ -494,6 +504,21 @@ def t(key: str) -> str:
 
     # Fallback auf Key selbst
     return key
+
+
+def tq(key: str) -> str:
+    """Übersetzung für Qt-Widgets, die "&" als Mnemonic-Marker lesen.
+
+    Buttons, Tabs und Menüeinträge verschlucken sonst das kaufmännische Und
+    (aus "Insert & Close" wird "Insert Close" mit unterstrichenem Leerzeichen).
+
+    Args:
+        key: Übersetzungs-Schlüssel.
+
+    Returns:
+        Übersetzter String mit maskiertem "&".
+    """
+    return t(key).replace("&", "&&")
 
 
 def missing_keys() -> set[str]:

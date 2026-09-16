@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.i18n import t
+from app.i18n import t, tq
 from app import theme
 from app.llm_service import LLMService
 from app.config import Config, ConfigError, VALID_TONES
@@ -680,7 +680,7 @@ class ComposeWindow(QDialog):
         self.lblOwnPrompt.setText(t("compose.custom.label"))
         self.txtOwnPrompt.setAccessibleName(t("compose.custom.label"))
         self.txtOwnPrompt.setPlaceholderText(t("compose.custom.placeholder"))
-        self.btnSavePrompt.setText(t("compose.custom.save"))
+        self.btnSavePrompt.setText(tq("compose.custom.save"))
         self.lblTone.setText(t("compose.tone.label"))
         self.chkVoiceRouting.setText(t("compose.voice_routing.label"))
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
@@ -690,7 +690,7 @@ class ComposeWindow(QDialog):
         self.btnShowPrompt.setText(t("compose.btn.show_prompt"))
         self.btnShowPrompt.setToolTip(t("compose.prompt_preview.tooltip"))
         self.btnCopy.setText(t("compose.button.copy"))
-        self.btnPaste.setText(t("compose.button.insert_close"))
+        self.btnPaste.setText(tq("compose.button.insert_close"))
         self.btnClose.setText(t("compose.button.close"))
         self.btnSignature.setText(t("compose.btn_append_signature"))
         self.btnSignature.setToolTip(t("compose.tooltip_append_signature"))

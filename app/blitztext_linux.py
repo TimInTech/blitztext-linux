@@ -51,7 +51,7 @@ from app.history_panel import HistoryPanel
 from app.compose_window import ComposeWindow
 from app.tts_window import TtsWindow
 from app.main_window import MainWindow
-from app.i18n import LANGUAGES, LANGUAGE_DISPLAY_NAMES, set_language, t
+from app.i18n import LANGUAGES, LANGUAGE_DISPLAY_NAMES, set_language, t, tq
 from app import notify as notify_service
 from app import theme
 from app import __version__ as APP_VERSION
@@ -240,7 +240,7 @@ class SettingsDialog(QDialog):
         form_whisper.addRow(t("settings.record_key.label"), self.combo_transcription_key)
         form_whisper.addRow(create_help_label(t("settings.record_key.help")))
 
-        self.tabs.addTab(self._scrollable(tab_whisper), t("settings.tab.speech"))
+        self.tabs.addTab(self._scrollable(tab_whisper), tq("settings.tab.speech"))
 
         # Tab 2: LLM (KI)
         tab_llm = QWidget()
@@ -328,8 +328,16 @@ class SettingsDialog(QDialog):
         self.edit_compose_custom_preset.setMaximumHeight(110)
 
         self.combo_emoji = QComboBox()
-        self.combo_emoji.addItems(["wenig", "mittel", "viel"])
-        self.combo_emoji.setCurrentText(self.config.emoji_density)
+        for density, label_key in (
+            ("wenig", "settings.emoji_density.low"),
+            ("mittel", "settings.emoji_density.medium"),
+            ("viel", "settings.emoji_density.high"),
+        ):
+            # The stored value stays language independent; only the caption is translated.
+            self.combo_emoji.addItem(t(label_key), density)
+        self.combo_emoji.setCurrentIndex(
+            max(0, self.combo_emoji.findData(self.config.emoji_density))
+        )
 
         self.edit_dampf_prompt = QPlainTextEdit()
         self.edit_dampf_prompt.setPlainText(self.config.dampf_system_prompt)
@@ -386,7 +394,7 @@ class SettingsDialog(QDialog):
         form_llm.addRow(create_help_label(t("settings.custom_terms.help")))
         self._update_settings_tone()
 
-        self.tabs.addTab(self._scrollable(tab_llm), t("settings.tab.workflows"))
+        self.tabs.addTab(self._scrollable(tab_llm), tq("settings.tab.workflows"))
 
         # Tab 3: Allgemein
         tab_general = QWidget()
@@ -439,9 +447,29 @@ class SettingsDialog(QDialog):
         version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         form_general.addRow(version_label)
 
-        self.tabs.addTab(self._scrollable(tab_general), t("settings.tab.general"))
+        self.tabs.addTab(self._scrollable(tab_general), tq("settings.tab.general"))
 
         layout.addWidget(self.tabs)
+
+        def _target_widgets(item) -> list[QWidget]:
+            if item is None:
+                return []
+            widget = item.widget()
+            if widget is not None:
+                layout = widget.layout()
+                if layout is not None:
+                    targets = [widget]
+                    for i in range(layout.count()):
+                        targets.extend(_target_widgets(layout.itemAt(i)))
+                    return targets
+                return [widget]
+            layout = item.layout()
+            if layout is not None:
+                targets = []
+                for i in range(layout.count()):
+                    targets.extend(_target_widgets(layout.itemAt(i)))
+                return targets
+            return []
 
         # Put supplemental explanations on their fields, keeping forms short.
         # Security notices and the direct prompt-editor link remain visible.
@@ -456,8 +484,9 @@ class SettingsDialog(QDialog):
                     continue
                 for role in (QFormLayout.ItemRole.LabelRole, QFormLayout.ItemRole.FieldRole):
                     previous = form.itemAt(row - 1, role) if row else None
-                    widget = previous.widget() if previous is not None else None
-                    if widget is not None:
+                    for widget in _target_widgets(previous):
+                        if widget.property("status") == "warning":
+                            continue
                         widget.setToolTip(help_label.text())
                         widget.setAccessibleDescription(help_label.text())
                 form.setRowVisible(row, False)
@@ -484,7 +513,9 @@ class SettingsDialog(QDialog):
     def _refresh_api_key_status(self) -> None:
         env_name = self.edit_api_key_env.text().strip() or self.config.openai_api_key_env
         env_value = os.environ.get(env_name, "").strip()
-        status = "gesetzt" if env_value else "nicht gesetzt"
+        status = t(
+            "settings.api_key.status_set" if env_value else "settings.api_key.status_unset"
+        )
         self.lbl_api_key_status.setText(
             t("settings.api_key.status").format(status=status, env_name=env_name)
         )
@@ -590,7 +621,7 @@ class SettingsDialog(QDialog):
             self.config.text_improver_tone = self.combo_tone.currentData()
             self.config.writing_preset = self.combo_writing_preset.currentData()
             self.config.compose_custom_preset_text = self.edit_compose_custom_preset.toPlainText()
-            self.config.emoji_density = self.combo_emoji.currentText()
+            self.config.emoji_density = self.combo_emoji.currentData()
             self.config.dampf_system_prompt = self.edit_dampf_prompt.toPlainText().strip()
             self.config.custom_terms = self._collect_custom_terms()
 
@@ -811,24 +842,24 @@ class BlitztextApp(QObject):
 
         # Actions für die fünf Workflows
         self.action_transcription = QAction(
-            f"{t('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}", self
+            f"{tq('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}", self
         )
         self.action_transcription.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TRANSCRIPTION))
         self.menu.addAction(self.action_transcription)
 
-        self.action_local = QAction(f"{t('workflow.local.name')}\tMeta+Shift+H", self)
+        self.action_local = QAction(f"{tq('workflow.local.name')}\tMeta+Shift+H", self)
         self.action_local.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.LOCAL))
         self.menu.addAction(self.action_local)
 
-        self.action_improver = QAction(f"{t('workflow.text_improver.name')}\tMeta+Shift+T", self)
+        self.action_improver = QAction(f"{tq('workflow.text_improver.name')}\tMeta+Shift+T", self)
         self.action_improver.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.TEXT_IMPROVER))
         self.menu.addAction(self.action_improver)
 
-        self.action_dampf = QAction(f"{t('workflow.dampf_ablassen.name')}\tMeta+Shift+D", self)
+        self.action_dampf = QAction(f"{tq('workflow.dampf_ablassen.name')}\tMeta+Shift+D", self)
         self.action_dampf.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.DAMPF_ABLASSEN))
         self.menu.addAction(self.action_dampf)
 
-        self.action_emoji = QAction(f"{t('workflow.emoji_text.name')}\tMeta+Shift+E", self)
+        self.action_emoji = QAction(f"{tq('workflow.emoji_text.name')}\tMeta+Shift+E", self)
         self.action_emoji.triggered.connect(lambda: self._trigger_menu_workflow(WorkflowType.EMOJI_TEXT))
         self.menu.addAction(self.action_emoji)
 
@@ -931,16 +962,16 @@ class BlitztextApp(QObject):
             self.action_custom_prompt.setText(t("compose.custom.edit"))
         if hasattr(self, "action_transcription"):
             self.action_transcription.setText(
-                f"{t('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}"
+                f"{tq('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}"
             )
         if hasattr(self, "action_local"):
-            self.action_local.setText(f"{t('workflow.local.name')}\tMeta+Shift+H")
+            self.action_local.setText(f"{tq('workflow.local.name')}\tMeta+Shift+H")
         if hasattr(self, "action_improver"):
-            self.action_improver.setText(f"{t('workflow.text_improver.name')}\tMeta+Shift+T")
+            self.action_improver.setText(f"{tq('workflow.text_improver.name')}\tMeta+Shift+T")
         if hasattr(self, "action_dampf"):
-            self.action_dampf.setText(f"{t('workflow.dampf_ablassen.name')}\tMeta+Shift+D")
+            self.action_dampf.setText(f"{tq('workflow.dampf_ablassen.name')}\tMeta+Shift+D")
         if hasattr(self, "action_emoji"):
-            self.action_emoji.setText(f"{t('workflow.emoji_text.name')}\tMeta+Shift+E")
+            self.action_emoji.setText(f"{tq('workflow.emoji_text.name')}\tMeta+Shift+E")
         if hasattr(self, "menu_preset"):
             self.menu_preset.setTitle(t("tray.writing_preset"))
         self.action_settings.setText(f"{t('tray.settings')}…")

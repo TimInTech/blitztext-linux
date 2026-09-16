@@ -8,7 +8,7 @@ import pytest
 
 from app.compose_window import MAX_COMPOSE_VARIANTS, ComposeWindow
 from app.config import Config
-from app.i18n import DEFAULT_LANGUAGE, missing_keys, set_language, t
+from app.i18n import DEFAULT_LANGUAGE, missing_keys, set_language, t, tq
 from app.workflows import WorkflowType
 
 _GUI = os.environ.get("WHISPER_GUI_TESTS") == "1"
@@ -152,7 +152,7 @@ def test_window_texts_follow_language(qapp, language, title, prompt_label):
         assert window.btnShowPrompt.text() == prompt_label
         assert window.btnShowPrompt.toolTip() == t("compose.prompt_preview.tooltip")
         assert window.btnCopy.text() == t("compose.button.copy")
-        assert window.btnPaste.text() == t("compose.button.insert_close")
+        assert window.btnPaste.text() == tq("compose.button.insert_close")
         assert window.btnClose.text() == t("compose.button.close")
     finally:
         window.close()
