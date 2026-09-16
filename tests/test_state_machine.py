@@ -672,6 +672,53 @@ class TestStateMachine:
 
 @gui_only
 class TestMainWindowControl:
+    def test_editor_is_created_only_after_user_opens_it(self, gui_app):
+        win = gui_app._ensure_main_window()
+
+        assert gui_app._compose_window is None
+
+        win._btn_edit_text.click()
+
+        assert gui_app._compose_window is not None
+        assert gui_app._compose_window.isVisible() is True
+
+    def test_panel_close_button_hides_window_and_keeps_tray_running(self, gui_app):
+        from PyQt6.QtCore import Qt
+
+        gui_app.app.setQuitOnLastWindowClosed(False)
+        win = gui_app._ensure_main_window()
+        win.show()
+        win._btn_options.click()
+        gui_app.app.processEvents()
+
+        assert win.windowFlags() & Qt.WindowType.FramelessWindowHint
+        assert gui_app.tray_icon.isVisible() is True
+
+        win._btn_close.click()
+        gui_app.app.processEvents()
+
+        assert win.isVisible() is False
+        assert win._options_popup.isVisible() is False
+        assert gui_app.tray_icon.isVisible() is True
+        assert gui_app.app.quitOnLastWindowClosed() is False
+
+        gui_app.show_main_window()
+        gui_app.app.processEvents()
+        assert win.isVisible() is True
+
+    def test_show_main_window_restores_minimized_panel(self, gui_app):
+        win = gui_app._ensure_main_window()
+        win.show()
+        win.showMinimized()
+        gui_app.app.processEvents()
+        assert win.isMinimized() is True
+
+        gui_app.show_main_window()
+        gui_app.app.processEvents()
+
+        assert win.isMinimized() is False
+        assert win.isVisible() is True
+
     def test_gui_toggle_starts_and_stops(self, gui_app):
         """Maus-Klick startet im IDLE eine Aufnahme und stoppt sie im RECORDING,
         unabhaengig vom Hotkey-Modus."""
@@ -752,22 +799,23 @@ class TestMainWindowControl:
         assert gui_app._compose_window is not None
         assert gui_app._compose_window.isVisible() is True
 
-    def test_text_edit_action_fits_compact_main_window(self, gui_app):
+    def test_text_edit_trigger_and_toolbar_fit_neumorphic_widget(self, gui_app):
+        from app.i18n import t
+
         win = gui_app._ensure_main_window()
         win.show()
         gui_app.app.processEvents()
 
+        panel = win._main_panel
         button_rect = win._btn_edit_text.geometry()
-        history_rect = win._btn_history.geometry()
-        text_width = win._btn_edit_text.fontMetrics().horizontalAdvance(
-            win._btn_edit_text.text()
-        )
-
-        assert win.width() == 256
-        assert button_rect.left() >= win.contentsRect().left()
-        assert button_rect.right() <= win.contentsRect().right()
-        assert button_rect.bottom() < history_rect.top()
-        assert text_width < button_rect.width()
+        # The window follows its content instead of a fixed oversized client area.
+        assert win.size() == win.layout().sizeHint()
+        assert not hasattr(win, "_toolbar")
+        assert win._btn_edit_text.parentWidget() is panel
+        assert panel.contentsRect().contains(button_rect)
+        assert win._btn_toggle.geometry().bottom() < button_rect.top()
+        assert panel.geometry().right() <= win.contentsRect().right()
+        assert win._btn_edit_text.accessibleName() == t("mainwindow.button.edit_text")
 
     def test_history_reset_timers_are_owned_by_their_widgets(self, gui_app):
         from PyQt6.QtCore import QCoreApplication, QEvent

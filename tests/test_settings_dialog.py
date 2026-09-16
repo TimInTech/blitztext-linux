@@ -150,7 +150,7 @@ def _fake_save_self(config_dir, preset_key, ui_language="de"):
         combo_tone=_Combo(text="neutral", data="neutral"),
         combo_writing_preset=_Combo(text="E-Mail – formell", data=preset_key),
         edit_compose_custom_preset=_Edit(""),
-        combo_emoji=_Combo("mittel"),
+        combo_emoji=_Combo("mittel", "mittel"),
         edit_dampf_prompt=_Edit(""),
         _collect_custom_terms=lambda: [],
         check_autopaste=_Check(True),
@@ -299,8 +299,8 @@ def test_refresh_i18n_texts_updates_existing_shell():
         set_language("en")
         BlitztextApp._refresh_i18n_texts(fake)
 
-        fake.action_settings.setText.assert_called_once_with("⚙   Settings...")
-        fake.action_quit.setText.assert_called_once_with("✕   Quit")
+        fake.action_settings.setText.assert_called_once_with("Settings…")
+        fake.action_quit.setText.assert_called_once_with("Quit")
         fake._main_window.setWindowTitle.assert_called_once_with("Blitztext")
         fake.update_tray_state.assert_called_once()
     finally:
@@ -446,9 +446,16 @@ def test_save_settings_persists_compose_custom_preset(tmp_path):
     assert reloaded.compose_custom_preset_text == "Freier Compose-Prompt."
 
 
-def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
+@pytest.mark.parametrize(
+    ("language", "expected_status"),
+    [("de", "gesetzt"), ("en", "set")],
+)
+def test_refresh_api_key_status_shows_env_name_not_secret(
+    monkeypatch, language, expected_status
+):
     secret_value = "dummy-openai-key"
     monkeypatch.setenv("CUSTOM_OPENAI_KEY", secret_value)
+    set_language(language)
 
     class FakeLineEdit:
         def text(self):
@@ -467,11 +474,16 @@ def test_refresh_api_key_status_shows_env_name_not_secret(monkeypatch):
         lbl_api_key_status=FakeLabel(),
     )
 
-    SettingsDialog._refresh_api_key_status(fake)
+    try:
+        with patch("app.blitztext_linux.theme.set_status_role") as set_status_role:
+            SettingsDialog._refresh_api_key_status(fake)
+    finally:
+        set_language(DEFAULT_LANGUAGE)
 
     assert "CUSTOM_OPENAI_KEY" in fake.lbl_api_key_status.text
-    assert "gesetzt" in fake.lbl_api_key_status.text
+    assert expected_status in fake.lbl_api_key_status.text
     assert secret_value not in fake.lbl_api_key_status.text
+    set_status_role.assert_called_once_with(fake.lbl_api_key_status, "success")
 
 # --- Goal 04: Settings nutzt dieselbe Auswahl und bestehende Prompt-Ablage --
 
@@ -511,3 +523,23 @@ def test_goal_settings_save_preserves_custom_selection_and_prompt(tmp_path):
 
     assert reloaded.writing_preset == "custom"
     assert reloaded.compose_custom_preset_text == "  Nutzer-Prompt exakt.  \n"
+
+
+def test_settings_dialog_attaches_help_to_layout_fields_and_editors(tmp_path):
+    from PyQt6.QtWidgets import QApplication
+    from app.i18n import t
+
+    qapp = QApplication.instance() or QApplication([])
+    config = BlitztextConfig(config_dir=tmp_path / ".config" / "blitztext-linux")
+    dialog = SettingsDialog(config)
+    try:
+        # Base URL is in a QVBoxLayout; ensure the QLineEdit receives help/accessible description
+        assert dialog.edit_base_url.toolTip() == t("settings.base_url.help")
+        assert dialog.edit_base_url.accessibleDescription() == t("settings.base_url.help")
+
+        # Counter-check: a field mounted directly as a widget keeps working too.
+        assert dialog.edit_llm_model.toolTip() == t("settings.llm_model.help")
+        assert dialog.edit_llm_model.accessibleDescription() == t("settings.llm_model.help")
+    finally:
+        dialog.close()
+        qapp.processEvents()

@@ -27,7 +27,7 @@ pytest.importorskip("PIL")
 
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
-from app.i18n import set_language, t  # noqa: E402
+from app.i18n import set_language, t, tq  # noqa: E402
 
 _MODULE_PATH = Path(__file__).resolve().parent.parent / "scripts" / "_make_screenshots.py"
 
@@ -163,9 +163,9 @@ def test_tab_index_resolves_keys_independent_of_language(lang):
     # Arrange: reale Tab-Reihenfolge speech, workflows, general in aktueller Sprache
     set_language(lang)
     tabs = _FakeTabs([
-        t("settings.tab.speech"),
-        t("settings.tab.workflows"),
-        t("settings.tab.general"),
+        tq("settings.tab.speech"),
+        tq("settings.tab.workflows"),
+        tq("settings.tab.general"),
     ])
 
     # Act / Assert: Lookup trifft die korrekten Indizes (Workflows == 1, nicht 2)
@@ -177,7 +177,7 @@ def test_tab_index_resolves_keys_independent_of_language(lang):
 def test_tab_index_raises_for_unknown_tab():
     # Arrange
     set_language("en")
-    tabs = _FakeTabs([t("settings.tab.general")])
+    tabs = _FakeTabs([tq("settings.tab.general")])
 
     # Act / Assert
     with pytest.raises(ValueError):

@@ -4,3 +4,5 @@ __pycache__/
 .env.*
 secrets.env
 .venv/
+scratch/
+prototypes/

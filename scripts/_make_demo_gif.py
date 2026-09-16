@@ -320,6 +320,8 @@ def _grab_app_states(lang: str) -> dict[str, Image.Image]:
         gui_toggle_recording=lambda *a, **k: None,
         gui_discard=lambda *a, **k: None,
         set_dictation_mode=lambda *a, **k: None,
+        show_compose_window=lambda *a, **k: None,
+        show_custom_prompt=lambda *a, **k: None,
         show_history_panel=lambda *a, **k: None,
         show_settings_dialog=lambda *a, **k: None,
         show_tts_window=lambda *a, **k: None,
@@ -328,10 +330,12 @@ def _grab_app_states(lang: str) -> dict[str, Image.Image]:
     window = MainWindow(controller)
     window.show()
 
-    def grab(state: str, timer_text: str | None = None) -> Image.Image:
+    def grab(state: str, timer_text: str | None = None, phase: float = 0.0) -> Image.Image:
         window.update_state(state, None, None)
         if timer_text is not None:
             window._timer_label.setText(timer_text)
+        if state in ("RECORDING", "TRANSCRIBING"):
+            window._btn_toggle._phase = phase
         for _ in range(10):
             app.processEvents()
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
@@ -346,10 +350,10 @@ def _grab_app_states(lang: str) -> dict[str, Image.Image]:
 
     states = {
         "idle": grab("IDLE"),
-        "recording-1": grab("RECORDING", "00:01"),
-        "recording-2": grab("RECORDING", "00:02"),
-        "recording-3": grab("RECORDING", "00:03"),
-        "transcribing": grab("TRANSCRIBING"),
+        "recording-1": grab("RECORDING", "00:01", 0.15),
+        "recording-2": grab("RECORDING", "00:02", 0.45),
+        "recording-3": grab("RECORDING", "00:03", 0.75),
+        "transcribing": grab("TRANSCRIBING", phase=0.25),
     }
     window.close()
     return states

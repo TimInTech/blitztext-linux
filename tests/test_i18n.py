@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from app.i18n import LANGUAGES, DEFAULT_LANGUAGE, TRANSLATIONS, t, get_language, set_language, missing_keys
+from app.i18n import LANGUAGES, DEFAULT_LANGUAGE, TRANSLATIONS, t, tq, get_language, set_language, missing_keys
 
 
 PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
@@ -225,21 +225,21 @@ class TestSetLanguage:
         (
             "de",
             (
-                "Standard / Text verbessern",
+                "Text verbessern",
                 "Kürzen",
                 "Ausformulieren",
                 "Tonfall ändern",
-                "Eigener Prompt",
+                "Eigene Anweisung",
             ),
         ),
         (
             "en",
             (
-                "Standard / Improve text",
+                "Improve text",
                 "Shorten",
                 "Expand",
                 "Change tone",
-                "Custom prompt",
+                "Custom instruction",
             ),
         ),
     ],
@@ -248,3 +248,19 @@ def test_goal_visible_preset_names(language, expected):
     keys = ("standard", "shorten", "expand", "change_tone", "custom")
     set_language(language)
     assert tuple(t(f"preset.{key}.name") for key in keys) == expected
+
+
+@pytest.mark.parametrize(
+    ("language", "key", "expected"),
+    [
+        ("de", "settings.tab.workflows", "Text && KI"),
+        ("en", "settings.tab.workflows", "Text && AI"),
+        ("en", "compose.button.insert_close", "Insert && Close"),
+        ("de", "compose.button.insert_close", "Einfügen && Schließen"),
+        ("en", "settings.tab.general", "General"),
+    ],
+)
+def test_tq_escapes_ampersands_for_qt_widgets(language, key, expected):
+    """Qt liest "&" als Mnemonic — tq maskiert es, sonst fehlt es in der UI."""
+    set_language(language)
+    assert tq(key) == expected

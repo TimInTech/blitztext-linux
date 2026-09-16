@@ -38,7 +38,7 @@ Blitztext Linux ist ein Hotkey-gesteuerter Sprachassistent, der gesprochene Spra
 ## Features
 
 - **Mehrsprachige Oberfläche (EN/DE):** Schalte die App-Oberfläche zwischen Deutsch und Englisch um – unter **Einstellungen → Allgemein → „Sprache der Oberfläche"** (die Änderung greift nach einem Neustart der App).
-- **Compose-Fenster:** Text eintippen oder einfügen, einen Workflow und Schreibstil wählen und von der KI umschreiben lassen — ganz ohne Mikrofon. Mit Tonfall-Auswahl, eigenem Preset, Varianten-Verlauf und Signatur-Unterstützung.
+- **Compose-Fenster:** Text eintippen, einfügen oder hineindiktieren, eine Text-Aktion wählen und von der KI umschreiben lassen — ganz ohne Mikrofon. Mit Tonfall-Auswahl, eigener Anweisung samt Prompt-Prüfung, Varianten-Navigation und Signatur-Unterstützung.
 - **OpenRouter & eigene LLM-Endpunkte:** Nutze OpenRouter oder eine beliebige OpenAI-kompatible API als Alternative zu OpenAI für alle KI-Workflows.
 - **Audio-Export:** Speichere die Ausgabe der Vorlesefunktion direkt als Audiodatei.
 - **Eigennamen / Begriffe:** Erweitere das Vokabular der KI um eigene Begriffe, Namen oder Fachwörter für perfekte Transkriptionen.
@@ -53,21 +53,21 @@ Blitztext registriert globale Hotkeys via `evdev`. Mit diesen Kombinationen hast
 
 | Workflow | Hotkey | LLM? | Beschreibung |
 | :--- | :--- | :---: | :--- |
-| **Blitztext** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Sehr kurze Tastendrücke unter 150 ms werden im Halten-Modus als Fehldruck verworfen. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
-| **Blitztext Lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
-| **Blitztext+** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Formuliert deine Aufnahme professionell via LLM um. |
-| **Blitztext $%&!** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |
-| **Blitztext :)** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Ergänzt deine Nachricht passend mit Emojis. |
+| **Diktieren** | <kbd>Alt</kbd> (halten) | ❌ | Standard: Nimmt auf, solange die Taste gehalten wird, transkribiert und fügt den Text ein. Sehr kurze Tastendrücke unter 150 ms werden im Halten-Modus als Fehldruck verworfen. Aufnahmetaste und Halten/Umschalten-Modus sind unter **Einstellungen → Spracherkennung** konfigurierbar. |
+| **Diktieren · lokal** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | ❌ | Erzwingt eine reine **Offline-Transkription**. |
+| **Diktieren & verbessern** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> | ✅ | Transkribiert und schreibt das Ergebnis mit der gewählten Text-Aktion um. |
+| **Sachlich formulieren** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> | ✅ | Emotionale Entladung: Wandelt Frust in eine sachliche Nachricht um. |
+| **Emojis ergänzen** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd> | ✅ | Ergänzt deine Nachricht passend mit Emojis. |
 
 > [!NOTE]
-> **LLM-Workflows** (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) setzen einen gültigen **API-Key** voraus. Siehe [Secrets](#secrets) weiter unten für die Konfiguration. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
+> **LLM-Workflows** (`Diktieren & verbessern`, `Sachlich formulieren`, `Emojis ergänzen`) setzen einen gültigen **API-Key** voraus. Siehe [Secrets](#secrets) weiter unten für die Konfiguration. Ohne diesen Key sind diese Funktionen im Menü und über die Hotkeys deaktiviert bzw. führen zu einer Fehlermeldung.
 
 ### KI-Workflows
 
-Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du unter **Einstellungen → KI-Workflows**:
+Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstellungen findest du unter **Einstellungen → Text & KI**:
 
 <div align="center">
-  <img src="docs/screenshots/linux/settings-ai-workflows-de.png" alt="KI-Workflow-Einstellungen" width="480">
+  <img src="docs/screenshots/linux/settings-ai-de.png" alt="Einstellungen: Text &amp; KI" width="480">
   <br><br>
 </div>
 
@@ -81,7 +81,7 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
 > systemd-User-Service laden diese Datei beim nächsten Start. Eine vollständige
 > Anleitung mit Dateiformat und Berechtigungen steht unter [Secrets](#secrets).
 
-**LLM-Anbieter.** Blitztext unterstützt drei Anbieter-Modi, wählbar unter **Einstellungen → KI-Workflows → „LLM-Anbieter"**:
+**LLM-Anbieter.** Blitztext unterstützt drei Anbieter-Modi, wählbar unter **Einstellungen → Text & KI → „LLM-Anbieter"**:
 
 | Anbieter | Wann verwenden |
 | :--- | :--- |
@@ -91,52 +91,57 @@ Die KI-Workflows helfen bei Formulierung, Ton und Emojis. Die passenden Einstell
 
 Für OpenRouter `base_url` auf `https://openrouter.ai/api/v1` setzen und Modell wählen (z. B. `openai/gpt-4o`). Der Name der API-Key-Umgebungsvariable wird unter „API-Key-Umgebung" eingestellt.
 
-**Schreibstil-Vorlagen.** Für den Workflow **Blitztext+** (Text-Verbesserer) gibt es vorgefertigte Schreibstil-Vorlagen, die du unter **Einstellungen → KI-Workflows → „Schreibstil-Vorlage"** oder direkt im **Compose-Fenster** auswählst:
+**Text-Aktionen.** Das Umschreiben läuft über fünf klar getrennte Aktionen. Du wählst sie unter **Einstellungen → Text & KI → „Text-Aktion"**, im Compose-Fenster oder im ⋯-Menü des Haupt-Widgets:
 
-| Vorlage | Wirkung |
+| Text-Aktion | Wirkung |
 | --- | --- |
-| **Standard (Text verbessern)** | Bisheriges Verhalten – sauber formatierter Text, der gewählte **Tonfall** greift. |
-| **E-Mail – formell** | Höfliche E-Mail in der Sie-Form mit klarer Struktur. |
-| **E-Mail – locker** | Freundliche E-Mail in der Du-Form. |
-| **Stichpunkte** | Gliedert den Inhalt in prägnante Stichpunkte. |
-| **Zusammenfassung** | Knappe, sachliche Zusammenfassung der Kernaussagen. |
-| **Persönlich (Du-Form)** | Klarer Text in der persönlichen Du-Form. |
-| **Höflich (Sie-Form)** | Klarer Text in der höflichen Sie-Form. |
-| **Kurz & präzise** | Maximal knapp, ohne Füllwörter und Wiederholungen. |
-| **Eigenes Preset…** | Ein freier System-Prompt, den du selbst unter **Einstellungen → Allgemein → „Eigenes Preset (Compose)"** festlegst. |
+| **Text verbessern** | Standard: sauber formatierter Text mit korrigierter Grammatik und Zeichensetzung; der gewählte **Ziel-Tonfall** greift. |
+| **Kürzen** | Entfernt Füllwörter, Wiederholungen und Umwege, behält aber alle wesentlichen Informationen. |
+| **Ausformulieren** | Macht aus Notizen und Fragmenten zusammenhängenden Fließtext — ohne neue Fakten zu ergänzen. |
+| **Tonfall ändern** | Ändert gezielt nur den Tonfall (locker / neutral / professionell) und lässt Inhalt, Sprache und Absicht unverändert. |
+| **Eigene Anweisung** | Deine eigene Anweisung aus dem Compose-Fenster („Wie soll dein Text klingen?“). **Speichern & für Diktate verwenden** überträgt sie zusätzlich auf den Workflow „Diktieren & verbessern“. |
 
-> Bei **Standard** wird zusätzlich der eingestellte **Tonfall** angewendet. Jede andere Vorlage bringt ihren eigenen Schreibstil mit und überschreibt den Tonfall. Eigennamen/Begriffe bleiben in allen Vorlagen erhalten.
+> Der **Ziel-Tonfall** wirkt bei **Text verbessern** und **Tonfall ändern**. Ältere Konfigurationen mit den früheren neun Schreibstil-Vorlagen werden automatisch auf die nächstliegende Aktion migriert (z. B. „E-Mail – formell“ → **Tonfall ändern**, professionell). Eigennamen/Begriffe bleiben in allen Aktionen erhalten.
 
 ### Compose-Fenster
 
-Das **Compose-Fenster** (`✍ Compose…` im Tray-Kontextmenü) ermöglicht das Umschreiben beliebiger Texte mit der KI — ganz ohne Sprachaufnahme. Es eignet sich ideal zum Überarbeiten fertiger Entwürfe, E-Mails oder Notizen.
+Das **Compose-Fenster** (`✍ Text bearbeiten…` im Tray-Menü oder über das Stift-Symbol im Hauptfenster-Widget) ermöglicht das Entwerfen, Umschreiben und Verfeinern von Texten mit der KI — ganz ohne Sprachaufnahme. Es eignet sich ideal zum Überarbeiten von E-Mails, Notizen oder Nachrichten, bevor sie eingefügt werden.
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/compose-de.png" alt="Compose-Fenster" width="480">
+  <img src="docs/screenshots/linux/compose-de.png" alt="Compose-Fenster" width="540">
   <br><br>
 </div>
 
-**Öffnen:** Klick auf das Tray-Icon → **✍ Compose…**
+**Öffnen:** Klick auf das Tray-Icon → **✍ Text bearbeiten…** oder Klick auf das goldene Stift-Symbol im Hauptfenster-Widget.
 
 **Was du im Compose-Fenster tun kannst:**
 
 | Element | Beschreibung |
 | :--- | :--- |
-| **Entwurf (linkes Feld)** | Text eintippen oder einfügen, der umgeschrieben werden soll. |
-| **Workflow** | Wähle zwischen Blitztext+ (Text-Verbesserer), Blitztext $%&! (Dampfablassen) oder Blitztext :) (Emojis). |
-| **Schreibstil-Vorlage** | Vorlage auswählen oder **Eigenes Preset…** für einen vollständig freien System-Prompt. |
-| **Tonfall** | Locker, neutral oder professionell. Aktiv nur bei **Standard**-Preset + **Blitztext+**; bei allen anderen Vorlagen ausgegraut (Tooltip erklärt warum). |
-| **Verbessern** | Sendet den Entwurf an die KI und zeigt das Ergebnis im rechten Feld. |
-| **Varianten-Verlauf** | Die letzten 10 generierten Ergebnisse der aktuellen Sitzung werden als scrollbare Liste gespeichert — Klick auf einen Eintrag stellt ihn wieder her. |
-| **Signatur** | Hängt deine gespeicherte Signatur an (konfiguriert unter **Einstellungen → Allgemein**). Ersetzt automatisch gängige KI-generierte Platzhalter wie `[Your Name]`, `[Ihr Name]`, `[Vorname Nachname]`, `[Signature]` u. Ä. — kein verlorener Platzhalter bleibt zurück. |
+| **Text-Aktion** | Wähle zwischen *Text verbessern*, *Kürzen*, *Ausformulieren*, *Tonfall ändern* oder *Eigene Anweisung*. |
+| **Tonfall** | Erscheint dynamisch bei Auswahl von *Tonfall ändern* (Locker, Neutral, Professionell). |
+| **Eigene Anweisung …** | Klappt eine eigene Prompt-Karte aus (*„Wie soll dein Text klingen?“*). **Verbessern** wendet sie für den aktuellen Entwurf an; **Speichern & für Diktate verwenden** speichert sie dauerhaft für kommende Sitzungen und Diktat-Workflows. |
+| **Prompt prüfen** | Zeigt den exakt zusammengestellten System-Prompt samt Anweisungen vor dem Senden an das Sprachmodell. |
+| **Sprachaufnahme hierher umleiten** | Ist diese Option aktiv, landen laufende Diktataufnahmen direkt im Entwurfsfeld statt in der aktiven Anwendung. |
+| **Entwurf (linkes Feld)** | Text eintippen, einfügen oder direkt per Sprache hineindiktieren. |
+| **Ergebnis (rechtes Feld)** | Zeigt die KI-generierte Fassung direkt neben dem Ausgangstext. |
+| **Varianten-Navigation** | Die in dieser Sitzung erzeugten Ergebnisse bleiben verfügbar — über die Pfeile ‹ › oberhalb des Ergebnisfelds durchblätterbar. |
 | **Kopieren** | Kopiert das Ergebnis in die Zwischenablage. |
-| **Einfügen & Schließen** | Fügt das Ergebnis direkt in die aktive Anwendung ein und schließt das Fenster. |
+| **Einfügen & Schließen** | Fügt das Ergebnis direkt in die aktive Anwendung ein und schließt das Compose-Fenster. |
+
+<div align="center">
+  <br>
+  <img src="docs/screenshots/linux/compose-prompt-de.png" alt="Compose-Fenster mit eigener Anweisung und Prompt-Prüfung" width="540">
+  <br>
+  <sub>Eigene KI-Anweisungen direkt im Compose-Fenster formulieren und den System-Prompt vorab prüfen.</sub>
+  <br><br>
+</div>
 
 > [!NOTE]
-> Signatur und eigener Preset-Text werden unter **Einstellungen → Allgemein** konfiguriert. Setze dort „Signatur für das Compose-Fenster" und aktiviere „Nach jeder Generierung automatisch anhängen", wenn die Signatur bei jedem Ergebnis ergänzt werden soll.
+> Signatur und eigener Preset-Text werden unter **Einstellungen → Allgemein** konfiguriert („Signatur für Compose-Fenster“ und „Automatisch nach Generierung anfügen“). Gängige KI-Platzhalter wie `[Ihr Name]` oder `[Your Name]` werden dabei automatisch sauber ersetzt.
 
-### Tray-Symbol: Statusfarben
+### Tray-Symbol und Kontextmenü
 
 Das Mikrofon im System-Tray ist dein Indikator für den aktuellen Zustand:
 
@@ -167,35 +172,61 @@ Das Mikrofon im System-Tray ist dein Indikator für den aktuellen Zustand:
   </table>
 </div>
 
-Das Tray-Kontextmenü gibt dir schnellen Zugriff auf alle Workflows, das Compose-Fenster, Schreibstil-Vorlagen, Diktat-Modus, Verlauf und Einstellungen:
+Das Tray-Kontextmenü gibt dir schnellen Zugriff auf alle Workflows, das Compose-Fenster, Text-Aktionen, Diktat-Modus, Verlauf und Einstellungen:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/tray-menu-de.png" alt="Tray-Kontextmenü" width="280">
+  <img src="docs/screenshots/linux/tray-menu-de.png" alt="Tray-Kontextmenü" width="300">
   <br><br>
 </div>
 
 > [!NOTE]
 > Steht im Desktop-Environment kein Tray-Bereich zur Verfügung, fällt das Icon auf das System-Theme `audio-input-microphone` zurück; die Farbkodierung greift dann ggf. nicht.
 
-### Hauptfenster
+### Hauptfenster: Single-Panel-Widget
 
-Das Hauptfenster ist dein grafisches Kontrollzentrum — nützlich, wenn Hotkeys blockiert sind oder du lieber mit der Maus arbeitest:
+Das Hauptfenster ist ein kompaktes, rahmenloses Desktop-Widget mit einheitlicher dunkler Ästhetik, edlen Gold-Akzenten und direkter visueller Rückmeldung:
 
 <div align="center">
-  <br>
-  <img src="docs/screenshots/linux/main-window-de.png" alt="Hauptfenster" width="300">
-  <br><br>
+  <table>
+    <tr>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-idle-de.png" width="170"><br><br>
+        <b>Bereit</b><br>
+        <i>Wartet auf Sprach- oder Mausklick-Eingabe.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-recording-de.png" width="170"><br><br>
+        <b>Aufnahme</b><br>
+        <i>Laufender Timer und Audiowellen-Balken.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-processing-de.png" width="170"><br><br>
+        <b>Verarbeitung</b><br>
+        <i>Rotierender goldener Fortschrittsring.</i>
+      </td>
+      <td align="center" width="25%">
+        <img src="docs/screenshots/linux/main-menu-de.png" width="170"><br><br>
+        <b>Aktions-Menü</b><br>
+        <i>Workflows und Schnellzugriff direkt am Widget.</i>
+      </td>
+    </tr>
+  </table>
 </div>
 
-- **Workflow-Dropdown:** Alle 5 Aufnahmemodi zur Auswahl.
-- **Schreibstil-Vorlage:** Sichtbar wenn **Blitztext+** gewählt ist — Preset direkt im Hauptfenster wählen. Änderungen werden sofort mit dem Tray synchronisiert.
-- **Start/Stopp-Button:** Klick zum Starten oder Beenden einer Aufnahme.
-- **Abbruch:** Bricht die aktuelle Aufnahme ohne Transkription ab.
-- **Diktat / Verlauf:** Schnellzugriff auf den Diktat-Modus und den Transkript-Verlauf.
-- **Vorlesen / Einstellungen:** Öffnet das Vorlese-Fenster oder den Einstellungs-Dialog.
+- **Zentrales Gold-Mikrofon:** Markanter kreisrunder Button mit metallischem Farbverlauf und Blitz-Aussparung. Klick startet oder beendet die Aufnahme.
+- **Dynamische visuelle Rückmeldung:**
+  - **Bereit (IDLE):** Grüner Statuspunkt und Zeitanzeige (`Bereit: 00:00`).
+  - **Aufnahme (RECORDING):** Gelber Statuspunkt, sekundengenaue Zeitanzeige und animierte Wellenbalken links und rechts des Mikrofons.
+  - **Verarbeitung (TRANSCRIBING):** Rotierender goldener Kreisbogen um das Mikrofon (`Transkribiere…`).
+- **Kompakte Werkzeugleiste:**
+  - ✍ **Compose-Button** (hervorgehobenes Stift-Symbol): Öffnet das Entwurfsfenster für Texteingabe und KI-Verfeinerung.
+  - 🕒 **Verlauf-Button** (mit Zähler-Badge): Öffnet den Transkript- und Diktat-Verlauf.
+  - 🔊 **Vorlesen-Button** (Lautsprecher-Symbol): Öffnet das TTS-Fenster zur Sprachausgabe.
+  - ⚙ **Einstellungen-Button** (Zahnrad): Öffnet den Konfigurations-Dialog.
+  - ⋯ **Mehr-Button**: Öffnet das Popup-Menü für *Diktieren & verbessern*, Text-Aktionen (*Kürzen*, *Ausformulieren*, *Tonfall ändern*), *Eigene Anweisung*, *Sammel-Diktat* und *Verwerfen*.
 
-*Das Fenster öffnet sich beim Start sowie über den Tray-Eintrag **Fenster anzeigen** oder einen Klick auf das Tray-Icon. Schließen versteckt das Fenster nur — die App läuft im Tray weiter.*
+*Das Widget öffnet sich beim Start sowie über den Tray-Eintrag **Fenster anzeigen** oder einen Klick auf das Tray-Icon. Schließen blendet das Widget aus — die App läuft im Hintergrund im Tray weiter.*
 
 ### Diktat, Verlauf und Vorlesen
 
@@ -203,7 +234,8 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 
 <div align="center">
   <br>
-  <img src="docs/screenshots/linux/history-de.png" alt="Verlauf" width="340">
+  <img src="docs/screenshots/linux/history-de.png" alt="Verlauf" width="320">
+  &nbsp;&nbsp;
   <img src="docs/screenshots/linux/tts-de.png" alt="Vorlesen" width="340">
   <br><br>
 </div>
@@ -358,10 +390,10 @@ Der Einstellungs-Dialog hat drei Tabs:
 <div align="center">
   <img src="docs/screenshots/linux/settings-speech-de.png" alt="Einstellungen: Spracherkennung" width="480">
   <br><i>Spracherkennung — Whisper-Modell, Backend, Sprache, Hotkey-Modus und Aufnahmetaste.</i><br><br>
-  <img src="docs/screenshots/linux/settings-ai-workflows-de.png" alt="Einstellungen: KI-Workflows" width="480">
-  <br><i>KI-Workflows — LLM-Anbieter, API-Key, Base-URL, Modell, Tonfall und Schreibstil-Vorlage.</i><br><br>
+  <img src="docs/screenshots/linux/settings-ai-de.png" alt="Einstellungen: Text &amp; KI" width="480">
+  <br><i>Text &amp; KI — System-Prompt, API-Key-Umgebung, LLM-Anbieter, Base-URL, Modell, Text-Aktion und Emoji-Dichte.</i><br><br>
   <img src="docs/screenshots/linux/settings-general-de.png" alt="Einstellungen: Allgemein" width="480">
-  <br><i>Allgemein — Auto-Paste, Diktat-Ordner, Verlaufsgröße, Sprache der Oberfläche und Signatur.</i><br><br>
+  <br><i>Allgemein — Auto-Paste, Diktat-Notizordner, Verlaufsgröße, Sprache der Oberfläche und Signatur.</i><br><br>
 </div>
 
 > [!IMPORTANT]
@@ -429,7 +461,7 @@ Der Einstellungs-Dialog hat drei Tabs:
 - **tts_openai_model** / **tts_openai_voice**: Modell und Stimme für OpenAI Cloud-TTS (Standard: `gpt-4o-mini-tts`, `marin`).
 - **tts_openai_consent**: `true`, sobald die einmalige Datenschutz-Bestätigung für Cloud-TTS erteilt wurde. Standard: `false`.
 - **tts_speed**: Sprechgeschwindigkeit für „Vorlesen" als Multiplikator. Standard: `1.0`.
-- **workflows**: Feintuning von Tonalität (`text_improver_tone`), Schreibstil-Vorlage (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
+- **workflows**: Feintuning von Tonalität (`text_improver_tone`), Text-Aktion (`writing_preset`), Emojis (`emoji_density`) und dem Dampf-Prompt (`dampf_system_prompt`).
 </details>
 
 ---
@@ -438,7 +470,7 @@ Der Einstellungs-Dialog hat drei Tabs:
 
 API-Keys werden niemals in `config.json` gespeichert — sie werden zur Laufzeit aus Umgebungsvariablen gelesen.
 
-**Empfohlen: `secrets.env`.** Lege deine(n) Key(s) in `~/.config/blitztext-linux/secrets.env` ab, ein `NAME=WERT`-Paar pro Zeile — der Variablenname richtet sich nach dem unter **Einstellungen → KI-Workflows → „API-Key-Umgebung"** gewählten Anbieter (z. B. die OpenAI-Variable für OpenAI, die OpenRouter-Variable für OpenRouter), `WERT` ist der geheime Key von diesem Anbieter:
+**Empfohlen: `secrets.env`.** Lege deine(n) Key(s) in `~/.config/blitztext-linux/secrets.env` ab, ein `NAME=WERT`-Paar pro Zeile — der Variablenname richtet sich nach dem unter **Einstellungen → Text & KI → „API-Key-Umgebung"** gewählten Anbieter (z. B. die OpenAI-Variable für OpenAI, die OpenRouter-Variable für OpenRouter), `WERT` ist der geheime Key von diesem Anbieter:
 
 ```bash
 <VARIABLENNAME>=<dein-geheimer-wert>
@@ -446,8 +478,8 @@ API-Keys werden niemals in `config.json` gespeichert — sie werden zur Laufzeit
 
 `./run.sh` und der systemd-User-Service laden diese Datei automatisch. `config.json` speichert nur den *Namen* der zu lesenden Umgebungsvariable (`openai_api_key_env`), niemals den Key selbst.
 
-- Welche Variable verwendet wird, hängt von **Einstellungen → KI-Workflows → „API-Key-Umgebung"** und dem gewählten LLM-Anbieter ab (`OPENAI_API_KEY` für OpenAI, `OPENROUTER_API_KEY` für OpenRouter, oder ein eigener Name für einen eigenen Endpunkt).
-- Ohne gültigen Key sind die LLM-Workflows (`Blitztext+`, `Blitztext $%&!`, `Blitztext :)`) und OpenAI Cloud-TTS deaktiviert bzw. schlagen mit einer Fehlermeldung fehl; lokale Transkription und Piper-TTS funktionieren weiterhin.
+- Welche Variable verwendet wird, hängt von **Einstellungen → Text & KI → „API-Key-Umgebung"** und dem gewählten LLM-Anbieter ab (`OPENAI_API_KEY` für OpenAI, `OPENROUTER_API_KEY` für OpenRouter, oder ein eigener Name für einen eigenen Endpunkt).
+- Ohne gültigen Key sind die LLM-Workflows (`Diktieren & verbessern`, `Sachlich formulieren`, `Emojis ergänzen`) und OpenAI Cloud-TTS deaktiviert bzw. schlagen mit einer Fehlermeldung fehl; lokale Transkription und Piper-TTS funktionieren weiterhin.
 - Committe niemals `secrets.env`, API-Keys oder Tokens in git. Sollte ein Key jemals offengelegt werden (z. B. versehentlich committet oder in ein Issue eingefügt), rotiere ihn sofort beim Anbieter.
 - `config.json` wird mit restriktiven Rechten (`0o600`) geschrieben; die gleiche Erwartung gilt für `secrets.env`.
 
@@ -514,7 +546,7 @@ Dieses Projekt wurde mit Unterstützung künstlicher Intelligenz (AI-assisted) e
 │   ├── transcribe.py       # Whisper-Transkription
 │   ├── tts_window.py       # Vorlese-Fenster mit Audio-Export
 │   ├── workflows.py        # Workflow-Definitionen
-│   └── writing_presets.py  # Schreibstil-Vorlagen-Definitionen
+│   └── writing_presets.py  # Text-Aktionen und Migration alter Presets
 ├── packaging/flatpak/      # Experimenteller Flatpak-MVP-Spike (siehe oben)
 ├── tests/                  # Test-Suite
 └── README.md               # Englische Fassung (diese Datei: README.de.md)

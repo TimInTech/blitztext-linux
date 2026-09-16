@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -27,6 +28,7 @@ from PyQt6.QtWidgets import (
 )
 
 from app.i18n import t
+from app import theme
 
 PIPER_VENV_PATH = str(Path(__file__).resolve().parents[1] / ".venv" / "bin" / "piper")
 VOICES_DIR = Path.home() / ".local" / "share" / "piper-voices"
@@ -73,6 +75,12 @@ def _scrub_secret(text: str, secret: str) -> str:
     if secret and text:
         return text.replace(secret, "***")
     return text
+
+
+def _set_status(label: QLabel, text: str, role: Optional[str] = None) -> None:
+    """Set status copy and its shared semantic theme role together."""
+    label.setText(text)
+    theme.set_status_role(label, role)
 
 
 def _find_piper() -> Optional[str]:
@@ -296,6 +304,7 @@ class TtsWindow(QDialog):
 
     def __init__(self, config, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.setObjectName("appDialog")
         self._config = config
         self.setWindowTitle(t("tts.window_title"))
         self.resize(430, 340)
@@ -320,12 +329,18 @@ class TtsWindow(QDialog):
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         self._text_edit = QTextEdit()
         self._text_edit.setPlaceholderText(t("tts.text.placeholder"))
         layout.addWidget(self._text_edit, 1)
+
+        controls = QFrame(self)
+        controls.setObjectName("sectionSurface")
+        controls_layout = QVBoxLayout(controls)
+        controls_layout.setContentsMargins(12, 12, 12, 12)
+        controls_layout.setSpacing(8)
 
         provider_row = QHBoxLayout()
         provider_row.setSpacing(6)
@@ -335,7 +350,7 @@ class TtsWindow(QDialog):
         self._provider_combo.addItem(t("tts.provider.openai_cloud"), "openai")
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         provider_row.addWidget(self._provider_combo, 1)
-        layout.addLayout(provider_row)
+        controls_layout.addLayout(provider_row)
 
         voice_row = QHBoxLayout()
         voice_row.setSpacing(6)
@@ -343,7 +358,7 @@ class TtsWindow(QDialog):
         self._voice_combo = QComboBox()
         self._voice_combo.currentIndexChanged.connect(self._on_voice_changed)
         voice_row.addWidget(self._voice_combo, 1)
-        layout.addLayout(voice_row)
+        controls_layout.addLayout(voice_row)
 
         model_row = QHBoxLayout()
         model_row.setSpacing(6)
@@ -352,7 +367,7 @@ class TtsWindow(QDialog):
         self._model_edit.setPlaceholderText(OPENAI_TTS_MODEL_DEFAULT)
         self._model_edit.editingFinished.connect(self._on_model_changed)
         model_row.addWidget(self._model_edit, 1)
-        layout.addLayout(model_row)
+        controls_layout.addLayout(model_row)
 
         speed_row = QHBoxLayout()
         speed_row.setSpacing(6)
@@ -368,7 +383,8 @@ class TtsWindow(QDialog):
         self._speed_combo.setCurrentIndex(idx if idx >= 0 else 2)
         self._speed_combo.currentIndexChanged.connect(self._on_speed_changed)
         speed_row.addWidget(self._speed_combo)
-        layout.addLayout(speed_row)
+        controls_layout.addLayout(speed_row)
+        layout.addWidget(controls)
 
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
@@ -396,6 +412,7 @@ class TtsWindow(QDialog):
         btn_row.addWidget(self._btn_pause)
 
         self._btn_speak = QPushButton(t("tts.button.speak"))
+        self._btn_speak.setObjectName("primaryAction")
         self._btn_speak.clicked.connect(self._on_speak_clicked)
         btn_row.addWidget(self._btn_speak)
 
@@ -441,18 +458,14 @@ class TtsWindow(QDialog):
         if provider == "openai":
             service = CloudTtsService(self._config)
             if service.is_available():
-                self._status_label.setText(t("tts.status.openai_ready"))
-                self._status_label.setStyleSheet("color: #4caf50;")
+                _set_status(self._status_label, t("tts.status.openai_ready"), "success")
             else:
-                self._status_label.setText(_openai_tts_install_hint())
-                self._status_label.setStyleSheet("color: #f44336;")
+                _set_status(self._status_label, _openai_tts_install_hint(), "error")
         else:
             if self._piper_path:
-                self._status_label.setText(t("tts.status.piper_ready"))
-                self._status_label.setStyleSheet("color: #4caf50;")
+                _set_status(self._status_label, t("tts.status.piper_ready"), "success")
             else:
-                self._status_label.setText(_piper_install_hint())
-                self._status_label.setStyleSheet("color: #f44336;")
+                _set_status(self._status_label, _piper_install_hint(), "error")
         self._update_speak_button_state()
 
     def _update_speak_button_state(self) -> None:
@@ -518,8 +531,7 @@ class TtsWindow(QDialog):
         self._cleanup_export_temp()
         self._cleanup_active_wav()
         self._pending_export_path = None
-        self._status_label.setText(status_text)
-        self._status_label.setStyleSheet("color: #f44336;")
+        _set_status(self._status_label, status_text, "error")
         self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
@@ -654,13 +666,11 @@ class TtsWindow(QDialog):
         text = self._current_tts_text()
         if not text:
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.no_text"))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.no_text"), "error")
             return
         if not _find_ffmpeg():
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.export_ffmpeg_missing"))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.export_ffmpeg_missing"), "error")
             self._schedule_status_clear(2500)
             return
         default_name = t("tts.export.default_filename_prefix") + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".ogg"
@@ -702,8 +712,7 @@ class TtsWindow(QDialog):
             text = self._current_tts_text()
         if not text:
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.no_text"))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.no_text"), "error")
             return
         self._last_tts_text = text
         self._btn_replay.setEnabled(True)
@@ -717,15 +726,13 @@ class TtsWindow(QDialog):
     def _start_piper_tts(self, text: str) -> None:
         if not self._piper_path:
             self._invalidate_status_clear()
-            self._status_label.setText(_piper_install_hint())
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, _piper_install_hint(), "error")
             return
 
         model_path = self._current_voice()
         if not model_path:
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.no_voice_path"))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.no_voice_path"), "error")
             return
 
         wav_path = self._prepare_new_tts_job()
@@ -740,8 +747,7 @@ class TtsWindow(QDialog):
         proc.errorOccurred.connect(self._on_tts_error)
         self._piper_proc = proc
 
-        self._status_label.setText(t("tts.status.synthesis"))
-        self._status_label.setStyleSheet("")
+        _set_status(self._status_label, t("tts.status.synthesis"))
         self._btn_speak.setText(t("tts.button.stop"))
         self._update_speak_button_state()
 
@@ -752,15 +758,13 @@ class TtsWindow(QDialog):
     def _start_cloud_tts(self, text: str) -> None:
         if not self._config.tts_openai_consent:
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.openai_not_confirmed"))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.openai_not_confirmed"), "error")
             self._update_speak_button_state()
             return
         service = CloudTtsService(self._config)
         if not service.is_available():
             self._invalidate_status_clear()
-            self._status_label.setText(_openai_tts_install_hint())
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, _openai_tts_install_hint(), "error")
             self._update_speak_button_state()
             return
 
@@ -779,8 +783,7 @@ class TtsWindow(QDialog):
         self._cloud_thread = thread
         self._cloud_worker = worker
 
-        self._status_label.setText(t("tts.status.cloud_synthesis"))
-        self._status_label.setStyleSheet("")
+        _set_status(self._status_label, t("tts.status.cloud_synthesis"))
         self._btn_speak.setText(t("tts.button.stop"))
         self._btn_pause.setEnabled(False)
         thread.start()
@@ -815,8 +818,7 @@ class TtsWindow(QDialog):
         export_proc.errorOccurred.connect(self._on_tts_error)
         self._export_proc = export_proc
 
-        self._status_label.setText(t("tts.status.exporting"))
-        self._status_label.setStyleSheet("")
+        _set_status(self._status_label, t("tts.status.exporting"))
         self._btn_speak.setText(t("tts.button.stop"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
@@ -860,8 +862,7 @@ class TtsWindow(QDialog):
         self._btn_pause.setEnabled(False)
         self._is_paused = False
         self._btn_pause.setText(t("tts.button.pause"))
-        self._status_label.setText(t("tts.status.cancelled"))
-        self._status_label.setStyleSheet("color: #ff9800;")
+        _set_status(self._status_label, t("tts.status.cancelled"), "warning")
         self._update_speak_button_state()
         self._schedule_status_clear(2000)
 
@@ -938,8 +939,7 @@ class TtsWindow(QDialog):
         self._cleanup_export_temp()
         self._cleanup_active_wav()
         self._invalidate_status_clear()
-        self._status_label.setText(t("tts.status.error").format(message=message))
-        self._status_label.setStyleSheet("color: #f44336;")
+        _set_status(self._status_label, t("tts.status.error").format(message=message), "error")
         self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False
@@ -966,8 +966,7 @@ class TtsWindow(QDialog):
             self._cleanup_active_wav()
             msg = stderr or f"Exit {exit_code}"
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.error").format(message=msg))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.error").format(message=msg), "error")
             self._btn_speak.setText(t("tts.button.speak"))
             self._update_speak_button_state()
             self._schedule_status_clear(2500)
@@ -981,8 +980,11 @@ class TtsWindow(QDialog):
 
         if not wav_path:
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.error").format(message=t("tts.status.missing_wav_output")))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(
+                self._status_label,
+                t("tts.status.error").format(message=t("tts.status.missing_wav_output")),
+                "error",
+            )
             self._btn_speak.setText(t("tts.button.speak"))
             self._update_speak_button_state()
             self._schedule_status_clear(2500)
@@ -1010,16 +1012,14 @@ class TtsWindow(QDialog):
         self._is_paused = False
         self._btn_pause.setText(t("tts.button.pause"))
         if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0:
-            self._status_label.setText(t("tts.status.done"))
-            self._status_label.setStyleSheet("color: #4caf50;")
+            _set_status(self._status_label, t("tts.status.done"), "success")
         else:
             stderr = ""
             if proc is not None:
                 stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
             msg = stderr or f"Exit {exit_code}"
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.error").format(message=msg))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.error").format(message=msg), "error")
         if proc is not None:
             proc.deleteLater()
         self._cleanup_export_temp()
@@ -1043,14 +1043,12 @@ class TtsWindow(QDialog):
         if exit_status == QProcess.ExitStatus.NormalExit and exit_code == 0 and export_temp_path and output_path:
             try:
                 os.replace(export_temp_path, output_path)
-                self._status_label.setText(t("tts.status.export_done"))
-                self._status_label.setStyleSheet("color: #4caf50;")
+                _set_status(self._status_label, t("tts.status.export_done"), "success")
                 self._export_temp_path = None
                 clear_status_later = True
             except OSError as exc:
                 self._invalidate_status_clear()
-                self._status_label.setText(t("tts.status.error").format(message=str(exc)))
-                self._status_label.setStyleSheet("color: #f44336;")
+                _set_status(self._status_label, t("tts.status.error").format(message=str(exc)), "error")
                 self._cleanup_export_temp()
         else:
             stderr = ""
@@ -1058,8 +1056,7 @@ class TtsWindow(QDialog):
                 stderr = bytes(proc.readAllStandardError()).decode("utf-8", "replace").strip()
             msg = stderr or f"Exit {exit_code}"
             self._invalidate_status_clear()
-            self._status_label.setText(t("tts.status.error").format(message=msg))
-            self._status_label.setStyleSheet("color: #f44336;")
+            _set_status(self._status_label, t("tts.status.error").format(message=msg), "error")
             self._cleanup_export_temp()
         if proc is not None:
             proc.deleteLater()
@@ -1078,7 +1075,7 @@ class TtsWindow(QDialog):
                 self._status_label.setText(_piper_install_hint() if self._current_provider() == "piper" else _openai_tts_install_hint())
         else:
             self._status_label.setText(t("tts.status.error").format(message=error.name))
-        self._status_label.setStyleSheet("color: #f44336;")
+        theme.set_status_role(self._status_label, "error")
         self._btn_speak.setText(t("tts.button.speak"))
         self._btn_pause.setEnabled(False)
         self._is_paused = False

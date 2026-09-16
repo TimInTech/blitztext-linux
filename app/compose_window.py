@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -22,9 +23,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from app.i18n import t
+from app.i18n import t, tq
+from app import theme
 from app.llm_service import LLMService
-from app.config import Config, VALID_TONES
+from app.config import Config, ConfigError, VALID_TONES
 from app.paste_service import PasteService, PasteServiceError
 from app.workflows import WorkflowType
 from app.writing_presets import (
@@ -82,12 +84,14 @@ class PromptEditorDialog(QDialog):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("appDialog")
         self.setWindowTitle(t("compose.prompt_preview.title"))
         self.setModal(True)
         self.resize(640, 500)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
 
         layout.addWidget(QLabel(t("compose.prompt_preview.system_label")))
         self._system_edit = QPlainTextEdit(system_prompt)
@@ -102,6 +106,7 @@ class PromptEditorDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         btn_send = QPushButton(t("compose.prompt_preview.send_btn"))
+        btn_send.setObjectName("primaryAction")
         btn_send.setDefault(True)
         btn_send.clicked.connect(self.accept)
         btn_row.addWidget(btn_send)
@@ -177,6 +182,8 @@ class _ComposeWorker(QObject):
 class ComposeWindow(QDialog):
     """Modeless dialog for composing text through existing LLM workflows."""
 
+    prompt_saved = pyqtSignal()
+
     def __init__(
         self,
         llm_service: LLMService,
@@ -185,9 +192,11 @@ class ComposeWindow(QDialog):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("appDialog")
         self._llm_service = llm_service
         self._paste_service = paste_service
         self._config = config
+        self._saved_custom_prompt = config.compose_custom_preset_text
         self._worker_thread: Optional[QThread] = None
         self._worker: Optional[_ComposeWorker] = None
         self._detached_threads: list[QThread] = []
@@ -198,8 +207,8 @@ class ComposeWindow(QDialog):
         self._variant_index: int = -1
 
         self.setWindowTitle(t("compose.window_title"))
-        self.setMinimumSize(600, 500)
-        self.resize(760, 600)
+        self.setMinimumSize(560, 360)
+        self.resize(620, 400)
 
         self._setup_ui()
         self.retranslate_ui()
@@ -207,25 +216,29 @@ class ComposeWindow(QDialog):
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         header_grid = QGridLayout()
         header_grid.setSpacing(8)
 
-        self.lblWorkflow = QLabel()
-        header_grid.addWidget(self.lblWorkflow, 0, 0)
+        # Keep workflow routing compatible; the editor exposes one action list.
+        self.lblWorkflow = QLabel(self)
+        self.lblWorkflow.hide()
 
-        self.cmbWorkflow = QComboBox()
-        self.cmbWorkflow.setMinimumWidth(160)
-        header_grid.addWidget(self.cmbWorkflow, 0, 1)
+        self.cmbWorkflow = QComboBox(self)
+        self.cmbWorkflow.hide()
 
         self.lblPreset = QLabel()
-        header_grid.addWidget(self.lblPreset, 0, 2)
+        header_grid.addWidget(self.lblPreset, 0, 0)
 
         self.cmbPreset = QComboBox()
-        self.cmbPreset.setMinimumWidth(180)
-        header_grid.addWidget(self.cmbPreset, 0, 3)
+        self.cmbPreset.setMinimumWidth(150)
+        header_grid.addWidget(self.cmbPreset, 0, 1)
+
+        self.btnOwnPrompt = QPushButton()
+        self.btnOwnPrompt.clicked.connect(self.edit_custom_prompt)
+        header_grid.addWidget(self.btnOwnPrompt, 0, 2, 1, 2)
 
         self.lblTone = QLabel()
         header_grid.addWidget(self.lblTone, 1, 0)
@@ -237,19 +250,36 @@ class ComposeWindow(QDialog):
         self.chkVoiceRouting = QCheckBox()
         self.chkVoiceRouting.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
-        header_grid.addWidget(self.chkVoiceRouting, 1, 2, 1, 2)
+        header_grid.addWidget(self.chkVoiceRouting, 2, 0, 1, 4)
 
         header_grid.setColumnStretch(1, 1)
         header_grid.setColumnStretch(3, 1)
         layout.addLayout(header_grid)
 
-        self.splitMain = QSplitter(Qt.Orientation.Vertical)
+        self.promptPanel = QFrame()
+        self.promptPanel.setObjectName("sectionSurface")
+        prompt_layout = QVBoxLayout(self.promptPanel)
+        prompt_layout.setContentsMargins(12, 10, 12, 12)
+        prompt_layout.setSpacing(7)
+        self.lblOwnPrompt = QLabel()
+        prompt_layout.addWidget(self.lblOwnPrompt)
+        self.txtOwnPrompt = QPlainTextEdit()
+        self.txtOwnPrompt.setPlainText(self._config.compose_custom_preset_text)
+        self.txtOwnPrompt.setFixedHeight(64)
+        prompt_layout.addWidget(self.txtOwnPrompt)
+        self.btnSavePrompt = QPushButton()
+        self.btnSavePrompt.clicked.connect(self._save_custom_prompt)
+        prompt_layout.addWidget(self.btnSavePrompt, 0, Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(self.promptPanel)
+
+        self.splitMain = QSplitter(Qt.Orientation.Horizontal)
         self.splitMain.setChildrenCollapsible(False)
 
-        input_panel = QWidget()
+        input_panel = QFrame()
+        input_panel.setObjectName("sectionSurface")
         input_layout = QVBoxLayout(input_panel)
-        input_layout.setContentsMargins(0, 0, 0, 0)
-        input_layout.setSpacing(6)
+        input_layout.setContentsMargins(12, 10, 12, 12)
+        input_layout.setSpacing(8)
 
         self.lblInput = QLabel()
         input_layout.addWidget(self.lblInput)
@@ -262,6 +292,7 @@ class ComposeWindow(QDialog):
         action_row.setSpacing(8)
 
         self.btnAction = QPushButton()
+        self.btnAction.setObjectName("primaryAction")
         self.btnAction.setMinimumWidth(140)
         self.btnAction.clicked.connect(self._on_improve_clicked)
         action_row.addWidget(self.btnAction)
@@ -276,10 +307,11 @@ class ComposeWindow(QDialog):
         action_row.addWidget(self.lblStatus, 1)
         input_layout.addLayout(action_row)
 
-        output_panel = QWidget()
+        output_panel = QFrame()
+        output_panel.setObjectName("sectionSurface")
         output_layout = QVBoxLayout(output_panel)
-        output_layout.setContentsMargins(0, 0, 0, 0)
-        output_layout.setSpacing(6)
+        output_layout.setContentsMargins(12, 10, 12, 12)
+        output_layout.setSpacing(8)
 
         output_header = QHBoxLayout()
         output_header.setSpacing(8)
@@ -289,7 +321,10 @@ class ComposeWindow(QDialog):
 
         output_header.addStretch(1)
 
-        self.btnPrev = QPushButton("◀")
+        self.btnPrev = QPushButton()
+        self.btnPrev.setObjectName("iconButton")
+        self.btnPrev.setIcon(theme.create_ui_icon("previous"))
+        self.btnPrev.setToolTip(t("compose.variant.prev"))
         self.btnPrev.setMaximumWidth(40)
         self.btnPrev.clicked.connect(self._on_prev_variant)
         output_header.addWidget(self.btnPrev)
@@ -297,7 +332,10 @@ class ComposeWindow(QDialog):
         self.lblVariantCounter = QLabel()
         output_header.addWidget(self.lblVariantCounter)
 
-        self.btnNext = QPushButton("▶")
+        self.btnNext = QPushButton()
+        self.btnNext.setObjectName("iconButton")
+        self.btnNext.setIcon(theme.create_ui_icon("next"))
+        self.btnNext.setToolTip(t("compose.variant.next"))
         self.btnNext.setMaximumWidth(40)
         self.btnNext.clicked.connect(self._on_next_variant)
         output_header.addWidget(self.btnNext)
@@ -326,16 +364,18 @@ class ComposeWindow(QDialog):
 
         self.btnClose = QPushButton()
         self.btnClose.clicked.connect(self.close)
-        footer_row.addWidget(self.btnClose)
+        # The native close control already closes this modeless window.
+        self.btnClose.setParent(self)
+        self.btnClose.hide()
 
-        output_layout.addLayout(footer_row)
 
         self.splitMain.addWidget(input_panel)
         self.splitMain.addWidget(output_panel)
         self.splitMain.setStretchFactor(0, 3)
         self.splitMain.setStretchFactor(1, 2)
-        self.splitMain.setSizes([330, 240])
+        self.splitMain.setSizes([290, 290])
         layout.addWidget(self.splitMain, 1)
+        layout.addLayout(footer_row)
 
         self._install_shortcuts()
         self._populate_workflow_combo()
@@ -422,16 +462,14 @@ class ComposeWindow(QDialog):
         self._update_tone_state()
 
     def _update_tone_state(self) -> None:
-        """Sichtbarkeit/Aktivierung des Tonfall-Selektors je nach Workflow+Vorlage.
-
-        Tonfall ist im Text-Verbesserer (Blitztext+) für „Standard“ und
-        „Tonfall ändern“ aktiv. Bei allen anderen Aktionen bleibt der Selektor
-        sichtbar, aber ausgegraut. Bei Dampf/Emoji entfällt er.
-        """
+        """Show only controls needed for the selected action."""
         workflow = self._selected_workflow()
         is_text_improver = workflow == WorkflowType.TEXT_IMPROVER
-        self.lblTone.setVisible(is_text_improver)
-        self.cmbTone.setVisible(is_text_improver)
+        uses_tone = is_text_improver and self._selected_preset() == "change_tone"
+        self.lblTone.setVisible(uses_tone)
+        self.cmbTone.setVisible(uses_tone)
+        self.promptPanel.setVisible(is_text_improver and self._selected_preset() == CUSTOM_PRESET_KEY)
+        self.btnOwnPrompt.setVisible(self._selected_preset() != CUSTOM_PRESET_KEY)
         if not is_text_improver:
             return
         uses_tone = self._selected_preset() in {
@@ -454,18 +492,18 @@ class ComposeWindow(QDialog):
     def _show_status(self, text: str, *, error: bool = False) -> None:
         self.lblStatus.setText(text)
         self.lblStatus.setVisible(bool(text))
-        if error:
-            self.lblStatus.setStyleSheet("color: #f44336;")
-        else:
-            self.lblStatus.setStyleSheet("")
+        theme.set_status_role(self.lblStatus, "error" if error else None)
 
     def _hide_status(self) -> None:
         self.lblStatus.clear()
         self.lblStatus.setVisible(False)
-        self.lblStatus.setStyleSheet("")
+        theme.set_status_role(self.lblStatus, None)
 
     def _set_busy(self, busy: bool, *, keep_status: bool = False) -> None:
         self._busy = busy
+        for control in (self.cmbPreset, self.cmbTone, self.btnOwnPrompt, self.btnSavePrompt):
+            control.setEnabled(not busy)
+        self.txtOwnPrompt.setReadOnly(busy)
         self.txtInput.setReadOnly(busy)
         if busy:
             self.btnAction.setEnabled(False)
@@ -603,6 +641,9 @@ class ComposeWindow(QDialog):
     def set_llm_service(self, llm_service: LLMService) -> None:
         """Verwendet bei der nächsten Aktion den aktuellen Controller-Service."""
         self._llm_service = llm_service
+        if self.txtOwnPrompt.toPlainText() == self._saved_custom_prompt:
+            self.txtOwnPrompt.setPlainText(self._config.compose_custom_preset_text)
+        self._saved_custom_prompt = self._config.compose_custom_preset_text
 
     def set_input_text(self, text: str) -> None:
         self.txtInput.setPlainText(text)
@@ -635,6 +676,11 @@ class ComposeWindow(QDialog):
         self.setWindowTitle(t("compose.window_title"))
         self.lblWorkflow.setText(t("compose.workflow.label"))
         self.lblPreset.setText(t("compose.preset.label"))
+        self.btnOwnPrompt.setText(t("compose.custom.edit"))
+        self.lblOwnPrompt.setText(t("compose.custom.label"))
+        self.txtOwnPrompt.setAccessibleName(t("compose.custom.label"))
+        self.txtOwnPrompt.setPlaceholderText(t("compose.custom.placeholder"))
+        self.btnSavePrompt.setText(tq("compose.custom.save"))
         self.lblTone.setText(t("compose.tone.label"))
         self.chkVoiceRouting.setText(t("compose.voice_routing.label"))
         self.chkVoiceRouting.setToolTip(t("compose.voice_routing.help"))
@@ -644,7 +690,7 @@ class ComposeWindow(QDialog):
         self.btnShowPrompt.setText(t("compose.btn.show_prompt"))
         self.btnShowPrompt.setToolTip(t("compose.prompt_preview.tooltip"))
         self.btnCopy.setText(t("compose.button.copy"))
-        self.btnPaste.setText(t("compose.button.insert_close"))
+        self.btnPaste.setText(tq("compose.button.insert_close"))
         self.btnClose.setText(t("compose.button.close"))
         self.btnSignature.setText(t("compose.btn_append_signature"))
         self.btnSignature.setToolTip(t("compose.tooltip_append_signature"))
@@ -666,14 +712,46 @@ class ComposeWindow(QDialog):
     def _start_worker(self, text: str) -> None:
         workflow = self._selected_workflow()
         tone = self._selected_tone()
+        custom = self.txtOwnPrompt.toPlainText().strip() if self._selected_preset() == CUSTOM_PRESET_KEY else None
+        if custom == "":
+            self._show_status(t("compose.custom.empty"), error=True)
+            self.txtOwnPrompt.setFocus()
+            return
         worker = _ComposeWorker(
             self._llm_service,
             workflow,
             text,
             self._selected_preset(),
             tone=tone,
+            custom_prompt=custom,
         )
         self._launch_worker(worker)
+
+    def edit_custom_prompt(self) -> None:
+        """Open the instruction field without requiring a draft or an API call."""
+        self.cmbWorkflow.setCurrentIndex(self.cmbWorkflow.findData(WorkflowType.TEXT_IMPROVER))
+        self.cmbPreset.setCurrentIndex(self.cmbPreset.findData(CUSTOM_PRESET_KEY))
+        self.txtOwnPrompt.setFocus()
+
+    def _save_custom_prompt(self) -> None:
+        prompt = self.txtOwnPrompt.toPlainText().strip()
+        if not prompt:
+            self._show_status(t("compose.custom.empty"), error=True)
+            return
+        previous = self._config.compose_custom_preset_text
+        previous_preset = self._config.writing_preset
+        self._config.compose_custom_preset_text = prompt
+        self._config.writing_preset = CUSTOM_PRESET_KEY
+        try:
+            self._config.save()
+        except ConfigError:
+            self._config.compose_custom_preset_text = previous
+            self._config.writing_preset = previous_preset
+            self._show_status(t("compose.custom.save_error"), error=True)
+            return
+        self._saved_custom_prompt = prompt
+        self.prompt_saved.emit()
+        self._show_status(t("compose.custom.saved"))
 
     def _launch_worker(self, worker: _ComposeWorker) -> None:
         """Gemeinsames Thread-Wiring für Standard- und Raw-Prompt-Worker."""
@@ -739,10 +817,15 @@ class ComposeWindow(QDialog):
 
         workflow = self._selected_workflow()
         tone = self._selected_tone()
+        if self._selected_preset() == CUSTOM_PRESET_KEY and not self.txtOwnPrompt.toPlainText().strip():
+            self._show_status(t("compose.custom.empty"), error=True)
+            self.txtOwnPrompt.setFocus()
+            return
         system_prompt = self._llm_service.build_system_prompt(
             workflow,
             writing_preset=self._selected_preset(),
             tone=tone,
+            custom_prompt=self.txtOwnPrompt.toPlainText().strip() if self._selected_preset() == CUSTOM_PRESET_KEY else None,
         )
         dialog = PromptEditorDialog(system_prompt, text.strip(), parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
