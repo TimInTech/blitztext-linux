@@ -153,6 +153,14 @@ def _safe_unlink(path: Optional[str]) -> None:
         pass
 
 
+def _save_config_safely(config) -> None:
+    """Persist the config; write errors are deliberately ignored."""
+    try:
+        config.save()
+    except Exception:
+        pass
+
+
 def _make_tts_runtime_job_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix=f"blitztext-tts-{uuid4().hex}-", dir=TTS_RUNTIME_DIR))
 
@@ -559,10 +567,7 @@ class TtsWindow(QDialog):
         if answer != QMessageBox.StandardButton.Yes:
             return False
         self._config.tts_openai_consent = True
-        try:
-            self._config.save()
-        except Exception:
-            pass
+        _save_config_safely(self._config)
         return True
 
     def _revert_provider_to_piper(self) -> None:
@@ -571,10 +576,7 @@ class TtsWindow(QDialog):
         self._provider_combo.blockSignals(False)
         if self._config.tts_provider != "piper":
             self._config.tts_provider = "piper"
-            try:
-                self._config.save()
-            except Exception:
-                pass
+            _save_config_safely(self._config)
 
     @pyqtSlot(int)
     def _on_provider_changed(self, _idx: int) -> None:
@@ -586,10 +588,7 @@ class TtsWindow(QDialog):
             return
         if self._config.tts_provider != provider:
             self._config.tts_provider = provider
-            try:
-                self._config.save()
-            except Exception:
-                pass
+            _save_config_safely(self._config)
         self._populate_voices()
         self._refresh_status_hint()
 
@@ -600,27 +599,18 @@ class TtsWindow(QDialog):
         if provider == "openai":
             if isinstance(voice, str) and voice and self._config.tts_openai_voice != voice:
                 self._config.tts_openai_voice = voice
-                try:
-                    self._config.save()
-                except Exception:
-                    pass
+                _save_config_safely(self._config)
         else:
             if isinstance(voice, str) and voice and self._config.tts_voice != voice:
                 self._config.tts_voice = voice
-                try:
-                    self._config.save()
-                except Exception:
-                    pass
+                _save_config_safely(self._config)
         self._refresh_status_hint()
 
     def _on_model_changed(self) -> None:
         model = self._model_edit.text().strip() or OPENAI_TTS_MODEL_DEFAULT
         if self._config.tts_openai_model != model:
             self._config.tts_openai_model = model
-            try:
-                self._config.save()
-            except Exception:
-                pass
+            _save_config_safely(self._config)
         self._refresh_status_hint()
 
     @pyqtSlot(int)
