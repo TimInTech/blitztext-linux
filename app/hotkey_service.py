@@ -371,11 +371,7 @@ def _discover_keyboards(transcription_key: str = "KEY_LEFTALT") -> list:
             pass
 
     if devices:
-        for dev in fallback_candidates:
-            try:
-                dev.close()
-            except Exception:
-                pass
+        _close_devices(fallback_candidates)
         return devices
 
     if fallback_candidates:
@@ -384,11 +380,7 @@ def _discover_keyboards(transcription_key: str = "KEY_LEFTALT") -> list:
             "Warning: no keyboard with Meta key found, falling back",
             file=sys.stderr, flush=True,
         )
-        for dev in fallback_candidates[1:]:
-            try:
-                dev.close()
-            except Exception:
-                pass
+        _close_devices(fallback_candidates[1:])
         return fallback_candidates[:1]
 
     return []

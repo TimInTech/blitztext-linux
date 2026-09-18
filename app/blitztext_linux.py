@@ -163,6 +163,14 @@ def create_help_label(text: str) -> QLabel:
     return label
 
 
+def _apply_window_icon(window: QWidget) -> None:
+    """Set the branded window icon; failures are purely cosmetic and ignored."""
+    try:
+        window.setWindowIcon(theme.create_app_icon())
+    except Exception:  # pragma: no cover - purely cosmetic
+        pass
+
+
 class SettingsDialog(QDialog):
     """Settings dialog for configuring BlitztextLinux."""
 
@@ -1360,10 +1368,7 @@ class BlitztextApp(QObject):
         if self._compose_window is None:
             window = ComposeWindow(self.llm_service, self.paste_service, self.config)
             window.prompt_saved.connect(self._on_custom_prompt_saved)
-            try:
-                window.setWindowIcon(theme.create_app_icon())
-            except Exception:  # pragma: no cover - rein kosmetisch
-                pass
+            _apply_window_icon(window)
             self._compose_window = window
         return self._compose_window
 
@@ -1409,10 +1414,7 @@ class BlitztextApp(QObject):
     def _ensure_main_window(self) -> MainWindow:
         if self._main_window is None:
             window = MainWindow(self)
-            try:
-                window.setWindowIcon(theme.create_app_icon())
-            except Exception:  # pragma: no cover - rein kosmetisch
-                pass
+            _apply_window_icon(window)
             window.set_dictation_checked(self._dictation_mode)
             if self._history_panel is not None:
                 window.set_history_count(self._history_panel.entry_count)
