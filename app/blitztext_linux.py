@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
 
@@ -674,10 +675,12 @@ class _TranscribeWorker(QRunnable):
         paste_service: PasteService,
         custom_terms: Optional[list[str]] = None,
         route_to_compose: bool = False,
+        cleanup_wav: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self.signals = _WorkerSignals()
         self.wav_file = wav_file
+        self._cleanup_wav = cleanup_wav
         self.model = model
         self.language = language
         self.backend = backend
@@ -732,9 +735,11 @@ class _TranscribeWorker(QRunnable):
         finally:
             # Clean up WAV file
             try:
-                if self.wav_file.is_file():
-                    self.wav_file.unlink()
-            except OSError as exc:
+                if self._cleanup_wav is not None:
+                    self._cleanup_wav()
+                else:
+                    self.wav_file.unlink(missing_ok=True)
+            except (OSError, AudioRecorderError) as exc:
                 logger.warning("Failed to delete temp WAV file %s: %s", self.wav_file, exc)
             self._emit("finished", self)
 
@@ -1227,6 +1232,7 @@ class BlitztextApp(QObject):
                 paste_service=self.paste_service,
                 custom_terms=self.config.custom_terms,
                 route_to_compose=route_to_compose,
+                cleanup_wav=lambda: AudioRecorder.cleanup_recording(wav_path),
             )
 
             worker.signals.status_changed.connect(self._on_worker_status_changed)
