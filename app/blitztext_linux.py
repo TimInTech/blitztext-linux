@@ -1177,6 +1177,11 @@ class BlitztextApp(QObject):
         """Laufende Aufnahme verwerfen, ohne zu transkribieren."""
         if self.state == "RECORDING":
             self.audio_recorder.discard()
+            if self.audio_recorder.is_recording():
+                self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(
+                    error="Aufnahme-Prozess konnte nicht sicher gestoppt werden."
+                ))
+                return
             self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "discarded via gui")
@@ -1195,8 +1200,8 @@ class BlitztextApp(QObject):
             route_to_compose = (
                 self._recording_routes_to_compose and self._compose_voice_routing_enabled()
             )
-            self._recording_routes_to_compose = False
             wav_path = self.audio_recorder.stop()
+            self._recording_routes_to_compose = False
             if not wav_path:
                 logger.warning("No audio was recorded")
                 self.show_tray_warning("Blitztext", "Keine Audioaufnahme erfasst.")
@@ -1240,6 +1245,8 @@ class BlitztextApp(QObject):
         except AudioRecorderError as e:
             logger.error("Failed to stop recording: %s", e)
             self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(error=e))
+            if self.audio_recorder.is_recording():
+                return
             self._recording_routes_to_compose = False
             self.current_workflow = None
             self._set_state("IDLE", "recording stop failed")
@@ -1504,6 +1511,11 @@ class BlitztextApp(QObject):
     def quit_app(self) -> None:
         logger.info("Quitting application...")
         self.audio_recorder.discard()
+        if self.audio_recorder.is_recording():
+            self.show_tray_error(t("error.recording.title"), t("error.recording.stop_failed").format(
+                error="Aufnahme-Prozess konnte nicht sicher gestoppt werden."
+            ))
+            return
         self.stop_hotkey_worker()
         if self._tts_window is not None:
             self._tts_window.close()
