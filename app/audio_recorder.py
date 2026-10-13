@@ -5,8 +5,8 @@ Starts and stops audio recordings via parec (PulseAudio/PipeWire).
 Design:
 - Synchron (kein Thread): der aufrufende Thread blockiert nicht,
   parec laeuft als Hintergrundprozess.
-- Stale-PID-Schutz: abgestuerzte parec-Prozesse werden erkannt
-  und der PID-File wird bereinigt, bevor der naechste Start versucht wird.
+- Only the child started by this instance can be controlled, using a pidfd.
+  PID files are untrusted status markers, never signal targets.
 - XDG_RUNTIME_DIR ist Pflicht (kein /tmp-Fallback, sicherheitsrelevant).
 """
 from __future__ import annotations
@@ -16,6 +16,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -26,6 +27,14 @@ logger = logging.getLogger("blitztext.audio_recorder")
 _RATE = 16000
 _CHANNELS = 1
 _LATENCY_MS = 100
+_STOP_TIMEOUT = 2.0
+# The child cannot capture audio until the parent has pinned its identity. EOF
+# aborts startup without a signal; exec preserves the PID and its pidfd binding.
+_START_GATE = (
+    "import os, sys\n"
+    "if sys.stdin.buffer.read(1) == b'1':\n"
+    "    os.execvp(sys.argv[1], sys.argv[1:])\n"
+)
 
 
 class AudioRecorderError(Exception):
@@ -63,13 +72,15 @@ class AudioRecorder:
         self._pid_file = self._runtime_dir / f"blitztext-linux-{user}.pid"
         self._wav_file = self._runtime_dir / f"blitztext-linux-{user}.wav"
         self._parec_err = self._runtime_dir / f"blitztext-linux-{user}.parec.err"
+        self._process: Optional[subprocess.Popen] = None
+        self._pidfd: Optional[int] = None
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def is_recording(self) -> bool:
-        """True, wenn ein parec-Prozess aktiv laeuft (PID-File existiert und Prozess lebt)."""
+        """True only while this instance's recording child is alive."""
         return self._live_pid() is not None
 
     def start_recording(self, device: str = "@DEFAULT_SOURCE@") -> Path:
@@ -104,9 +115,9 @@ class AudioRecorder:
         # Stale PID guard for interrupted recording processes.
         self._cleanup_stale_pid()
 
-        if self._pid_file.is_file():
+        if self._process is not None:
             raise AudioRecorderError(
-                "Aufnahme laeuft bereits (PID-File vorhanden). Zuerst stop() aufrufen."
+                "Aufnahme laeuft bereits. Zuerst stop() aufrufen."
             )
 
         if not self._pipewire_available():
@@ -115,11 +126,21 @@ class AudioRecorder:
         if not self._device_exists(device):
             raise AudioRecorderError(f"Mikrofon nicht gefunden: {device!r}")
 
+        # Fail before starting capture on kernels without safe process handles.
+        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise AudioRecorderError("Sichere Aufnahme-Prozessverwaltung benoetigt Linux pidfd-Unterstuetzung.")
+        try:
+            probe_fd = os.pidfd_open(os.getpid())
+            os.close(probe_fd)
+        except OSError as exc:
+            raise AudioRecorderError("Linux pidfd-Unterstuetzung ist nicht verfuegbar.") from exc
+
         self._parec_err.unlink(missing_ok=True)
         err_fh = open(self._parec_err, "wb")
         try:
             proc = subprocess.Popen(
                 [
+                    sys.executable, "-I", "-S", "-c", _START_GATE,
                     "parec",
                     f"--device={device}",
                     "--file-format=wav",
@@ -130,16 +151,49 @@ class AudioRecorder:
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=err_fh,
+                stdin=subprocess.PIPE,
             )
+        except OSError as exc:
+            raise AudioRecorderError(f"Aufnahme-Prozess konnte nicht gestartet werden: {exc}") from exc
         finally:
             err_fh.close()
 
-        self._pid_file.write_text(f"{proc.pid}\n")
+        # This local Popen child has not been polled/reaped or exposed to another
+        # caller yet. Its PID cannot be recycled before pidfd_open pins it.
+        try:
+            pidfd = os.pidfd_open(proc.pid)
+        except OSError as exc:
+            # EOF ends the gate without starting parec or trusting a numeric PID.
+            self._process = proc
+            proc.stdin.close()
+            try:
+                proc.wait(timeout=_STOP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                logger.warning("Aufnahme-Startbarriere ist noch nicht beendet (PID=%d).", proc.pid)
+            else:
+                self._release_process()
+            raise AudioRecorderError(
+                "Aufnahme-Prozess konnte nicht sicher vorbereitet werden; Aufnahme nicht gestartet."
+            ) from exc
+        self._process = proc
+        self._pidfd = pidfd
+
+        try:
+            self._pid_file.write_text(f"{proc.pid}\n")
+            # No shell interpolation; all parec arguments cross exec as argv.
+            with proc.stdin:
+                proc.stdin.write(b"1")
+        except OSError as exc:
+            if not proc.stdin.closed:
+                proc.stdin.close()
+            if self._stop_owned_process():
+                self._wav_file.unlink(missing_ok=True)
+            raise AudioRecorderError("Aufnahme-Prozess konnte nicht freigegeben werden.") from exc
 
         # Kurz warten und sicherstellen, dass parec nicht sofort abgestuerzt ist
         time.sleep(0.2)
         if proc.poll() is not None:
-            self._pid_file.unlink(missing_ok=True)
+            self._release_process()
             self._wav_file.unlink(missing_ok=True)
             detail = self._read_parec_err()
             msg = f"parec sofort abgestuerzt: {detail}" if detail else "parec sofort abgestuerzt."
@@ -157,20 +211,11 @@ class AudioRecorder:
         Raises:
             AudioRecorderError: Wenn keine Aufnahme lief.
         """
-        self._cleanup_stale_pid()
-
-        if not self._pid_file.is_file():
+        if self._live_pid() is None:
             raise AudioRecorderError("stop() aufgerufen, obwohl keine Aufnahme laeuft.")
 
-        pid = self._read_pid()
-        self._pid_file.unlink(missing_ok=True)
-
-        if pid is not None:
-            try:
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(0.4)  # parec Zeit geben, WAV-Header abzuschliessen
-            except (ProcessLookupError, PermissionError, OSError) as exc:
-                logger.debug("SIGTERM fehlgeschlagen (PID=%d): %s", pid, exc)
+        if not self._stop_owned_process():
+            raise AudioRecorderError("Aufnahme-Prozess konnte nicht sicher gestoppt werden.")
 
         if not self._wav_file.is_file() or self._wav_file.stat().st_size == 0:
             detail = self._read_parec_err()
@@ -188,13 +233,10 @@ class AudioRecorder:
         """Bricht die laufende Aufnahme ab, ohne zu transkribieren.
         WAV-Datei wird geloescht. Kein Fehler wenn keine Aufnahme lief.
         """
-        pid = self._live_pid()
-        self._pid_file.unlink(missing_ok=True)
-        if pid is not None:
-            try:
-                os.kill(pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
+        if self._live_pid() is not None and not self._stop_owned_process():
+            # Preserve the handle and files rather than pretending capture ended.
+            logger.warning("Aufnahme konnte nicht sicher verworfen werden.")
+            return
         self._wav_file.unlink(missing_ok=True)
         logger.debug("Aufnahme verworfen.")
 
@@ -203,39 +245,53 @@ class AudioRecorder:
     # ------------------------------------------------------------------
 
     def _live_pid(self) -> Optional[int]:
-        """Gibt PID zurueck wenn Prozess lebt, sonst None. Bereinigt Stale-PID."""
-        if not self._pid_file.is_file():
-            return None
-        pid = self._read_pid()
-        if pid is None:
-            self._pid_file.unlink(missing_ok=True)
-            return None
-        try:
-            os.kill(pid, 0)
-            return pid
-        except OSError:
-            self._pid_file.unlink(missing_ok=True)
-            return None
+        """Return only the owned child PID; never trust or probe a PID file."""
+        if self._process is not None and self._process.poll() is None:
+            return self._process.pid
+        self._release_process()
+        return None
 
     def _cleanup_stale_pid(self) -> None:
-        """Entfernt PID-File wenn Prozess nicht mehr laeuft (Stale-PID-Schutz)."""
-        if not self._pid_file.is_file():
-            return
-        pid = self._read_pid()
-        if pid is None:
-            self._pid_file.unlink(missing_ok=True)
-            return
-        try:
-            os.kill(pid, 0)  # Signal 0 = nur Existenz-Check, kein Kill
-        except OSError:
-            logger.debug("Stale PID %d bereinigt.", pid)
-            self._pid_file.unlink(missing_ok=True)
+        """Clean up markers without adopting or signalling unowned processes."""
+        self._live_pid()
 
-    def _read_pid(self) -> Optional[int]:
+    def _release_process(self) -> None:
+        """Release the identity handle only after the child has stopped."""
+        if self._pidfd is not None:
+            os.close(self._pidfd)
+            self._pidfd = None
+        self._process = None
         try:
-            return int(self._pid_file.read_text().strip())
-        except (OSError, ValueError):
-            return None
+            self._pid_file.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Aufnahme-PID-Marker konnte nicht entfernt werden: %s", exc)
+
+    def _stop_owned_process(self) -> bool:
+        """Signal the pinned child, even if its numeric PID is later recycled."""
+        proc = self._process
+        if proc is None:
+            return True
+        if self._pidfd is None:
+            logger.warning("Kein verifizierter Prozess-Handle fuer Aufnahme-PID %d.", proc.pid)
+            return False
+        try:
+            try:
+                signal.pidfd_send_signal(self._pidfd, signal.SIGTERM)
+            except ProcessLookupError:
+                pass  # The pinned child exited before delivery; no PID fallback.
+            try:
+                proc.wait(timeout=_STOP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                try:
+                    signal.pidfd_send_signal(self._pidfd, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait(timeout=_STOP_TIMEOUT)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            logger.warning("Aufnahme-Prozess konnte nicht gestoppt werden: %s", exc)
+            return False
+        self._release_process()
+        return True
 
     def _read_parec_err(self) -> str:
         try:
