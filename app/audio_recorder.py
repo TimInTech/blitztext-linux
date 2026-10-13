@@ -15,8 +15,10 @@ import logging
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -57,23 +59,174 @@ class AudioRecorder:
             runtime_dir: Pfad fuer PID- und WAV-Dateien.
                          Standard: $XDG_RUNTIME_DIR (Pflicht).
         """
-        if runtime_dir is not None:
-            self._runtime_dir = runtime_dir
-        else:
-            rt = os.environ.get("XDG_RUNTIME_DIR", "")
-            if not rt or not Path(rt).is_dir():
-                raise AudioRecorderError(
-                    "XDG_RUNTIME_DIR ist nicht gesetzt oder existiert nicht. "
-                    "AudioRecorder kann nicht initialisiert werden."
-                )
-            self._runtime_dir = Path(rt)
-
-        user = os.environ.get("USER", "user")
-        self._pid_file = self._runtime_dir / f"blitztext-linux-{user}.pid"
-        self._wav_file = self._runtime_dir / f"blitztext-linux-{user}.wav"
-        self._parec_err = self._runtime_dir / f"blitztext-linux-{user}.parec.err"
+        rt = runtime_dir if runtime_dir is not None else os.environ.get("XDG_RUNTIME_DIR", "")
+        if not rt:
+            raise AudioRecorderError("XDG_RUNTIME_DIR ist nicht gesetzt.")
+        self._runtime_dir = Path(rt)
         self._process: Optional[subprocess.Popen] = None
         self._pidfd: Optional[int] = None
+        self._runtime_fd: int | None = None
+        self._job_fd: int | None = None
+        self._new_job()
+
+    @staticmethod
+    def _open_runtime(path: Path) -> int:
+        """Walk an absolute path without following links, then check privacy.
+
+        Parents must be owned by root or this effective UID and not writable by
+        others. Root-owned sticky directories (e.g. /tmp in isolated tests) are
+        safe parents: other users cannot rename our private child directory.
+        """
+        if not path.is_absolute() or ".." in path.parts:
+            raise AudioRecorderError("Recorder-Runtime muss ein absoluter Pfad ohne '..' sein.")
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        fd = os.open("/", flags)
+        try:
+            for component in path.parts[1:]:
+                parent = os.fstat(fd)
+                sticky_root = parent.st_uid == 0 and bool(parent.st_mode & stat.S_ISVTX)
+                if parent.st_uid not in (0, os.geteuid()) or (parent.st_mode & 0o022 and not sticky_root):
+                    raise AudioRecorderError("Unsicheres Elternverzeichnis der Recorder-Runtime.")
+                child = os.open(component, flags, dir_fd=fd)
+                os.close(fd)
+                fd = child
+            info = os.fstat(fd)
+            if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+                raise AudioRecorderError("Recorder-Runtime muss dem Benutzer gehoeren und Rechte 0700 haben.")
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    def _new_job(self) -> None:
+        """Create a unique private job through a verified directory handle."""
+        runtime_fd = None
+        job_fd = None
+        created = None
+        try:
+            runtime_fd = self._open_runtime(self._runtime_dir)
+            # The procfs path pins creation to the checked inode, including when
+            # a pathname is renamed during startup. mkdtemp uses atomic mkdir.
+            created = Path(tempfile.mkdtemp(prefix="blitztext-recording-", dir=f"/proc/self/fd/{runtime_fd}"))
+            job_fd = os.open(created.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=runtime_fd)
+            os.fchmod(job_fd, 0o700)
+        except OSError as exc:
+            if job_fd is not None:
+                os.close(job_fd)
+            if runtime_fd is not None:
+                try:
+                    if created is not None:
+                        os.rmdir(created.name, dir_fd=runtime_fd)
+                finally:
+                    os.close(runtime_fd)
+            raise AudioRecorderError("Sichere Recorder-Runtime konnte nicht erstellt werden.") from exc
+        except BaseException:
+            if runtime_fd is not None:
+                os.close(runtime_fd)
+            raise
+        self._runtime_fd = runtime_fd
+        self._job_fd = job_fd
+        self._job_name = created.name
+        self._job_dir = self._runtime_dir / self._job_name
+        self._pid_file = self._job_dir / "recorder.pid"
+        self._wav_file = self._job_dir / "recording.wav"
+        self._parec_err = self._job_dir / "parec.err"
+
+    def _check_job(self) -> None:
+        """Recheck permissions and pathname identity before handing out paths."""
+        try:
+            fd = self._open_runtime(self._runtime_dir)
+            try:
+                current = os.fstat(fd)
+                pinned = os.fstat(self._runtime_fd)
+                if (current.st_dev, current.st_ino) != (pinned.st_dev, pinned.st_ino):
+                    raise AudioRecorderError("Recorder-Runtime wurde ersetzt.")
+                job = os.stat(self._job_name, dir_fd=fd, follow_symlinks=False)
+                pinned_job = os.fstat(self._job_fd)
+                if (
+                    (job.st_dev, job.st_ino) != (pinned_job.st_dev, pinned_job.st_ino)
+                    or not stat.S_ISDIR(job.st_mode)
+                    or job.st_uid != os.geteuid()
+                    or stat.S_IMODE(job.st_mode) != 0o700
+                ):
+                    raise AudioRecorderError("Recorder-Jobverzeichnis ist unsicher oder wurde ersetzt.")
+            finally:
+                os.close(fd)
+        except OSError as exc:
+            raise AudioRecorderError("Recorder-Runtime konnte nicht sicher geprueft werden.") from exc
+
+    def _create_file(self, name: str):
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=self._job_fd)
+        try:
+            # Also retain 0600 under a restrictive caller umask.
+            os.fchmod(fd, 0o600)
+            return os.fdopen(fd, "wb")
+        except BaseException:
+            os.close(fd)
+            raise
+
+    def _unlink_file(self, name: str) -> None:
+        if self._job_fd is None:
+            return
+        try:
+            os.unlink(name, dir_fd=self._job_fd)
+        except FileNotFoundError:
+            pass
+
+    def _finish_job(self, *, keep_wav: bool = False) -> None:
+        """Never remove a successful WAV: its consumer owns that lifecycle."""
+        if self._job_fd is None:
+            return
+        try:
+            for name in ("recorder.pid", "parec.err") + (() if keep_wav else ("recording.wav",)):
+                self._unlink_file(name)
+            if not keep_wav:
+                entry = os.stat(self._job_name, dir_fd=self._runtime_fd, follow_symlinks=False)
+                pinned = os.fstat(self._job_fd)
+                if (entry.st_dev, entry.st_ino) == (pinned.st_dev, pinned.st_ino):
+                    os.rmdir(self._job_name, dir_fd=self._runtime_fd)
+        except OSError as exc:
+            logger.warning("Recorder-Job konnte nicht vollstaendig entfernt werden: %s", exc)
+        finally:
+            self._close_job_handles()
+
+    def _close_job_handles(self) -> None:
+        for attr in ("_job_fd", "_runtime_fd"):
+            fd = getattr(self, attr, None)
+            if fd is not None:
+                os.close(fd)
+                setattr(self, attr, None)
+
+    def __del__(self) -> None:
+        # Successful stop has already detached the job, preserving its WAV.
+        # Remove unused jobs, but never unlink files of a retained child.
+        if getattr(self, "_job_fd", None) is not None and getattr(self, "_process", None) is None:
+            self._finish_job()
+        else:
+            self._close_job_handles()
+
+    @classmethod
+    def cleanup_recording(cls, wav: Path) -> None:
+        """Worker-only cleanup after transcription, independent of later jobs."""
+        runtime_fd = cls._open_runtime(wav.parent.parent)
+        job_fd = None
+        try:
+            if wav.name != "recording.wav" or not wav.parent.name.startswith("blitztext-recording-"):
+                raise AudioRecorderError("Ungueltiger Recorder-Jobpfad.")
+            job_fd = os.open(wav.parent.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=runtime_fd)
+            info = os.fstat(job_fd)
+            if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+                raise AudioRecorderError("Unsicheres Recorder-Jobverzeichnis.")
+            for name in ("recording.wav", "recorder.pid", "parec.err"):
+                try:
+                    os.unlink(name, dir_fd=job_fd)
+                except FileNotFoundError:
+                    pass
+            os.rmdir(wav.parent.name, dir_fd=runtime_fd)
+        finally:
+            if job_fd is not None:
+                os.close(job_fd)
+            os.close(runtime_fd)
 
     # ------------------------------------------------------------------
     # Public API
@@ -135,8 +288,19 @@ class AudioRecorder:
         except OSError as exc:
             raise AudioRecorderError("Linux pidfd-Unterstuetzung ist nicht verfuegbar.") from exc
 
-        self._parec_err.unlink(missing_ok=True)
-        err_fh = open(self._parec_err, "wb")
+        if self._job_fd is None:
+            self._new_job()
+        self._check_job()
+        try:
+            wav_fh = self._create_file("recording.wav")
+            try:
+                err_fh = self._create_file("parec.err")
+            except BaseException:
+                wav_fh.close()
+                raise
+        except OSError as exc:
+            self._finish_job()
+            raise AudioRecorderError("Recorder-Dateien konnten nicht sicher erstellt werden.") from exc
         try:
             proc = subprocess.Popen(
                 [
@@ -147,16 +311,19 @@ class AudioRecorder:
                     f"--rate={_RATE}",
                     f"--channels={_CHANNELS}",
                     f"--latency-msec={_LATENCY_MS}",
-                    str(self._wav_file),
+                    f"/proc/self/fd/{wav_fh.fileno()}",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=err_fh,
                 stdin=subprocess.PIPE,
+                pass_fds=(wav_fh.fileno(),),
             )
         except OSError as exc:
+            self._finish_job()
             raise AudioRecorderError(f"Aufnahme-Prozess konnte nicht gestartet werden: {exc}") from exc
         finally:
             err_fh.close()
+            wav_fh.close()
 
         # This local Popen child has not been polled/reaped or exposed to another
         # caller yet. Its PID cannot be recycled before pidfd_open pins it.
@@ -172,6 +339,7 @@ class AudioRecorder:
                 logger.warning("Aufnahme-Startbarriere ist noch nicht beendet (PID=%d).", proc.pid)
             else:
                 self._release_process()
+                self._finish_job()
             raise AudioRecorderError(
                 "Aufnahme-Prozess konnte nicht sicher vorbereitet werden; Aufnahme nicht gestartet."
             ) from exc
@@ -179,7 +347,8 @@ class AudioRecorder:
         self._pidfd = pidfd
 
         try:
-            self._pid_file.write_text(f"{proc.pid}\n")
+            with self._create_file("recorder.pid") as marker:
+                marker.write(f"{proc.pid}\n".encode("ascii"))
             # No shell interpolation; all parec arguments cross exec as argv.
             with proc.stdin:
                 proc.stdin.write(b"1")
@@ -187,17 +356,24 @@ class AudioRecorder:
             if not proc.stdin.closed:
                 proc.stdin.close()
             if self._stop_owned_process():
-                self._wav_file.unlink(missing_ok=True)
+                self._finish_job()
             raise AudioRecorderError("Aufnahme-Prozess konnte nicht freigegeben werden.") from exc
 
         # Kurz warten und sicherstellen, dass parec nicht sofort abgestuerzt ist
         time.sleep(0.2)
         if proc.poll() is not None:
             self._release_process()
-            self._wav_file.unlink(missing_ok=True)
             detail = self._read_parec_err()
+            self._finish_job()
             msg = f"parec sofort abgestuerzt: {detail}" if detail else "parec sofort abgestuerzt."
             raise AudioRecorderError(msg)
+
+        try:
+            self._check_job()
+        except AudioRecorderError:
+            if self._stop_owned_process():
+                self._finish_job()
+            raise
 
         logger.debug("Aufnahme gestartet: PID=%d device=%s", proc.pid, device)
         return self._wav_file
@@ -217,16 +393,27 @@ class AudioRecorder:
         if not self._stop_owned_process():
             raise AudioRecorderError("Aufnahme-Prozess konnte nicht sicher gestoppt werden.")
 
-        if not self._wav_file.is_file() or self._wav_file.stat().st_size == 0:
+        try:
+            self._check_job()
+            info = os.stat("recording.wav", dir_fd=self._job_fd, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != 0o600
+            ):
+                raise AudioRecorderError("Unsichere WAV-Datei.")
+        except (OSError, AudioRecorderError) as exc:
+            self._finish_job()
+            raise AudioRecorderError("WAV-Datei konnte nicht sicher geprueft werden.") from exc
+        if info.st_size == 0:
             detail = self._read_parec_err()
-            self._wav_file.unlink(missing_ok=True)
-            if detail:
-                logger.warning("Kein Audio aufgezeichnet: %s", detail)
-            else:
-                logger.warning("Kein Audio aufgezeichnet (leere WAV-Datei).")
+            self._finish_job()
+            logger.warning("Kein Audio aufgezeichnet: %s", detail or "leere WAV-Datei")
             return None
 
-        logger.debug("Aufnahme gestoppt: %s (%d Bytes)", self._wav_file, self._wav_file.stat().st_size)
+        logger.debug("Aufnahme gestoppt: %s (%d Bytes)", self._job_name, info.st_size)
+        self._finish_job(keep_wav=True)
         return self._wav_file
 
     def discard(self) -> None:
@@ -237,7 +424,7 @@ class AudioRecorder:
             # Preserve the handle and files rather than pretending capture ended.
             logger.warning("Aufnahme konnte nicht sicher verworfen werden.")
             return
-        self._wav_file.unlink(missing_ok=True)
+        self._finish_job()
         logger.debug("Aufnahme verworfen.")
 
     # ------------------------------------------------------------------
@@ -248,7 +435,10 @@ class AudioRecorder:
         """Return only the owned child PID; never trust or probe a PID file."""
         if self._process is not None and self._process.poll() is None:
             return self._process.pid
+        had_process = self._process is not None
         self._release_process()
+        if had_process:
+            self._finish_job()
         return None
 
     def _cleanup_stale_pid(self) -> None:
@@ -262,7 +452,7 @@ class AudioRecorder:
             self._pidfd = None
         self._process = None
         try:
-            self._pid_file.unlink(missing_ok=True)
+            self._unlink_file("recorder.pid")
         except OSError as exc:
             logger.warning("Aufnahme-PID-Marker konnte nicht entfernt werden: %s", exc)
 
@@ -294,14 +484,19 @@ class AudioRecorder:
         return True
 
     def _read_parec_err(self) -> str:
+        if self._job_fd is None:
+            return ""
         try:
-            if self._parec_err.is_file() and self._parec_err.stat().st_size > 0:
-                text = self._parec_err.read_text(errors="replace").strip()
+            fd = os.open("parec.err", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=self._job_fd)
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+                    return ""
+                text = stream.read(4096).decode(errors="replace").strip()
                 first = text.splitlines()[0] if text else ""
                 return (first[:157] + "...") if len(first) > 160 else first
         except OSError:
-            pass
-        return ""
+            return ""
 
     @staticmethod
     def _pipewire_available() -> bool:
