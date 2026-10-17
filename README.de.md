@@ -42,6 +42,7 @@ Blitztext Linux ist ein Hotkey-gesteuerter Sprachassistent, der gesprochene Spra
 - **OpenRouter & eigene LLM-Endpunkte:** Nutze OpenRouter oder eine beliebige OpenAI-kompatible API als Alternative zu OpenAI für alle KI-Workflows.
 - **Audio-Export:** Speichere die Ausgabe der Vorlesefunktion direkt als Audiodatei.
 - **Eigennamen / Begriffe:** Erweitere das Vokabular der KI um eigene Begriffe, Namen oder Fachwörter für perfekte Transkriptionen.
+- **Lokale Transkript-Bereinigung:** Vor dem Einfügen bzw. Umschreiben werden Füllwörter („äh“) und Stottern entfernt, Wörter mit denselben Buchstaben wie einer deiner Begriffe erhalten deine Schreibweise („Blitz Text“ → „Blitztext“), und optionale feste Regeln aus `workflows.replacements` in der `config.json` (`{"spoken": "n acht n", "written": "n8n"}`) werden angewendet. Ohne KI, alles andere bleibt unverändert.
 - **Globale Hotkeys:** Jederzeit von überall im System aufnehmen.
 - **Auto-Paste:** Erkennt Sprache und fügt sie direkt dort ein, wo der Cursor ist.
 - **LLM-gestützte Workflows:** Lass die KI deine Sätze professionell umformulieren, emotional filtern oder mit passenden Emojis anreichern.

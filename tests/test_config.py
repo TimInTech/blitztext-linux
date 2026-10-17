@@ -102,6 +102,16 @@ class TestWorkflowConfig:
         assert loaded.emoji_density == "mittel"
         assert loaded.custom_terms == []
 
+    def test_replacements_are_sanitized(self, config):
+        config.replacements = [
+            {"spoken": " n acht n ", "written": "n8n"},
+            {"spoken": "", "written": "x"},
+            {"spoken": "a"},
+            "kaputt",
+            {"spoken": "N ACHT N", "written": "dup"},
+        ]
+        assert config.replacements == [{"spoken": "n acht n", "written": "n8n"}]
+
     def test_custom_terms_are_sanitized(self, config):
         config.custom_terms = [" Blitztext ", "Blitztext", "", "OpenRouter", 123]
         assert config.custom_terms == ["Blitztext", "OpenRouter"]

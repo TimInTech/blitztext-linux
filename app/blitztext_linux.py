@@ -47,6 +47,7 @@ from app.writing_presets import (
 from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe
+from app.transcript_cleanup import clean_transcript
 from app.paste_service import PasteService, PasteServiceError
 from app.history_panel import HistoryPanel
 from app.compose_window import ComposeWindow
@@ -675,6 +676,7 @@ class _TranscribeWorker(QRunnable):
         paste_service: PasteService,
         custom_terms: Optional[list[str]] = None,
         route_to_compose: bool = False,
+        replacements: Optional[list[dict[str, str]]] = None,
         cleanup_wav: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
@@ -689,6 +691,7 @@ class _TranscribeWorker(QRunnable):
         self.autopaste = autopaste
         self.paste_service = paste_service
         self.custom_terms = list(custom_terms or [])
+        self.replacements = list(replacements or [])
         self.route_to_compose = route_to_compose
 
     def _emit(self, signal_name: str, *args) -> None:
@@ -707,6 +710,7 @@ class _TranscribeWorker(QRunnable):
                 backend=self.backend,
                 custom_terms=self.custom_terms,
             )
+            transcript = clean_transcript(transcript, self.custom_terms, self.replacements, self.language)
 
             if not transcript or not transcript.strip():
                 self._emit("no_speech")
@@ -1249,6 +1253,7 @@ class BlitztextApp(QObject):
                 autopaste=self.config.autopaste,
                 paste_service=self.paste_service,
                 custom_terms=self.config.custom_terms,
+                replacements=self.config.replacements,
                 route_to_compose=route_to_compose,
                 cleanup_wav=lambda: AudioRecorder.cleanup_recording(wav_path),
             )

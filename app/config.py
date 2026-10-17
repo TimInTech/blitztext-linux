@@ -56,6 +56,7 @@ DEFAULTS: dict[str, Any] = {
         "emoji_density": "mittel",
         "dampf_system_prompt": "",
         "custom_terms": [],
+        "replacements": [],
         "writing_preset": DEFAULT_PRESET_KEY,
     },
     "ui_language": I18N_DEFAULT_LANGUAGE,
@@ -484,6 +485,14 @@ class BlitztextConfig:
             self._data["workflows"]["text_improver_tone"] = migrated_tone
 
     @property
+    def replacements(self) -> list[dict[str, str]]:
+        return [dict(rule) for rule in self._data["workflows"].get("replacements", [])]
+
+    @replacements.setter
+    def replacements(self, value: list[dict[str, str]]) -> None:
+        self._data["workflows"]["replacements"] = _sanitize_replacements(value)
+
+    @property
     def custom_terms(self) -> list[str]:
         return list(self._data["workflows"].get("custom_terms", []))
 
@@ -603,6 +612,7 @@ class BlitztextConfig:
         if migrated_tone is not None:
             wf["text_improver_tone"] = migrated_tone
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
+        wf["replacements"] = _sanitize_replacements(wf.get("replacements"))
 
 
 def _normalize_env_var_name(value: Any, default: str = DEFAULTS["openai_api_key_env"]) -> str:
@@ -722,6 +732,26 @@ def _sanitize_terms(values: Any) -> list[str]:
             continue
         seen.add(term)
         result.append(term)
+    return result
+
+
+def _sanitize_replacements(values: Any) -> list[dict[str, str]]:
+    """Fixed spoken -> written rules ("n acht n" -> "n8n"); invalid entries are dropped."""
+    if not isinstance(values, list):
+        return []
+    result: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        spoken, written = value.get("spoken"), value.get("written")
+        if not isinstance(spoken, str) or not isinstance(written, str):
+            continue
+        spoken = spoken.strip()
+        if not spoken or spoken.lower() in seen:
+            continue
+        seen.add(spoken.lower())
+        result.append({"spoken": spoken, "written": written})
     return result
 
 

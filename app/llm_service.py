@@ -182,11 +182,17 @@ _MIN_DICTATION_RETENTION = 0.75
 _WORD_PATTERN = re.compile(r"\w+", re.UNICODE)
 
 
+def _fold_word(word: str) -> str:
+    """Lower case; "dass" counts as "das", since fixing that pair is part of the job."""
+    word = word.lower()
+    return "das" if word == "dass" else word
+
+
 def _keeps_dictation(source: str, result: str) -> bool:
-    source_words = Counter(word.lower() for word in _WORD_PATTERN.findall(source))
+    source_words = Counter(_fold_word(word) for word in _WORD_PATTERN.findall(source))
     if not source_words:
         return True
-    result_words = Counter(word.lower() for word in _WORD_PATTERN.findall(result))
+    result_words = Counter(_fold_word(word) for word in _WORD_PATTERN.findall(result))
     kept = sum((source_words & result_words).values())
     return kept / sum(source_words.values()) >= _MIN_DICTATION_RETENTION
 

@@ -796,3 +796,8 @@ class TestDictationSafetyNet:
         self._reply(mock_client, "Ich hätte gern einen vernünftigen Text.")
         src = "ich hätte gern ein vernünftigen text"
         assert service.rewrite(WorkflowType.TEXT_IMPROVER, src) == "Ich hätte gern einen vernünftigen Text."
+
+    def test_das_dass_fix_counts_as_the_same_word(self, service, mock_client):
+        # "das" -> "dass" is a correction the prompt asks for, not a lost word.
+        self._reply(mock_client, "Dass")
+        assert service.rewrite(WorkflowType.TEXT_IMPROVER, "das") == "Dass"

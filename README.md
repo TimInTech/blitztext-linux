@@ -42,6 +42,7 @@ Blitztext Linux is a hotkey-driven voice assistant that turns speech into text a
 - **OpenRouter & custom LLM endpoints:** Use OpenRouter or any OpenAI-compatible API as an alternative to OpenAI for all AI workflows.
 - **Audio export:** Save read-aloud output as an audio file directly from the Read Aloud window.
 - **Custom names / terms:** Extend the AI's vocabulary with your own terms, names, or technical words for perfect transcriptions.
+- **Local transcript cleanup:** Before pasting or rewriting, hesitation sounds („äh“) and stutters are removed, words that spell one of your terms with the same letters get your spelling („Blitz Text“ → „Blitztext“), and optional fixed rules from `workflows.replacements` in `config.json` (`{"spoken": "n acht n", "written": "n8n"}`) are applied. No AI involved, nothing else is changed.
 - **Global hotkeys:** Record from anywhere in the system at any time.
 - **Auto-paste:** Detects speech and pastes it right where your cursor is.
 - **LLM-powered workflows:** Let the AI rephrase your sentences professionally, filter them emotionally, or enrich them with fitting emojis.
