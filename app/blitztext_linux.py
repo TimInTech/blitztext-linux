@@ -1068,26 +1068,37 @@ class BlitztextApp(QObject):
         logger.info("Writing preset changed via main window: %s", key)
 
     def main_window_provider_changed(self, provider: str) -> None:
-        """Switch the AI provider from the main window; refuse without a usable key."""
+        """Switch between OpenAI and OpenRouter from the main window.
+
+        A custom endpoint is only changed in the settings dialog: leaving it here would
+        overwrite the user's URL and key variable, and entering it here could pair a stale
+        URL with an OpenAI key. Without a usable key the switch is refused.
+        """
         cfg = self.config
         if provider == cfg.llm_provider:
             return
         previous = (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env)
-        cfg.llm_provider = provider
-        if provider == "openrouter":
-            cfg.llm_base_url = "https://openrouter.ai/api/v1"
-            cfg.openai_api_key_env = "OPENROUTER_API_KEY"
-        elif provider == "openai":
-            cfg.llm_base_url = ""
-            cfg.openai_api_key_env = DEFAULTS["openai_api_key_env"]
         problem = None
-        if provider == "custom" and not cfg.llm_base_url:
-            problem = (t("settings.save_error.title"), t("mainwindow.provider.no_url.message"))
-        elif not cfg.resolve_llm_api_key():
-            problem = (
-                t("mainwindow.provider.no_key.title"),
-                t("mainwindow.provider.no_key.message").format(env=cfg.openai_api_key_env),
-            )
+        if provider == "custom" or cfg.llm_provider == "custom":
+            problem = (t("settings.save_error.title"), t("mainwindow.provider.custom_in_settings.message"))
+        else:
+            if cfg.llm_provider == "openai":
+                # Remember a personal OpenAI key variable so the way back restores it.
+                self._openai_key_env_memo = cfg.openai_api_key_env
+            cfg.llm_provider = provider
+            if provider == "openrouter":
+                cfg.llm_base_url = "https://openrouter.ai/api/v1"
+                cfg.openai_api_key_env = "OPENROUTER_API_KEY"
+            else:
+                cfg.llm_base_url = ""
+                cfg.openai_api_key_env = getattr(
+                    self, "_openai_key_env_memo", DEFAULTS["openai_api_key_env"]
+                )
+            if not cfg.resolve_llm_api_key():
+                problem = (
+                    t("mainwindow.provider.no_key.title"),
+                    t("mainwindow.provider.no_key.message").format(env=cfg.openai_api_key_env),
+                )
         if problem is None:
             try:
                 cfg.save()
@@ -1110,6 +1121,9 @@ class BlitztextApp(QObject):
         logger.info("LLM provider changed via main window: %s", provider)
 
     def _confirm_model_download(self, model: str) -> bool:
+        if self._main_window is not None:
+            # The selector popup is a Qt.Popup; a modal box over it would be unreliable.
+            self._main_window._options_popup.hide()
         answer = QMessageBox.question(
             self._main_window,
             t("mainwindow.model.download.title"),
@@ -1135,7 +1149,7 @@ class BlitztextApp(QObject):
             if self._main_window is not None:
                 self._main_window.set_model(previous)
             logger.error("Failed to save model: %s", exc)
-            self.show_tray_error(
+            self.show_tray_warning(
                 t("settings.save_error.title"),
                 t("settings.save_error.message").format(error=exc),
             )

@@ -57,7 +57,7 @@ _MIC_BODY = _mic_body_path()
 # tools. The window margins only reserve the measured reach of its shadow.
 _SHADOW_MARGINS = (10, 6, 10, 14)  # left, top, right, bottom
 # Quick choices only; the full list stays in the settings dialog.
-_PROVIDER_ORDER = ("openai", "openrouter", "custom")
+_PROVIDER_ORDER = ("openai", "openrouter")  # "custom" is added while it is active
 _MODEL_ORDER = ("tiny", "base", "small", "medium", "large-v3-turbo")
 _PANEL_PADDING = (10, 6, 10, 10)  # plus the 1 px QSS border
 _TOOL_GAP = 6
@@ -509,6 +509,10 @@ class MainWindow(QWidget):
 
     def set_llm_provider(self, provider: str) -> None:
         """Show the active provider without notifying the controller."""
+        if self._provider_combo.findData(provider) < 0:
+            self._provider_combo.blockSignals(True)
+            self._provider_combo.addItem(t(f"mainwindow.provider.{provider}"), userData=provider)
+            self._provider_combo.blockSignals(False)
         self._select_silently(self._provider_combo, provider)
 
     def set_model(self, model: str) -> None:

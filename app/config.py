@@ -159,6 +159,9 @@ class BlitztextConfig:
             tmp = self.config_file.with_suffix(".json.tmp")
             flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
             fd = os.open(str(tmp), flags, 0o600)
+            # Fix the mode before the file can replace the config: a failure after the
+            # replace would report an error although the new content is already live.
+            os.fchmod(fd, 0o600)
             payload = _deep_copy_without_legacy_key(self._data)
             if not self._tts_env_explicit:
                 payload.pop("tts_openai_api_key_env", None)
@@ -166,7 +169,6 @@ class BlitztextConfig:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
                 f.write("\n")
             tmp.replace(self.config_file)
-            self.config_file.chmod(0o600)
             self._data = payload
             self._legacy_openai_api_key_present = False
             self._legacy_openai_api_key_value = ""

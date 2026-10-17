@@ -386,3 +386,91 @@ class TestModeSwitch:
         assert asked == ["small"]
         assert tray_app.config.model == "base"
         assert main._model_combo.currentData() == "base"
+
+
+@gui_only
+class TestModeSwitchHardening:
+    def test_leaving_a_custom_endpoint_never_overwrites_it(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.llm_provider = "custom"
+        cfg.llm_base_url = "https://llm.example.org/v1"
+        cfg.openai_api_key_env = "MY_CUSTOM_KEY"
+        tray_app._ensure_main_window().set_llm_provider("custom")
+
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env) == (
+            "custom", "https://llm.example.org/v1", "MY_CUSTOM_KEY")
+        assert tray_app._main_window._provider_combo.currentData() == "custom"
+
+    def test_custom_is_not_a_target_of_the_quick_switch(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.llm_provider = "openai"
+        cfg.llm_base_url = "https://stale.example.org/v1"
+
+        tray_app.main_window_provider_changed("custom")
+
+        assert cfg.llm_provider == "openai"
+
+    def test_custom_key_variable_survives_openai_openrouter_round_trip(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        monkeypatch.setenv("WORK_OPENAI_KEY", "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.llm_provider = "openai"
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+
+        tray_app.main_window_provider_changed("openrouter")
+        tray_app.main_window_provider_changed("openai")
+
+        assert cfg.openai_api_key_env == "WORK_OPENAI_KEY"
+        assert cfg.llm_base_url == ""
+
+    def test_failed_provider_save_restores_state_and_combo(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        main = tray_app._ensure_main_window()
+        before = (tray_app.config.llm_provider, tray_app.config.llm_base_url,
+                  tray_app.config.openai_api_key_env)
+        monkeypatch.setattr(tray_app.config, "save", lambda: (_ for _ in ()).throw(OSError("disk full")))
+
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert (tray_app.config.llm_provider, tray_app.config.llm_base_url,
+                tray_app.config.openai_api_key_env) == before
+        assert main._provider_combo.currentData() == before[0]
+
+    def test_failed_model_save_restores_state_and_does_not_latch_an_error(self, tray_app, monkeypatch):
+        main = tray_app._ensure_main_window()
+        tray_app.config.model = "base"
+        monkeypatch.setattr(tray_app.config, "save", lambda: (_ for _ in ()).throw(OSError("disk full")))
+
+        tray_app.main_window_model_changed("tiny")
+
+        assert tray_app.config.model == "base"
+        assert main._model_combo.currentData() == "base"
+        assert tray_app._tray_error_message in (None, "")
+
+    def test_unchanged_model_is_a_noop(self, tray_app, monkeypatch):
+        tray_app.config.model = "base"
+        calls = []
+        monkeypatch.setattr(tray_app.config, "save", lambda: calls.append(1))
+        monkeypatch.setattr(tray_app, "_confirm_model_download", lambda m: calls.append("ask") or True)
+
+        tray_app.main_window_model_changed("base")
+
+        assert calls == []
+
+    def test_model_prompt_closes_the_popup_first(self, tray_app, monkeypatch):
+        main = tray_app._ensure_main_window()
+        main._show_options_popup()
+        seen = []
+        from PyQt6.QtWidgets import QMessageBox
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            staticmethod(lambda *a, **k: seen.append(main._options_popup.isVisible()) or QMessageBox.StandardButton.No),
+        )
+
+        tray_app.main_window_model_changed("small")
+
+        assert seen == [False]

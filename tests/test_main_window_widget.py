@@ -700,7 +700,7 @@ def test_mode_combos_live_in_the_popup_and_report_changes(qapp):
     qapp.processEvents()
 
     providers = [window._provider_combo.itemData(i) for i in range(window._provider_combo.count())]
-    assert providers == ["openai", "openrouter", "custom"]
+    assert providers == ["openai", "openrouter"]  # custom only shows while active
     models = [window._model_combo.itemData(i) for i in range(window._model_combo.count())]
     assert models[:3] == ["tiny", "base", "small"]
 
@@ -797,3 +797,15 @@ def test_provider_selector_stays_usable_in_every_mode_when_idle(qapp):
     for workflow in WorkflowType:
         window.update_state("IDLE", workflow, None)
         assert window._provider_combo.isEnabled(), workflow
+
+
+@gui_only
+def test_mode_summary_tells_dictate_and_local_apart(qapp):
+    from app.main_window import MainWindow
+    from app.workflows import WorkflowType
+
+    window = MainWindow(_Controller())
+    window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
+    first = window._mode_label.text()
+    window.update_state("IDLE", WorkflowType.LOCAL, None)
+    assert window._mode_label.text() != first

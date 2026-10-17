@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import BlitztextConfig
+from app.config import BlitztextConfig, ConfigError
 
 
 @pytest.fixture
@@ -810,3 +810,23 @@ def test_goal_unknown_saved_id_falls_back_without_deleting_custom_prompt(config_
 
     assert loaded.writing_preset == "standard"
     assert loaded.compose_custom_preset_text == custom_prompt
+
+
+def test_failed_mode_change_never_replaces_the_existing_config(tmp_path, monkeypatch):
+    """A save error must leave the file on disk exactly as it was."""
+    import os
+
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    cfg.model = "base"
+    cfg.save()
+    before = cfg.config_file.read_text(encoding="utf-8")
+
+    def broken_fchmod(fd, mode):
+        raise OSError("chmod refused")
+
+    monkeypatch.setattr(os, "fchmod", broken_fchmod)
+    cfg.model = "tiny"
+    with pytest.raises(ConfigError):
+        cfg.save()
+
+    assert cfg.config_file.read_text(encoding="utf-8") == before

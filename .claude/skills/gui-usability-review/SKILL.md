@@ -42,7 +42,7 @@ The driver only reads the UI with a fake controller; nothing to roll back. Abort
 review if the screenshots are blank (check `QT_QPA_PLATFORM=offscreen`).
 
 ## Known pitfalls
-- A drop-down counts as two clicks (open, choose).
+- A drop-down counts as two clicks (open, choose); the driver sets the combo index directly, so budgets are assumed clicks, not measured ones.
 - Offscreen renders no native Wayland decorations or real fonts; judge layout, not font metrics.
 - Setting a combo to its current value emits no signal; set a different state first.
 - Reviewer prompts must never include the source, or the rating is no longer blind.
