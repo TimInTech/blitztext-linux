@@ -571,8 +571,8 @@ The original project is an experimental, non-commercial open-source project unde
   <sub>Made with ❤️ (and a little AI help).</sub>
 </div>
 
-### Latest release notes (v0.8.1): Intent-preserving prompts and diagnostics
+### Latest release notes (v0.9.0): Local | With AI switch and safer recording
 
-Blitztext+ and the writing presets now preserve the user's intent more conservatively. They avoid inventing meetings, participants, recipients, roles, or goals when rewriting spoken work instructions or handover prompts. Email presets only use email-like structure when the input is clearly meant as a message to someone.
+The main window has a visible Local | With AI switch, quick switches for the AI provider and the Whisper model, and a small settings gear. Dictated text is cleaned locally (term joining, replacements, fillers, stutters) before pasting or rewriting.
 
-The Linux verification script also includes improved session-aware desktop diagnostics for X11, Wayland, and clipboard backends. The compatibility matrix is diagnostic guidance, not a support promise.
+AI recordings without a usable key are refused before the audio starts, from the button and from hotkeys alike. Compose voice routing keeps working without a key. Personal key variable names (names only, never key values) survive provider switches and restarts, and a failed config save no longer leaves a temp file behind.

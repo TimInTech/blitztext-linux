@@ -573,8 +573,8 @@ Das Original-Projekt ist ein experimentelles, nicht-kommerzielles Open-Source-Pr
   <sub>Erstellt mit ❤️ (und ein bisschen KI-Hilfe).</sub>
 </div>
 
-### Neueste Release-Notizen (v0.8.1): Absichtstreue Prompts und bessere Diagnose
+### Neueste Release-Notizen (v0.9.0): Schalter Lokal | Mit KI und sicherere Aufnahme
 
-Blitztext+ und die Schreibstil-Presets bewahren die Absicht der Eingabe jetzt konservativer. Sie sollen bei diktierten Arbeitsanweisungen oder Übergabe-Prompts keine Meetings, Teilnehmer, Empfänger, Rollen oder Ziele erfinden. E-Mail-Presets nutzen eine E-Mail-artige Struktur nur dann, wenn die Eingabe erkennbar als Nachricht an jemanden gemeint ist.
+Das Hauptfenster hat einen sichtbaren Schalter Lokal | Mit KI, schnelle Umschalter für KI-Anbieter und Whisper-Modell sowie ein kleines Einstellungs-Zahnrad. Diktierter Text wird lokal bereinigt (Begriffe zusammenführen, Ersetzungen, Füllwörter, Stottern), bevor er eingefügt oder umgeschrieben wird.
 
-Das Linux-Prüfskript enthält außerdem verbesserte sitzungsabhängige Desktop-Diagnosen für X11, Wayland und Clipboard-Backends. Die Kompatibilitätsmatrix ist Diagnosehilfe, kein Supportversprechen.
+KI-Aufnahmen ohne nutzbaren Schlüssel werden abgelehnt, bevor die Audioaufnahme startet, per Button wie per Hotkey. Das Voice-Routing ins Compose-Fenster funktioniert weiter ohne Schlüssel. Eigene Variablennamen für Schlüssel (nur Namen, nie Schlüsselwerte) bleiben bei Anbieterwechseln und Neustarts erhalten, und ein fehlgeschlagenes Speichern der Config hinterlässt keine Temp-Datei mehr.
