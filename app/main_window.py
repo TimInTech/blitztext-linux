@@ -383,18 +383,27 @@ class MainWindow(QWidget):
         popup.setSpacing(8)
         self._workflow_combo = QComboBox(self._popup_surface)
         self._workflow_combo.setObjectName("popupCombo")
+        self._workflow_combo.setToolTip(t("mainwindow.tooltip.workflow"))
+        self._workflow_combo.setAccessibleName(t("mainwindow.tooltip.workflow"))
         for workflow in _WORKFLOW_ORDER:
             self._workflow_combo.addItem(t(f"workflow.{workflow.value}.name"), userData=workflow)
         self._workflow_combo.currentIndexChanged.connect(self._on_workflow_changed)
+        self._caption_workflow = self._caption("workflow")
+        popup.addWidget(self._caption_workflow)
         popup.addWidget(self._workflow_combo)
         self._preset_combo = QComboBox(self._popup_surface)
         self._preset_combo.setObjectName("popupCombo")
+        self._preset_combo.setToolTip(t("mainwindow.tooltip.preset"))
+        self._preset_combo.setAccessibleName(t("mainwindow.tooltip.preset"))
         for key in WRITING_PRESET_KEYS:
             if key == CUSTOM_PRESET_KEY:
                 self._preset_combo.insertSeparator(self._preset_combo.count())
             self._preset_combo.addItem(t(f"preset.{key}.name"), userData=key)
         self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_combo.hide()
+        self._caption_preset = self._caption("preset")
+        self._caption_preset.hide()
+        popup.addWidget(self._caption_preset)
         popup.addWidget(self._preset_combo)
         self._provider_combo = QComboBox(self._popup_surface)
         self._provider_combo.setObjectName("popupCombo")
@@ -403,6 +412,7 @@ class MainWindow(QWidget):
         for provider in _PROVIDER_ORDER:
             self._provider_combo.addItem(t(f"mainwindow.provider.{provider}"), userData=provider)
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        popup.addWidget(self._caption("provider"))
         popup.addWidget(self._provider_combo)
         self._model_combo = QComboBox(self._popup_surface)
         self._model_combo.setObjectName("popupCombo")
@@ -411,6 +421,7 @@ class MainWindow(QWidget):
         for model in _MODEL_ORDER:
             self._add_model_item(model)
         self._model_combo.currentIndexChanged.connect(self._on_model_changed)
+        popup.addWidget(self._caption("model"))
         popup.addWidget(self._model_combo)
         self._btn_prompt = QPushButton(t("compose.custom.edit"), self._popup_surface)
         self._btn_prompt.setObjectName("promptButton")
@@ -451,12 +462,18 @@ class MainWindow(QWidget):
     def _on_workflow_changed(self) -> None:
         visible = self._selected_workflow() == WorkflowType.TEXT_IMPROVER
         self._preset_combo.setVisible(visible)
+        self._caption_preset.setVisible(visible)
         self._btn_prompt.setVisible(visible)
         self._options_popup.adjustSize()
 
     def _edit_prompt(self) -> None:
         self._options_popup.hide()
         self._controller.show_custom_prompt()
+
+    def _caption(self, key: str) -> QLabel:
+        label = QLabel(t(f"mainwindow.caption.{key}"), self._popup_surface)
+        label.setObjectName("popupCaption")
+        return label
 
     def _add_model_item(self, model: str) -> None:
         self._model_combo.addItem(t("mainwindow.model.item").format(model=model), userData=model)

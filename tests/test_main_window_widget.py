@@ -728,3 +728,21 @@ def test_mode_combos_sync_without_feedback_and_lock_while_busy(qapp):
     assert not window._model_combo.isEnabled()
     window.update_state("IDLE", None, None)
     assert window._provider_combo.isEnabled() and window._model_combo.isEnabled()
+
+
+@gui_only
+def test_every_popup_combo_has_a_visible_caption_naming_its_job(qapp):
+    from PyQt6.QtWidgets import QLabel
+    from app.main_window import MainWindow
+
+    window = MainWindow(_Controller())
+    window._show_options_popup()
+    qapp.processEvents()
+
+    captions = {w.text() for w in window._popup_surface.findChildren(QLabel)
+                if w.objectName() == "popupCaption" and w.isVisible()}
+    assert {"Betriebsart", "KI-Anbieter (Cloud)", "Spracherkennung (lokal)"} <= captions
+    # Entries show only the value; the caption says what it is.
+    assert window._provider_combo.currentText() == "OpenAI"
+    assert window._model_combo.currentText() == "tiny"
+    window._options_popup.hide()

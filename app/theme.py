@@ -379,6 +379,7 @@ QPushButton#goldAction:hover {{
         stop:0 #fff0bd, stop:0.50 {BLITZ_400}, stop:1 #bb9145);
 }}
 QComboBox#popupCombo {{ min-height: 22px; }}
+QLabel#popupCaption {{ color: {APP_TEXT_DIM}; font-size: 11px; margin-top: 4px; }}
 QPushButton#dictationToggle {{ color: {BLITZ_300}; }}
 QPushButton#discardButton {{ color: {STATE_ERROR}; }}
 """
