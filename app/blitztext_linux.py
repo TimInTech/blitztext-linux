@@ -1095,11 +1095,15 @@ class BlitztextApp(QObject):
                 self._retired_hotkey_threads.append(thread)
         self._retired_hotkey_threads = [t for t in self._retired_hotkey_threads if not t.isFinished()]
 
-    def join_retired_hotkey_threads(self, timeout_ms: int) -> None:
-        """Wait for hotkey threads that outlived stop_hotkey_worker() (shutdown only)."""
+    def join_retired_hotkey_threads(self, timeout_ms: int) -> bool:
+        """Wait for hotkey threads that outlived stop_hotkey_worker() (shutdown only).
+
+        Returns True when no retired thread is still running.
+        """
         for thread in self._retired_hotkey_threads:
             thread.wait(timeout_ms)
         self._retired_hotkey_threads = [t for t in self._retired_hotkey_threads if not t.isFinished()]
+        return not self._retired_hotkey_threads
 
     def show_settings_dialog(self) -> None:
         dialog = SettingsDialog(self.config)
@@ -1552,6 +1556,20 @@ class BlitztextApp(QObject):
         self.app.quit()
 
 
+def _finish_hotkey_shutdown(blitztext, exit_code: int, join_timeout_ms: int = 7000) -> int:
+    """Stop the hotkey thread and return exit_code, or hard-exit if a thread is stuck.
+
+    Returning from main() would free the still running parentless QThread and Qt
+    aborts the process (qFatal, exit 134); the OS reclaims everything on _exit.
+    """
+    blitztext.stop_hotkey_worker()
+    if blitztext.join_retired_hotkey_threads(join_timeout_ms):
+        return exit_code
+    logging.error("Hotkey thread still running after %d ms; exiting without Qt teardown", join_timeout_ms)
+    logging.shutdown()
+    os._exit(exit_code)
+
+
 def main() -> int:
     """Application entry point."""
     logging.basicConfig(
@@ -1589,9 +1607,7 @@ def main() -> int:
 
     exit_code = app.exec()
 
-    blitztext.stop_hotkey_worker()
-    blitztext.join_retired_hotkey_threads(7000)
-    return exit_code
+    return _finish_hotkey_shutdown(blitztext, exit_code)
 
 
 if __name__ == "__main__":

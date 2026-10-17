@@ -1,4 +1,5 @@
 """Tests für HotkeyService — Hold-Modus, Toggle-Modus, Debounce, Reconnect."""
+import os
 import time
 import pytest
 from unittest.mock import MagicMock, patch, call
@@ -563,6 +564,78 @@ class TestHotkeyWorkerShutdown:
         started = time.monotonic()
         assert worker._sleep_while_running(5.0) is False
         assert time.monotonic() - started < 0.5
+
+    def test_join_retired_hotkey_threads_reports_stuck_threads(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        from app.blitztext_linux import BlitztextApp
+
+        stuck = MagicMock()
+        stuck.isFinished.return_value = False
+        app = SimpleNamespace(_retired_hotkey_threads=[stuck])
+        assert BlitztextApp.join_retired_hotkey_threads(app, 10) is False
+        assert app._retired_hotkey_threads == [stuck]
+
+        stuck.isFinished.return_value = True
+        assert BlitztextApp.join_retired_hotkey_threads(app, 10) is True
+        assert app._retired_hotkey_threads == []
+
+    def test_finish_shutdown_skips_teardown_when_hotkey_thread_is_stuck(self):
+        from unittest.mock import MagicMock, patch
+
+        from app.blitztext_linux import _finish_hotkey_shutdown
+
+        blitztext = MagicMock()
+        blitztext.join_retired_hotkey_threads.return_value = False
+        with patch("app.blitztext_linux.os._exit", side_effect=SystemExit) as hard_exit:
+            with pytest.raises(SystemExit):
+                _finish_hotkey_shutdown(blitztext, 3)
+        blitztext.stop_hotkey_worker.assert_called_once_with()
+        hard_exit.assert_called_once_with(3)
+
+        blitztext.join_retired_hotkey_threads.return_value = True
+        with patch("app.blitztext_linux.os._exit") as hard_exit:
+            assert _finish_hotkey_shutdown(blitztext, 3) == 3
+        hard_exit.assert_not_called()
+
+    def test_stuck_running_qthread_does_not_abort_the_process_at_exit(self, tmp_path):
+        """Echter QThread, der nach dem Join noch laeuft: kein qFatal-Abbruch (Exit 134)."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script = tmp_path / "stuck.py"
+        script.write_text(
+            "import gc\n"
+            "import time\n"
+            "from types import SimpleNamespace\n"
+            "from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSlot\n"
+            "from app.blitztext_linux import BlitztextApp, _finish_hotkey_shutdown\n"
+            "class W(QObject):\n"
+            "    @pyqtSlot()\n"
+            "    def run(self): time.sleep(4)\n"
+            "def main():\n"
+            "    app = QCoreApplication([])\n"
+            "    t = QThread(); w = W(); w.moveToThread(t); t.started.connect(w.run); t.start()\n"
+            "    time.sleep(0.3); t._w = w\n"
+            "    fake = SimpleNamespace(hotkey_worker=None, hotkey_thread=None, _retired_hotkey_threads=[t])\n"
+            "    fake.stop_hotkey_worker = lambda: None\n"
+            "    fake.join_retired_hotkey_threads = lambda ms: BlitztextApp.join_retired_hotkey_threads(fake, ms)\n"
+            "    return _finish_hotkey_shutdown(fake, 7, join_timeout_ms=200)\n"
+            "rc = main()\n"
+            "gc.collect()  # like interpreter finalization: frees the cyclic QThread/worker wrappers\n"
+            "raise SystemExit(rc)\n"
+        )
+        repo_root = Path(__file__).resolve().parent.parent
+        env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(repo_root)}
+        # Popen, not run(): conftest replaces subprocess.run globally to block notifications.
+        proc = subprocess.Popen(
+            [sys.executable, str(script)], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        _, stderr = proc.communicate(timeout=60)
+        assert proc.returncode == 7, stderr.decode(errors="replace")[-400:]
 
     def test_slow_hotkey_thread_stays_referenced_until_finished(self):
         from types import SimpleNamespace
