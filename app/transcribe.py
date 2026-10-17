@@ -15,6 +15,7 @@ import os
 import sys
 import threading
 import warnings
+import wave
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -27,6 +28,12 @@ VALID_MODEL_NAMES = {
 VALID_BACKENDS = {"openai-whisper", "faster-whisper"}
 # A WAV with only its header carries no samples (e.g. an accidental short press).
 _WAV_HEADER_BYTES = 44
+# As in the original Blitztext app: vocabulary hints only for recordings of at
+# least 0.9 s. On very short audio Whisper tends to echo the initial prompt
+# ("Eigennamen und Begriffe: ...") instead of transcribing.
+_HINT_MIN_SECONDS = 0.9
+# AudioRecorder writes 16 kHz mono s16le; used when the header has no frame count.
+_FALLBACK_BYTES_PER_SECOND = 16000 * 2
 _MODEL_CACHE_ENV = "BLITZTEXT_MODEL_CACHE_SECONDS"
 _MODEL_CACHE_DEFAULT_SECONDS = 600.0
 
@@ -80,6 +87,10 @@ def transcribe(
         raise TranscribeError(f"WAV-Datei nicht gefunden: {wav_file}")
     if wav_file.stat().st_size <= _WAV_HEADER_BYTES:
         raise TranscribeError(f"WAV-Datei enthält keine Audiodaten: {wav_file}")
+
+    if custom_terms and _wav_duration_seconds(wav_file) < _HINT_MIN_SECONDS:
+        logger.debug("Recording shorter than %.1fs; transcribing without vocabulary hint", _HINT_MIN_SECONDS)
+        custom_terms = None
 
     try:
         hint = _build_transcription_hint(custom_terms)
@@ -154,6 +165,21 @@ def unload_cached_models() -> None:
 # ---------------------------------------------------------------------------
 # Backend implementations
 # ---------------------------------------------------------------------------
+
+def _wav_duration_seconds(wav_file: Path) -> float:
+    try:
+        with wave.open(str(wav_file), "rb") as wav:
+            frames, rate = wav.getnframes(), wav.getframerate()
+        if frames > 0 and rate > 0:
+            return frames / rate
+    except (wave.Error, EOFError, OSError):
+        pass
+    try:
+        size = wav_file.stat().st_size
+    except OSError:
+        return 0.0
+    return max(0, size - _WAV_HEADER_BYTES) / _FALLBACK_BYTES_PER_SECOND
+
 
 def _normalize_language(language: str) -> Optional[str]:
     return None if not language or language == "auto" else language

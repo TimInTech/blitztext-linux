@@ -201,8 +201,8 @@ class CloudTtsServiceError(Exception):
 class CloudTtsService:
     def __init__(self, config, client: Optional[object] = None) -> None:
         self.config = config
-        self.api_key = config.resolve_openai_api_key()
-        self.api_key_env = config.openai_api_key_env
+        self.api_key = config.resolve_tts_openai_api_key()
+        self.api_key_env = config.tts_openai_api_key_env
         self._openai_installed = True
         self.client = client
         if client is not None:

@@ -248,6 +248,47 @@ class TestLLMProvider:
         assert loaded.resolve_llm_api_key() == "openrouter-placeholder"
 
 
+class TestTranscriptionLanguage:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("de", "de"), (" DE ", "de"), ("Deutsch", "de"), ("german", "de"), ("auto", "auto"), ("en", "en")],
+    )
+    def test_language_is_normalized(self, config, value, expected):
+        config.language = value
+        assert config.language == expected
+
+    @pytest.mark.parametrize("value", ["", "   ", "de-DE", "Deutschland", None])
+    def test_invalid_language_is_rejected(self, config, value):
+        with pytest.raises(ValueError):
+            config.language = value
+
+    @pytest.mark.parametrize("stored", ["", "Deutschland", 42])
+    def test_invalid_stored_language_falls_back_to_german(self, config_dir, stored):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(json.dumps({"language": stored}), encoding="utf-8")
+        assert BlitztextConfig(config_dir=config_dir).language == "de"
+
+
+class TestTtsApiKey:
+    def test_tts_key_is_independent_of_llm_provider_key(self, config_dir, monkeypatch):
+        config = BlitztextConfig(config_dir=config_dir)
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        config.openai_api_key_env = "OPENROUTER_API_KEY"
+        monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key-must-not-reach-openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-placeholder")
+
+        assert config.tts_openai_api_key_env == "OPENAI_API_KEY"
+        assert config.resolve_tts_openai_api_key() == "openai-placeholder"
+
+    def test_invalid_tts_env_name_falls_back_to_default(self, config_dir):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({"tts_openai_api_key_env": "not valid!"}), encoding="utf-8"
+        )
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
+
+
 class TestLLMBaseUrlSecurity:
     @pytest.mark.parametrize(
         ("value", "expected"),

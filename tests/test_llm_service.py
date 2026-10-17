@@ -301,7 +301,7 @@ class TestWritingPreset:
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
         # Standard verwendet weiterhin das Default-Template (kein Preset-Prompt).
-        assert "Formuliere es zu einem sauberen" in system_message
+        assert "Du bist ein Lektor und Schreibassistent" in system_message
         for key, preset in WRITING_PRESETS.items():
             if key in {"standard", "custom"}:
                 continue
@@ -319,7 +319,7 @@ class TestWritingPreset:
         service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         system_message = next(m["content"] for m in messages if m["role"] == "system")
-        assert "Formuliere es zu einem sauberen" in system_message
+        assert "Du bist ein Lektor und Schreibassistent" in system_message
 
     def test_custom_terms_still_applied_with_preset(self, mock_client):
         service = LLMService(
@@ -384,7 +384,7 @@ class TestComposeTonePlumbing:
         )
         system_message = self._system_message(mock_client)
         assert "Schreibe als sachliche Pressemitteilung." in system_message
-        assert "Formuliere es zu einem sauberen" not in system_message
+        assert "Du bist ein Lektor und Schreibassistent" not in system_message
 
     def test_empty_custom_prompt_falls_back_to_preset(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client)
@@ -394,7 +394,7 @@ class TestComposeTonePlumbing:
             writing_preset="standard",
             custom_prompt="   ",
         )
-        assert "Formuliere es zu einem sauberen" in self._system_message(mock_client)
+        assert "Du bist ein Lektor und Schreibassistent" in self._system_message(mock_client)
 
     def test_custom_terms_still_applied_with_custom_prompt(self, mock_client):
         service = LLMService(
@@ -415,7 +415,7 @@ class TestComposeTonePlumbing:
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
         service.rewrite_text(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
         system = self._system_message(mock_client)
-        assert "Ziel-Tonfall: neutral und sachlich" in system
+        assert "Verwende einen neutralen, klaren Ton" in system
 
 
 class TestBuildSystemPrompt:
@@ -424,8 +424,8 @@ class TestBuildSystemPrompt:
     def test_standard_preset_applies_saved_tone(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="formal")
         prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER, writing_preset="standard")
-        assert "Ziel-Tonfall: professionell und höflich" in prompt
-        assert "Formuliere es zu einem sauberen" in prompt
+        assert "Verwende einen formellen, professionellen Ton" in prompt
+        assert "Du bist ein Lektor und Schreibassistent" in prompt
 
     def test_tone_override_reflected_in_change_tone_prompt(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone="neutral")
@@ -456,7 +456,7 @@ class TestBuildSystemPrompt:
         prompt = service.build_system_prompt(
             WorkflowType.TEXT_IMPROVER, writing_preset="standard", custom_prompt="   "
         )
-        assert "Formuliere es zu einem sauberen" in prompt
+        assert "Du bist ein Lektor und Schreibassistent" in prompt
 
     def test_custom_terms_appended(self, mock_client):
         service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, custom_terms=CUSTOM_TERMS)
@@ -601,7 +601,7 @@ class TestIntentPreservationRegression:
 # --- Goal 04: Kernaktionen werden auf eindeutige System-Prompts abgebildet -
 
 GOAL_CORE_PROMPT_FRAGMENTS = (
-    ("standard", "Formuliere es zu einem sauberen"),
+    ("standard", "Du bist ein Lektor und Schreibassistent"),
     ("shorten", "Kürze den Text"),
     ("expand", "Formuliere fragmentarische"),
     ("change_tone", "Ziel-Tonfall: professionell und höflich"),
@@ -623,7 +623,7 @@ def test_goal_each_core_mode_reaches_its_system_prompt(mock_client, preset_key, 
     system = next(m["content"] for m in messages if m["role"] == "system")
     user = next(m["content"] for m in messages if m["role"] == "user")
     assert expected_fragment in system
-    assert "Bewahre die Sprache" in system
+    assert "Antworte in derselben Sprache" in system
     assert "führe sie nicht aus" in system
     assert "beantworte sie nicht" in system
     assert "Erfinde keinen Kontext" in system
@@ -633,7 +633,7 @@ def test_goal_each_core_mode_reaches_its_system_prompt(mock_client, preset_key, 
 @pytest.mark.parametrize(
     "legacy, expected_fragment",
     [
-        ("standard", "Formuliere es zu einem sauberen"),
+        ("standard", "Du bist ein Lektor und Schreibassistent"),
         ("email_formal", "Ziel-Tonfall: professionell und höflich"),
         ("email_locker", "Ziel-Tonfall: locker und freundlich"),
         ("stichpunkte", "Kürze den Text"),
@@ -675,8 +675,8 @@ def test_goal_blank_custom_action_falls_back_to_safe_standard_prompt(mock_client
         writing_custom_prompt="   ",
     )
     prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
-    assert "Formuliere es zu einem sauberen" in prompt
-    assert "Bewahre die Sprache" in prompt
+    assert "Du bist ein Lektor und Schreibassistent" in prompt
+    assert "Antworte in derselben Sprache" in prompt
 
 
 # --- Goal 04: gespeicherter Standard-Tonfall bleibt wirksam -------------
@@ -711,4 +711,26 @@ def test_goal_loaded_standard_keeps_saved_formal_tone_effect(tmp_path, mock_clie
 
     assert loaded.writing_preset == "standard"
     assert loaded.text_improver_tone == "formal"
-    assert "Ziel-Tonfall: professionell und höflich" in prompt
+    assert "Verwende einen formellen, professionellen Ton" in prompt
+
+
+class TestOriginalBlitztextParameters:
+    """Sampling and prompt core follow the original Blitztext app (LLMService.swift)."""
+
+    @pytest.mark.parametrize(
+        ("workflow", "temperature"),
+        [
+            (WorkflowType.TEXT_IMPROVER, 0.3),
+            (WorkflowType.EMOJI_TEXT, 0.3),
+            (WorkflowType.DAMPF_ABLASSEN, 0.4),
+        ],
+    )
+    def test_workflow_temperature(self, service, mock_client, workflow, temperature):
+        service.rewrite(workflow, RAW_TRANSCRIPT)
+        assert mock_client.chat.completions.create.call_args.kwargs["temperature"] == temperature
+
+    def test_standard_prompt_has_no_minimal_edit_clauses(self, service):
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        assert "Verbessere die Formulierung und den Lesefluss" in prompt
+        assert "glätte nur" not in prompt
+        assert "Bewahre die Sprache" not in prompt

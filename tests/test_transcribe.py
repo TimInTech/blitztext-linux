@@ -115,3 +115,25 @@ def test_model_cache_disabled_reloads_every_call(tmp_path: Path, monkeypatch):
 
     assert module.loads == ["base", "base"]
     assert transcribe_module._model_cache == {}
+
+
+def _write_pcm_wav(path: Path, seconds: float) -> None:
+    import wave
+
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(bytes(int(16000 * seconds) * 2))
+
+
+@pytest.mark.parametrize(("seconds", "expect_hint"), [(0.5, False), (1.5, True)])
+def test_vocabulary_hint_only_for_recordings_of_at_least_0_9s(tmp_path: Path, seconds, expect_hint):
+    wav_file = tmp_path / "sample.wav"
+    _write_pcm_wav(wav_file, seconds)
+
+    with patch("app.transcribe._transcribe_openai", return_value="OK") as backend_mock:
+        transcribe(wav_file, backend="openai-whisper", custom_terms=["Blitztext"])
+
+    hint = backend_mock.call_args.kwargs["hint"]
+    assert (hint is not None) is expect_hint

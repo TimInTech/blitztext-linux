@@ -445,6 +445,7 @@ Der Einstellungs-Dialog hat drei Tabs:
   - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird. Tastendrücke unter 150 ms werden verworfen; leere Aufnahmen kehren ohne dauerhaften Fehlerzustand zu Bereit zurück.
 - **transcription_hotkey**: Aufnahmetaste, die vom globalen Hotkey-Daemon überwacht wird. Standard: `KEY_LEFTALT`.
 - **openai_api_key_env**: Name der Umgebungsvariable für den API-Key. Standard: `OPENAI_API_KEY`. Für OpenRouter: `OPENROUTER_API_KEY`.
+- **tts_openai_api_key_env**: Umgebungsvariable für den Key von OpenAI Cloud-TTS, unabhängig vom LLM-Anbieter. Standard: `OPENAI_API_KEY`.
 - **llm_provider**: `openai` (Standard), `openrouter` oder `custom`.
 - **llm_base_url**: Eigene API-Base-URL. Leer = OpenAI-Standard. Für OpenRouter: `https://openrouter.ai/api/v1`.
 - **llm_model**: Modellname beim Anbieter, z. B. `gpt-4o-mini` (OpenAI) oder `openai/gpt-4o` (OpenRouter).

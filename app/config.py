@@ -48,6 +48,8 @@ DEFAULTS: dict[str, Any] = {
     "tts_openai_model": "gpt-4o-mini-tts",
     "tts_openai_voice": "marin",
     "tts_openai_consent": False,
+    # Cloud TTS always talks to OpenAI, independent of the LLM provider's key.
+    "tts_openai_api_key_env": "OPENAI_API_KEY",
     "tts_speed": 1.0,
     "workflows": {
         "text_improver_tone": "neutral",
@@ -84,6 +86,15 @@ VALID_HOTKEY_KEYS = {
     "KEY_SCROLLLOCK", "KEY_PAUSE", "KEY_INSERT", "KEY_CAPSLOCK",
 }
 ENV_VAR_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+# Whisper expects ISO codes ("de"); empty or unknown values silently switched
+# transcription to auto-detection or failed in the backend.
+TRANSCRIPTION_LANGUAGE_RE = re.compile(r"^[a-z]{2,3}$")
+_TRANSCRIPTION_LANGUAGE_ALIASES = {
+    "deutsch": "de",
+    "german": "de",
+    "englisch": "en",
+    "english": "en",
+}
 
 
 class ConfigError(Exception):
@@ -176,6 +187,24 @@ class BlitztextConfig:
             return env_value
         return self._legacy_openai_api_key_value
 
+    @property
+    def tts_openai_api_key_env(self) -> str:
+        value = self._data.get("tts_openai_api_key_env", DEFAULTS["tts_openai_api_key_env"])
+        return _normalize_env_var_name(value, DEFAULTS["tts_openai_api_key_env"])
+
+    @tts_openai_api_key_env.setter
+    def tts_openai_api_key_env(self, value: str) -> None:
+        self._data["tts_openai_api_key_env"] = _normalize_env_var_name(
+            value, DEFAULTS["tts_openai_api_key_env"]
+        )
+
+    def resolve_tts_openai_api_key(self) -> str:
+        """Key for OpenAI Cloud-TTS; never the key of another LLM provider."""
+        env_value = os.environ.get(self.tts_openai_api_key_env, "").strip()
+        if env_value:
+            return env_value
+        return self._legacy_openai_api_key_value
+
     def resolve_llm_api_key(self) -> str:
         """Return a key only when it is safe for the selected LLM provider."""
         if self.llm_provider != "openai":
@@ -236,7 +265,7 @@ class BlitztextConfig:
 
     @language.setter
     def language(self, value: str) -> None:
-        self._data["language"] = value
+        self._data["language"] = normalize_transcription_language(value)
 
     @property
     def ui_language(self) -> str:
@@ -474,6 +503,11 @@ class BlitztextConfig:
             self._data["backend"] = "openai-whisper"
         if self._data.get("ui_language") not in VALID_UI_LANGUAGES:
             self._data["ui_language"] = DEFAULTS["ui_language"]
+        try:
+            self._data["language"] = normalize_transcription_language(self._data.get("language"))
+        except ValueError:
+            logger.warning("Invalid transcription language in config, using %r", DEFAULTS["language"])
+            self._data["language"] = DEFAULTS["language"]
         if self._data.get("hotkey_mode") not in VALID_HOTKEY_MODES:
             self._data["hotkey_mode"] = "toggle"
         if self._data.get("transcription_hotkey") not in VALID_HOTKEY_KEYS:
@@ -507,6 +541,9 @@ class BlitztextConfig:
 
         self._data["openai_api_key_env"] = _normalize_env_var_name(
             self._data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"])
+        )
+        self._data["tts_openai_api_key_env"] = _normalize_env_var_name(
+            self._data.get("tts_openai_api_key_env"), DEFAULTS["tts_openai_api_key_env"]
         )
         self._data.pop("openai_api_key", None)
 
@@ -545,12 +582,12 @@ class BlitztextConfig:
         wf["custom_terms"] = _sanitize_terms(wf.get("custom_terms"))
 
 
-def _normalize_env_var_name(value: Any) -> str:
+def _normalize_env_var_name(value: Any, default: str = DEFAULTS["openai_api_key_env"]) -> str:
     if not isinstance(value, str):
-        return DEFAULTS["openai_api_key_env"]
+        return default
     candidate = value.strip().upper()
     if not candidate or not ENV_VAR_NAME_RE.fullmatch(candidate):
-        return DEFAULTS["openai_api_key_env"]
+        return default
     return candidate
 
 
@@ -601,6 +638,17 @@ def _normalize_base_url(value: Any) -> str:
     ):
         return candidate
     raise ValueError("LLM base URL requires HTTPS for non-local endpoints")
+
+
+def normalize_transcription_language(value: Any) -> str:
+    """Return a Whisper language code such as 'de', or 'auto' for detection."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Sprache darf nicht leer sein (z. B. 'de', oder 'auto' für automatische Erkennung)")
+    candidate = value.strip().lower()
+    candidate = _TRANSCRIPTION_LANGUAGE_ALIASES.get(candidate, candidate)
+    if candidate == "auto" or TRANSCRIPTION_LANGUAGE_RE.fullmatch(candidate):
+        return candidate
+    raise ValueError(f"Ungueltige Sprache: {value!r}. Erwartet z. B. 'de', 'en' oder 'auto'")
 
 
 def normalize_llm_api_key_env(value: Any) -> str:

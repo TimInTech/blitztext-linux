@@ -778,6 +778,9 @@ class BlitztextApp(QObject):
         # Start hotkey worker
         self.hotkey_worker: Optional[HotkeyWorker] = None
         self.hotkey_thread: Optional[QThread] = None
+        # Threads that did not stop in time stay referenced until they finish;
+        # dropping a running parentless QThread aborts the process (qFatal).
+        self._retired_hotkey_threads: list[QThread] = []
         self.start_hotkey_worker()
 
     def _build_llm_service(self) -> LLMService:
@@ -1079,13 +1082,24 @@ class BlitztextApp(QObject):
         self.hotkey_thread.start()
 
     def stop_hotkey_worker(self) -> None:
-        if self.hotkey_worker:
-            self.hotkey_worker.stop()
-            self.hotkey_worker = None
-        if self.hotkey_thread:
-            self.hotkey_thread.quit()
-            self.hotkey_thread.wait(2000)
-            self.hotkey_thread = None
+        worker, thread = self.hotkey_worker, self.hotkey_thread
+        self.hotkey_worker = None
+        self.hotkey_thread = None
+        if worker:
+            worker.stop()
+        if thread:
+            thread.quit()
+            if not thread.wait(2000):
+                logger.warning("Hotkey thread did not stop within 2s; keeping it until it ends")
+                thread._retired_worker = worker  # type: ignore[attr-defined]
+                self._retired_hotkey_threads.append(thread)
+        self._retired_hotkey_threads = [t for t in self._retired_hotkey_threads if not t.isFinished()]
+
+    def join_retired_hotkey_threads(self, timeout_ms: int) -> None:
+        """Wait for hotkey threads that outlived stop_hotkey_worker() (shutdown only)."""
+        for thread in self._retired_hotkey_threads:
+            thread.wait(timeout_ms)
+        self._retired_hotkey_threads = [t for t in self._retired_hotkey_threads if not t.isFinished()]
 
     def show_settings_dialog(self) -> None:
         dialog = SettingsDialog(self.config)
@@ -1576,6 +1590,7 @@ def main() -> int:
     exit_code = app.exec()
 
     blitztext.stop_hotkey_worker()
+    blitztext.join_retired_hotkey_threads(7000)
     return exit_code
 
 

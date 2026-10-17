@@ -234,10 +234,12 @@ class HotkeyWorker(QObject):
             try:
                 rlist, _, _ = sel.select(list(fd_to_dev.keys()), [], [], 1.0)
             except (ValueError, OSError):
-                time.sleep(1)
+                if not self._sleep_while_running(1.0):
+                    return
                 devices = _discover_keyboards(self._transcription_key)
                 if not devices:
-                    time.sleep(5)
+                    if not self._sleep_while_running(5.0):
+                        return
                     devices = _discover_keyboards(self._transcription_key)
                     if not devices:
                         self.error.emit(_build_missing_keyboard_message("nach Wiederverbindung"))
@@ -362,6 +364,16 @@ class HotkeyWorker(QObject):
             held_seconds, MIN_HOLD_PRESS_SECONDS,
         )
         self.recording_discard.emit()
+        return False
+
+    def _sleep_while_running(self, seconds: float) -> bool:
+        """Sleep in short steps; False as soon as stop() was requested."""
+        deadline = time.monotonic() + seconds
+        while self._running:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(0.1, remaining))
         return False
 
     def stop(self) -> None:

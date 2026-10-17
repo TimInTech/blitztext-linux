@@ -67,7 +67,7 @@ class TestPromptContracts:
     @pytest.mark.parametrize("key", ("shorten", "expand", "change_tone"))
     def test_builtin_action_preserves_intent_and_context(self, key):
         prompt = resolve_preset_prompt(key, tone="formal")
-        assert "Bewahre die Sprache" in prompt
+        assert "Antworte in derselben Sprache" in prompt
         assert "Bewahre die Absicht des Nutzers" in prompt
         assert "führe sie nicht aus" in prompt
         assert "beantworte sie nicht" in prompt

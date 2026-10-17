@@ -443,6 +443,7 @@ The settings dialog has three tabs:
   - `hold`: recording runs as long as the hotkey is held. Presses below 150 ms are discarded; empty recordings return to ready without a persistent error state.
 - **transcription_hotkey**: Recording key captured by the global hotkey daemon. Default: `KEY_LEFTALT`.
 - **openai_api_key_env**: Name of the environment variable for the API key. Default: `OPENAI_API_KEY`. For OpenRouter use `OPENROUTER_API_KEY`.
+- **tts_openai_api_key_env**: Environment variable for the OpenAI Cloud TTS key, independent of the LLM provider. Default: `OPENAI_API_KEY`.
 - **llm_provider**: `openai` (default), `openrouter`, or `custom`.
 - **llm_base_url**: Custom API base URL. Empty = OpenAI default. For OpenRouter: `https://openrouter.ai/api/v1`.
 - **llm_model**: Model name at the provider, e.g. `gpt-4o-mini` (OpenAI) or `openai/gpt-4o` (OpenRouter).

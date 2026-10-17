@@ -522,3 +522,36 @@ class TestHotkeyDisplayName:
     def test_unknown_key_falls_back_to_stripped_name(self):
         from app.hotkey_service import hotkey_display_name
         assert hotkey_display_name("KEY_KPENTER") == "Kpenter"
+
+
+class TestHotkeyWorkerShutdown:
+    def test_sleep_while_running_returns_false_once_stopped(self):
+        from app.hotkey_service import HotkeyWorker
+
+        worker = HotkeyWorker()
+        worker._running = False
+        started = time.monotonic()
+        assert worker._sleep_while_running(5.0) is False
+        assert time.monotonic() - started < 0.5
+
+    def test_slow_hotkey_thread_stays_referenced_until_finished(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        from app.blitztext_linux import BlitztextApp
+
+        thread = MagicMock()
+        thread.wait.return_value = False
+        thread.isFinished.return_value = False
+        worker = MagicMock()
+        app = SimpleNamespace(hotkey_worker=worker, hotkey_thread=thread, _retired_hotkey_threads=[])
+
+        BlitztextApp.stop_hotkey_worker(app)
+
+        worker.stop.assert_called_once_with()
+        assert app.hotkey_thread is None
+        assert app._retired_hotkey_threads == [thread]
+
+        thread.isFinished.return_value = True
+        BlitztextApp.join_retired_hotkey_threads(app, 100)
+        assert app._retired_hotkey_threads == []
