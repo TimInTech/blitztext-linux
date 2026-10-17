@@ -473,3 +473,32 @@ class TestModeSwitchHardening:
         tray_app.main_window_model_changed("small")
 
         assert seen == [False]
+
+
+@gui_only
+class TestAiGate:
+    def test_ai_recording_without_a_key_is_refused_before_recording(self, tray_app, monkeypatch):
+        from app.workflows import WorkflowType
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        tray_app.config._legacy_openai_api_key_value = ""
+        tray_app._rebuild_llm_service()
+        started = []
+        monkeypatch.setattr(tray_app, "_start_recording", lambda wf: started.append(wf))
+
+        tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        tray_app.gui_toggle_recording(WorkflowType.TRANSCRIPTION)
+
+        assert started == [WorkflowType.TRANSCRIPTION]
+
+    def test_ai_recording_with_a_key_starts(self, tray_app, monkeypatch):
+        from app.workflows import WorkflowType
+
+        monkeypatch.setenv("OPENAI_API_KEY", "dummy-not-a-real-key")
+        tray_app._rebuild_llm_service()
+        started = []
+        monkeypatch.setattr(tray_app, "_start_recording", lambda wf: started.append(wf))
+
+        tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+
+        assert started == [WorkflowType.TEXT_IMPROVER]

@@ -1285,6 +1285,13 @@ class BlitztextApp(QObject):
         Fallback wenn der Hotkey nicht greift oder keine Tastatur zur Hand ist.
         """
         if self.state == "IDLE":
+            if workflow in LLM_WORKFLOWS and not self.llm_service.is_available():
+                # Fail before speaking: otherwise the transcript is lost at the rewrite step.
+                self.show_tray_warning(
+                    t("mainwindow.provider.no_key.title"),
+                    t("mainwindow.provider.no_key.message").format(env=self.config.openai_api_key_env),
+                )
+                return
             self._start_recording(workflow)
         elif self.state == "RECORDING":
             self._stop_recording_and_process()

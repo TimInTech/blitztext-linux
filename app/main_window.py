@@ -486,7 +486,8 @@ class MainWindow(QWidget):
         self._options_popup.adjustSize()
         self._options_popup.hide()
 
-    def _show_options_popup(self) -> None:
+    def _place_options_popup(self) -> None:
+        """Anchor the popup's bottom edge above the options button, inside the screen."""
         self._options_popup.adjustSize()
         anchor = self._btn_options.mapToGlobal(QPoint(self._btn_options.width(), 0))
         position = QPoint(anchor.x() - self._options_popup.width(), anchor.y() - self._options_popup.height() - 4)
@@ -496,6 +497,9 @@ class MainWindow(QWidget):
             position.setX(max(area.left() + 6, min(position.x(), area.right() - self._options_popup.width() - 6)))
             position.setY(max(area.top() + 6, min(position.y(), area.bottom() - self._options_popup.height() - 6)))
         self._options_popup.move(position)
+
+    def _show_options_popup(self) -> None:
+        self._place_options_popup()
         self._options_popup.show()
         self._options_popup.raise_()
 
@@ -557,7 +561,10 @@ class MainWindow(QWidget):
         for widget in (self._caption_preset, self._preset_combo, self._btn_prompt):
             widget.setVisible(improver)
         self._refresh_mode_summary()
-        self._options_popup.adjustSize()
+        if self._options_popup.isVisible():
+            self._place_options_popup()  # grew or shrank: keep the bottom edge anchored
+        else:
+            self._options_popup.adjustSize()
 
     def _edit_prompt(self) -> None:
         self._options_popup.hide()

@@ -169,3 +169,23 @@ def test_clicking_the_side_that_is_already_active_keeps_the_workflow(qapp):
     window.update_state("IDLE", WorkflowType.EMOJI_TEXT, None)
     window._seg_ai.click()
     assert window._selected_workflow() == WorkflowType.EMOJI_TEXT
+
+
+@gui_only
+def test_open_popup_keeps_its_bottom_edge_when_it_grows(qapp):
+    window = _window(qapp)
+    window.move(300, 380)  # low enough that the screen edge does not clamp the popup
+    qapp.processEvents()
+    window._show_options_popup()
+    qapp.processEvents()
+    bottom_before = window._options_popup.geometry().bottom()
+    window._seg_ai.click()
+    qapp.processEvents()
+    assert window._options_popup.geometry().bottom() == bottom_before
+    window._options_popup.hide()
+
+
+@gui_only
+def test_local_tooltip_is_honest_about_hotkeys(qapp):
+    window = _window(qapp)
+    assert "Hotkey" in window._seg_local.toolTip()
