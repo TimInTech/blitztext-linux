@@ -830,3 +830,4 @@ def test_failed_mode_change_never_replaces_the_existing_config(tmp_path, monkeyp
         cfg.save()
 
     assert cfg.config_file.read_text(encoding="utf-8") == before
+    assert not cfg.config_file.with_suffix(".json.tmp").exists()

@@ -161,7 +161,12 @@ class BlitztextConfig:
             fd = os.open(str(tmp), flags, 0o600)
             # Fix the mode before the file can replace the config: a failure after the
             # replace would report an error although the new content is already live.
-            os.fchmod(fd, 0o600)
+            try:
+                os.fchmod(fd, 0o600)
+            except OSError:
+                os.close(fd)
+                tmp.unlink(missing_ok=True)
+                raise
             payload = _deep_copy_without_legacy_key(self._data)
             if not self._tts_env_explicit:
                 payload.pop("tts_openai_api_key_env", None)
