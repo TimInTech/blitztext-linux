@@ -47,6 +47,14 @@ class TestReplacements:
     def test_part_of_a_longer_word_is_not_replaced(self):
         assert apply_replacements("nacht n acht nacht", self.RULES) == "nacht n acht nacht"
 
+    def test_underscore_is_part_of_a_word(self):
+        # Codex review: identifiers like foo_n acht n_bar must stay untouched.
+        assert apply_replacements("foo_n acht n_bar", self.RULES) == "foo_n acht n_bar"
+
+    def test_overlapping_rules_prefer_the_longer_one(self):
+        rules = [{"spoken": "n acht", "written": "XX"}, {"spoken": "n acht n", "written": "n8n"}]
+        assert apply_replacements("n acht n", rules) == "n8n"
+
     def test_written_side_is_literal(self):
         rules = [{"spoken": "preis", "written": "\\1 $1"}]
         assert apply_replacements("der preis", rules) == "der \\1 $1"

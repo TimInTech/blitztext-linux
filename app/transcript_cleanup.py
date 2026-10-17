@@ -92,7 +92,7 @@ def apply_replacements(text: str, rules: Iterable[Any] | None) -> str:
         words = [re.escape(w) for w in re.split(r"[\s-]+", spoken) if w]
         if not words:
             continue
-        pattern = r"(?<![^\W_])" + r"[\s\-]+".join(words) + r"(?![^\W_])"
+        pattern = r"(?<!\w)" + r"[\s\-]+".join(words) + r"(?!\w)"
         text = re.sub(pattern, lambda _m, w=written: w, text, flags=re.IGNORECASE)
     return text
 
