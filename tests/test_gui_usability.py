@@ -68,3 +68,10 @@ def test_no_blocking_accessibility_findings(report):
 @gui_only
 def test_report_is_json_serialisable(report):
     json.dumps(report)
+
+
+def test_output_directory_outside_workdir_and_tmp_is_refused():
+    module = _load()
+    with pytest.raises(SystemExit):
+        module._checked_outdir(Path("/etc/blitztext-usability"))
+    assert module._checked_outdir(Path("/tmp/blitztext-usability-ok")).name == "blitztext-usability-ok"

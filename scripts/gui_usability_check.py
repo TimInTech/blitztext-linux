@@ -7,7 +7,9 @@ a blind reviewer; the audit part needs no LLM.
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -145,11 +147,21 @@ def audit_widgets(window) -> list[dict]:
     return findings
 
 
+def _checked_outdir(outdir: Path) -> Path:
+    """Resolve the output directory and only accept the working tree or the temp dir."""
+    resolved = os.path.realpath(str(outdir))
+    allowed = [os.path.realpath(os.getcwd()), os.path.realpath(tempfile.gettempdir())]
+    if not any(resolved == base or resolved.startswith(base + os.sep) for base in allowed):
+        raise SystemExit(f"output directory must be inside the working tree or the temp dir: {resolved}")
+    return Path(resolved)
+
+
 def run_checks(outdir: Path) -> dict:
     from PyQt6.QtWidgets import QApplication
 
     from app.main_window import MainWindow
 
+    outdir = _checked_outdir(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([])
     tasks = []
