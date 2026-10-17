@@ -746,3 +746,42 @@ def test_every_popup_combo_has_a_visible_caption_naming_its_job(qapp):
     assert window._provider_combo.currentText() == "OpenAI"
     assert window._model_combo.currentText() == "tiny"
     window._options_popup.hide()
+
+
+@gui_only
+def test_main_window_shows_the_active_mode_without_opening_the_popup(qapp):
+    from app.main_window import MainWindow
+    from app.workflows import WorkflowType
+
+    window = MainWindow(_Controller())
+    window.show()
+    qapp.processEvents()
+    assert window._mode_label.isVisible()
+
+    window.set_model("base")
+    window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
+    assert window._mode_label.text() == "Diktieren · base"
+
+    window.set_llm_provider("openrouter")
+    window.update_state("IDLE", WorkflowType.TEXT_IMPROVER, None)
+    assert window._mode_label.text() == "Verbessern · OpenRouter · base"
+
+    window.set_model("tiny")
+    assert window._mode_label.text().endswith("tiny")
+
+
+@gui_only
+def test_options_button_names_what_is_behind_it(qapp):
+    from app.main_window import MainWindow
+
+    window = MainWindow(_Controller())
+    for text in (window._btn_options.toolTip(), window._btn_options.accessibleName()):
+        assert "KI" in text and "Spracherkennung" in text
+
+
+@gui_only
+def test_mode_summary_is_filled_right_after_construction(qapp):
+    from app.main_window import MainWindow
+
+    window = MainWindow(_Controller())
+    assert window._mode_label.text() == "Diktieren · tiny"

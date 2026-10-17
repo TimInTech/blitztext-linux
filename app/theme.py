@@ -338,6 +338,7 @@ QFrame#popupSurface {{
     border-radius: 14px;
 }}
 QLabel#panelTitle {{ color: {APP_TEXT_DIM}; font-size: 12px; font-weight: 600; padding-left: 2px; }}
+QLabel#modeLabel {{ color: {APP_TEXT_DIM}; font-size: 11px; }}
 QLabel#statusLabel {{ color: {APP_TEXT}; font-size: 12px; font-weight: 600; }}
 QLabel#timerLabel {{ color: {APP_TEXT_DIM}; font-family: monospace; font-size: 12px; }}
 QPushButton#windowControl {{

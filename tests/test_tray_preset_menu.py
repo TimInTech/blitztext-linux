@@ -239,22 +239,18 @@ class TestMainWindowPresetSync:
 
         assert window._preset_combo.currentData() == target
 
-    def test_preset_combo_visible_only_for_text_improver(self, tray_app):
-        """Preset-Combo im Options-Popup ist nur bei Blitztext+ sichtbar."""
+    def test_preset_combo_always_visible_but_only_usable_for_text_improver(self, tray_app):
+        """The style stays findable in every mode; it is only enabled where it acts."""
         from app.workflows import WorkflowType
 
         window = self._open_window(tray_app)
         window._btn_options.click()
 
-        # Standard-Workflow ist TRANSCRIPTION → Combo unsichtbar
         for i in range(window._workflow_combo.count()):
             wf = window._workflow_combo.itemData(i)
             window._workflow_combo.setCurrentIndex(i)
-            expected = wf == WorkflowType.TEXT_IMPROVER
-            assert window._preset_combo.isVisible() == expected, (
-                f"Workflow {wf}: Combo sichtbar={window._preset_combo.isVisible()}, "
-                f"erwartet={expected}"
-            )
+            assert window._preset_combo.isVisible()
+            assert window._preset_combo.isEnabled() == (wf == WorkflowType.TEXT_IMPROVER), wf
         window._options_popup.hide()
 
 # --- Goal 04: Tray und Hauptfenster zeigen dieselben Kernaktionen -----------

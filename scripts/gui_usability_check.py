@@ -81,8 +81,14 @@ def _controller_task(task_id, window, app, outdir, recorder):
         s.click(window._btn_options, "Mehr")
         s.choose(window._workflow_combo, WorkflowType.TEXT_IMPROVER, "Workflow")
         window._options_popup.hide()
+        window.update_state("IDLE", WorkflowType.TEXT_IMPROVER, None)
         s.click(window._btn_toggle, "Start")
+        # The real controller moves the window through its states; mirror that.
+        window.update_state("RECORDING", WorkflowType.TEXT_IMPROVER, None)
+        s._shot("state: recording")
         s.click(window._btn_toggle, "Stopp")
+        window.update_state("LLM_REWRITING", WorkflowType.TEXT_IMPROVER, None)
+        s._shot("state: improving")
         toggles = [c for c in recorder.calls if c[0] == "gui_toggle_recording"]
         goal = len(toggles) == 2 and toggles[0][1] == WorkflowType.TEXT_IMPROVER
     elif task_id == "D_model":
@@ -93,8 +99,26 @@ def _controller_task(task_id, window, app, outdir, recorder):
     else:
         s.click(window._btn_settings, "Zahnrad")
         goal = ("show_settings_dialog",) in recorder.calls
+        _shot_settings_dialog(s)
     window._options_popup.hide()
     return {"clicks": s.clicks, "steps": s.steps, "goal_reached": bool(goal)}
+
+
+def _shot_settings_dialog(session) -> None:
+    """The fake controller opens nothing, so grab what the real dialog looks like."""
+    import tempfile
+
+    from app.blitztext_linux import SettingsDialog
+    from app.config import BlitztextConfig
+
+    with tempfile.TemporaryDirectory() as tmp:
+        dialog = SettingsDialog(BlitztextConfig(config_dir=Path(tmp)))
+        dialog.show()
+        session.app.processEvents()
+        path = session.outdir / f"{session.task_id}_{len(session.steps) + 1:02d}.png"
+        dialog.grab().save(str(path))
+        session.steps.append({"action": "result: settings dialog opens", "screenshot": str(path)})
+        dialog.close()
 
 
 def audit_widgets(window) -> list[dict]:

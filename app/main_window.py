@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (QApplication, QComboBox, QFrame,
 
 from app import theme
 from app.i18n import t
-from app.llm_service import WorkflowType
+from app.llm_service import LLM_WORKFLOWS, WorkflowType
 from app.writing_presets import CUSTOM_PRESET_KEY, WRITING_PRESET_KEYS
 
 _WORKFLOW_ORDER = [
@@ -253,6 +253,7 @@ class MainWindow(QWidget):
         self._timer.timeout.connect(self._update_timer_label)
         self._setup_ui()
         self.update_state("IDLE", None, None)
+        self._refresh_mode_summary()
 
     @staticmethod
     def _qss() -> str:
@@ -310,6 +311,10 @@ class MainWindow(QWidget):
         self._timer_label.setObjectName("timerLabel")
         status.addWidget(self._timer_label)
         panel.addLayout(status)
+        self._mode_label = QLabel("", self._main_panel)
+        self._mode_label.setObjectName("modeLabel")
+        self._mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        panel.addWidget(self._mode_label)
         panel.addSpacing(_TOOLBAR_TOP_GAP)
 
         # The tool row is part of the same surface; its width sets the panel width.
@@ -400,9 +405,7 @@ class MainWindow(QWidget):
                 self._preset_combo.insertSeparator(self._preset_combo.count())
             self._preset_combo.addItem(t(f"preset.{key}.name"), userData=key)
         self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
-        self._preset_combo.hide()
         self._caption_preset = self._caption("preset")
-        self._caption_preset.hide()
         popup.addWidget(self._caption_preset)
         popup.addWidget(self._preset_combo)
         self._provider_combo = QComboBox(self._popup_surface)
@@ -461,14 +464,26 @@ class MainWindow(QWidget):
     @pyqtSlot()
     def _on_workflow_changed(self) -> None:
         visible = self._selected_workflow() == WorkflowType.TEXT_IMPROVER
-        self._preset_combo.setVisible(visible)
-        self._caption_preset.setVisible(visible)
+        # The style stays findable in every mode; it is only usable for "improve".
+        self._preset_combo.setEnabled(visible and self._state == "IDLE")
         self._btn_prompt.setVisible(visible)
+        self._refresh_mode_summary()
         self._options_popup.adjustSize()
 
     def _edit_prompt(self) -> None:
         self._options_popup.hide()
         self._controller.show_custom_prompt()
+
+    def _refresh_mode_summary(self) -> None:
+        """One line under the status: what the next recording will do."""
+        if not hasattr(self, "_mode_label") or not hasattr(self, "_model_combo"):
+            return
+        workflow = self._selected_workflow()
+        parts = [t(f"mainwindow.mode.{workflow.value}")]
+        if workflow in LLM_WORKFLOWS:
+            parts.append(self._provider_combo.currentText())
+        parts.append(self._model_combo.currentData() or "")
+        self._mode_label.setText(" · ".join(p for p in parts if p))
 
     def _caption(self, key: str) -> QLabel:
         label = QLabel(t(f"mainwindow.caption.{key}"), self._popup_surface)
@@ -480,12 +495,14 @@ class MainWindow(QWidget):
 
     @pyqtSlot()
     def _on_provider_changed(self) -> None:
+        self._refresh_mode_summary()
         provider = self._provider_combo.currentData()
         if provider:
             self._controller.main_window_provider_changed(provider)
 
     @pyqtSlot()
     def _on_model_changed(self) -> None:
+        self._refresh_mode_summary()
         model = self._model_combo.currentData()
         if model:
             self._controller.main_window_model_changed(model)
@@ -502,13 +519,13 @@ class MainWindow(QWidget):
             self._model_combo.blockSignals(False)
         self._select_silently(self._model_combo, model)
 
-    @staticmethod
-    def _select_silently(combo: QComboBox, data: str) -> None:
+    def _select_silently(self, combo: QComboBox, data: str) -> None:
         index = combo.findData(data)
         if index >= 0:
             combo.blockSignals(True)
             combo.setCurrentIndex(index)
             combo.blockSignals(False)
+            self._refresh_mode_summary()
 
     @pyqtSlot()
     def _on_preset_changed(self) -> None:
@@ -539,10 +556,13 @@ class MainWindow(QWidget):
         self._btn_toggle.set_mode("RECORDING" if recording else "PROCESSING" if busy else "IDLE")
         self._btn_discard.setEnabled(recording)
         for control in (
-            self._workflow_combo, self._preset_combo, self._btn_prompt,
+            self._workflow_combo, self._btn_prompt,
             self._provider_combo, self._model_combo,
         ):
             control.setEnabled(state == "IDLE")
+        self._preset_combo.setEnabled(
+            state == "IDLE" and self._selected_workflow() == WorkflowType.TEXT_IMPROVER
+        )
         if error:
             self._set_status(t("mainwindow.status.error"), theme.STATE_ERROR)
         elif recording:
