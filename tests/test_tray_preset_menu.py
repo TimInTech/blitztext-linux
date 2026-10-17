@@ -239,8 +239,8 @@ class TestMainWindowPresetSync:
 
         assert window._preset_combo.currentData() == target
 
-    def test_preset_combo_always_visible_but_only_usable_for_text_improver(self, tray_app):
-        """The style stays findable in every mode; it is only enabled where it acts."""
+    def test_preset_combo_is_only_shown_where_it_acts(self, tray_app):
+        """The style only exists for text improvement; elsewhere the field is gone."""
         from app.workflows import WorkflowType
 
         window = self._open_window(tray_app)
@@ -249,8 +249,7 @@ class TestMainWindowPresetSync:
         for i in range(window._workflow_combo.count()):
             wf = window._workflow_combo.itemData(i)
             window._workflow_combo.setCurrentIndex(i)
-            assert window._preset_combo.isVisible()
-            assert window._preset_combo.isEnabled() == (wf == WorkflowType.TEXT_IMPROVER), wf
+            assert window._preset_combo.isVisible() == (wf == WorkflowType.TEXT_IMPROVER), wf
         window._options_popup.hide()
 
 # --- Goal 04: Tray und Hauptfenster zeigen dieselben Kernaktionen -----------

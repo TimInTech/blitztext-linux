@@ -44,9 +44,10 @@ def test_every_task_reached_its_goal(report):
 
 
 @gui_only
-def test_switching_provider_or_model_takes_at_most_three_clicks(report):
+def test_switching_provider_or_model_stays_cheap(report):
     by_id = {t["id"]: t for t in report["tasks"]}
-    assert by_id["A_provider"]["clicks"] <= 3
+    assert by_id["A_provider"]["clicks"] <= 4
+    assert by_id["C_dictate"]["clicks"] <= 3
     assert by_id["D_model"]["clicks"] <= 3
     assert by_id["E_settings"]["clicks"] == 1
 

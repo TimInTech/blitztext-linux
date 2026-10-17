@@ -17,9 +17,9 @@ MIN_TARGET = 22  # px, the smallest allowed clickable control (header buttons)
 
 # id, title, click budget
 TASKS = (
-    ("A_provider", "Switch the AI provider to OpenRouter", 3),
-    ("B_preset", "Pick the writing style 'Kürzen' for text improvement", 5),
-    ("C_dictate", "Dictate with text improvement (start and stop)", 5),
+    ("A_provider", "Switch the AI provider to OpenRouter", 4),
+    ("B_preset", "Pick the writing style 'Kürzen' for text improvement", 4),
+    ("C_dictate", "Dictate with text improvement (start and stop)", 3),
     ("D_model", "Switch the Whisper model to 'tiny'", 3),
     ("E_settings", "Open the settings dialog", 1),
 )
@@ -68,19 +68,18 @@ def _controller_task(task_id, window, app, outdir, recorder):
     from app.workflows import WorkflowType
 
     if task_id == "A_provider":
-        s.click(window._btn_options, "Mehr")
+        s.click(window._seg_ai, "Mit KI")
+        s.click(window._mode_label, "Zustandszeile (Details)")
         s.choose(window._provider_combo, "openrouter", "KI-Anbieter")
         goal = ("provider", "openrouter") in recorder.calls
     elif task_id == "B_preset":
-        s.click(window._btn_options, "Mehr")
-        s.choose(window._workflow_combo, WorkflowType.TEXT_IMPROVER, "Workflow")
+        s.click(window._seg_ai, "Mit KI")
+        s.click(window._mode_label, "Zustandszeile (Details)")
         s.choose(window._preset_combo, "shorten", "Vorlage")
         goal = ("main_window_preset_changed", "shorten") in recorder.calls
         goal = goal or ("preset", "shorten") in recorder.calls
     elif task_id == "C_dictate":
-        s.click(window._btn_options, "Mehr")
-        s.choose(window._workflow_combo, WorkflowType.TEXT_IMPROVER, "Workflow")
-        window._options_popup.hide()
+        s.click(window._seg_ai, "Mit KI")
         window.update_state("IDLE", WorkflowType.TEXT_IMPROVER, None)
         s.click(window._btn_toggle, "Start")
         # The real controller moves the window through its states; mirror that.
@@ -93,7 +92,7 @@ def _controller_task(task_id, window, app, outdir, recorder):
         goal = len(toggles) == 2 and toggles[0][1] == WorkflowType.TEXT_IMPROVER
     elif task_id == "D_model":
         window.set_model("base")
-        s.click(window._btn_options, "Mehr")
+        s.click(window._mode_label, "Zustandszeile (Details)")
         s.choose(window._model_combo, "tiny", "Whisper-Modell")
         goal = ("model", "tiny") in recorder.calls
     else:

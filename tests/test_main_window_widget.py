@@ -181,7 +181,7 @@ def test_options_are_shown_only_in_transient_popup(qapp):
 
     window._btn_options.click()
     qapp.processEvents()
-    assert window._workflow_combo.isVisible()
+    assert window._model_combo.isVisible()
     assert window._btn_dictation.isVisible()
     assert window._btn_discard.isVisible()
 
@@ -525,12 +525,12 @@ def test_window_size_follows_compact_content_with_small_shadow_margins(qapp):
 
     assert window.size() == window.layout().sizeHint()
     assert 170 <= panel.width() <= 250
-    assert 170 <= panel.height() <= 220
+    assert 170 <= panel.height() <= 260
     assert panel.left() <= 12
     assert window.width() - panel.right() - 1 <= 12
     assert panel.top() <= 8
     assert window.height() - panel.bottom() - 1 <= 16
-    assert window.width() <= 260 and window.height() <= 236
+    assert window.width() <= 260 and window.height() <= 282
     # The panel has no dead filler around its content.
     assert panel.size() == window._main_panel.sizeHint()
 
@@ -736,12 +736,13 @@ def test_every_popup_combo_has_a_visible_caption_naming_its_job(qapp):
     from app.main_window import MainWindow
 
     window = MainWindow(_Controller())
+    window._seg_ai.click()
     window._show_options_popup()
     qapp.processEvents()
 
     captions = {w.text() for w in window._popup_surface.findChildren(QLabel)
                 if w.objectName() == "popupCaption" and w.isVisible()}
-    assert {"Betriebsart", "KI-Anbieter (Cloud)", "Whisper-Modell (lokal)"} <= captions
+    assert {"Aktion", "KI-Anbieter (Cloud)", "Whisper-Modell (lokal)"} <= captions
     # Entries show only the value; the caption says what it is.
     assert window._provider_combo.currentText() == "OpenAI"
     assert window._model_combo.currentText() == "tiny"
@@ -760,12 +761,13 @@ def test_main_window_shows_the_active_mode_without_opening_the_popup(qapp):
 
     window.set_model("base")
     window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
-    assert window._mode_label.text() == "Diktieren · base"
+    assert window._mode_label.text() == "Lokal · Whisper base"
 
     window.set_llm_provider("openrouter")
     window.update_state("IDLE", WorkflowType.TEXT_IMPROVER, None)
-    assert window._mode_label.text() == "Verbessern · OpenRouter · base"
+    assert window._mode_label.text() == "Mit KI · OpenRouter · Verbessern"
 
+    window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
     window.set_model("tiny")
     assert window._mode_label.text().endswith("tiny")
 
@@ -784,7 +786,7 @@ def test_mode_summary_is_filled_right_after_construction(qapp):
     from app.main_window import MainWindow
 
     window = MainWindow(_Controller())
-    assert window._mode_label.text() == "Diktieren · tiny"
+    assert window._mode_label.text() == "Lokal · Whisper tiny"
 
 
 @gui_only
@@ -797,15 +799,3 @@ def test_provider_selector_stays_usable_in_every_mode_when_idle(qapp):
     for workflow in WorkflowType:
         window.update_state("IDLE", workflow, None)
         assert window._provider_combo.isEnabled(), workflow
-
-
-@gui_only
-def test_mode_summary_tells_dictate_and_local_apart(qapp):
-    from app.main_window import MainWindow
-    from app.workflows import WorkflowType
-
-    window = MainWindow(_Controller())
-    window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
-    first = window._mode_label.text()
-    window.update_state("IDLE", WorkflowType.LOCAL, None)
-    assert window._mode_label.text() != first

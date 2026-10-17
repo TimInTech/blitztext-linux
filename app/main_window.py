@@ -10,7 +10,7 @@ from PyQt6.QtGui import (QBrush, QCloseEvent, QColor, QConicalGradient,
                          QEnterEvent, QKeySequence, QLinearGradient,
                          QMouseEvent, QPainter, QPainterPath, QPen,
                          QRadialGradient)
-from PyQt6.QtWidgets import (QApplication, QComboBox, QFrame,
+from PyQt6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFrame,
                              QGraphicsDropShadowEffect, QHBoxLayout, QLabel,
                              QLayout, QPushButton, QVBoxLayout, QWidget)
 
@@ -242,6 +242,7 @@ class MainWindow(QWidget):
         self._controller = controller
         self._state = "IDLE"
         self._rec_start: Optional[float] = None
+        self._last_ai_workflow = WorkflowType.TEXT_IMPROVER
         self.setWindowTitle(t("app.name"))
         # The panel draws its own title and window controls.
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -311,9 +312,30 @@ class MainWindow(QWidget):
         self._timer_label.setObjectName("timerLabel")
         status.addWidget(self._timer_label)
         panel.addLayout(status)
-        self._mode_label = QLabel("", self._main_panel)
+        panel.addSpacing(4)
+        switch = QHBoxLayout()
+        switch.setSpacing(0)
+        self._seg_local = self._segment_button(t("mainwindow.mode.switch.local"), "left")
+        self._seg_ai = self._segment_button(t("mainwindow.mode.switch.ai"), "right")
+        self._seg_local.setToolTip(t("mainwindow.mode.switch.local.tip"))
+        self._seg_ai.setToolTip(t("mainwindow.mode.switch.ai.tip"))
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+        for button in (self._seg_local, self._seg_ai):
+            group.addButton(button)
+            switch.addWidget(button)
+        self._seg_local.setChecked(True)
+        self._seg_local.clicked.connect(lambda _c=False: self._set_ai_mode(False))
+        self._seg_ai.clicked.connect(lambda _c=False: self._set_ai_mode(True))
+        panel.addLayout(switch)
+        # The state line is a button: it opens the details for the chosen side.
+        self._mode_label = QPushButton("", self._main_panel)
         self._mode_label.setObjectName("modeLabel")
-        self._mode_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mode_label.setFlat(True)
+        self._mode_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode_label.setToolTip(t("mainwindow.tooltip.mode_details"))
+        self._mode_label.setAccessibleName(t("mainwindow.tooltip.mode_details"))
+        self._mode_label.clicked.connect(self._show_options_popup)
         panel.addWidget(self._mode_label)
         panel.addSpacing(_TOOLBAR_TOP_GAP)
 
@@ -386,16 +408,29 @@ class MainWindow(QWidget):
         popup = QVBoxLayout(self._popup_surface)
         popup.setContentsMargins(12, 12, 12, 12)
         popup.setSpacing(8)
+        self._popup_title = QLabel("", self._popup_surface)
+        self._popup_title.setObjectName("popupTitle")
+        popup.addWidget(self._popup_title)
+        # The master list keeps every workflow; the user only sees the two sides of the
+        # switch and, on the AI side, the action list below.
         self._workflow_combo = QComboBox(self._popup_surface)
         self._workflow_combo.setObjectName("popupCombo")
-        self._workflow_combo.setToolTip(t("mainwindow.tooltip.workflow"))
         self._workflow_combo.setAccessibleName(t("mainwindow.tooltip.workflow"))
         for workflow in _WORKFLOW_ORDER:
             self._workflow_combo.addItem(t(f"workflow.{workflow.value}.name"), userData=workflow)
         self._workflow_combo.currentIndexChanged.connect(self._on_workflow_changed)
-        self._caption_workflow = self._caption("workflow")
-        popup.addWidget(self._caption_workflow)
-        popup.addWidget(self._workflow_combo)
+        self._workflow_combo.hide()
+        self._caption_action = self._caption("action")
+        popup.addWidget(self._caption_action)
+        self._action_combo = QComboBox(self._popup_surface)
+        self._action_combo.setObjectName("popupCombo")
+        self._action_combo.setToolTip(t("mainwindow.tooltip.workflow"))
+        self._action_combo.setAccessibleName(t("mainwindow.tooltip.workflow"))
+        for workflow in _WORKFLOW_ORDER:
+            if workflow in LLM_WORKFLOWS:
+                self._action_combo.addItem(t(f"workflow.{workflow.value}.name"), userData=workflow)
+        self._action_combo.currentIndexChanged.connect(self._on_action_changed)
+        popup.addWidget(self._action_combo)
         self._preset_combo = QComboBox(self._popup_surface)
         self._preset_combo.setObjectName("popupCombo")
         self._preset_combo.setToolTip(t("mainwindow.tooltip.preset"))
@@ -415,7 +450,8 @@ class MainWindow(QWidget):
         for provider in _PROVIDER_ORDER:
             self._provider_combo.addItem(t(f"mainwindow.provider.{provider}"), userData=provider)
         self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
-        popup.addWidget(self._caption("provider"))
+        self._caption_provider = self._caption("provider")
+        popup.addWidget(self._caption_provider)
         popup.addWidget(self._provider_combo)
         self._model_combo = QComboBox(self._popup_surface)
         self._model_combo.setObjectName("popupCombo")
@@ -424,13 +460,18 @@ class MainWindow(QWidget):
         for model in _MODEL_ORDER:
             self._add_model_item(model)
         self._model_combo.currentIndexChanged.connect(self._on_model_changed)
-        popup.addWidget(self._caption("model"))
+        self._caption_model = self._caption("model")
+        popup.addWidget(self._caption_model)
         popup.addWidget(self._model_combo)
         self._btn_prompt = QPushButton(t("compose.custom.edit"), self._popup_surface)
         self._btn_prompt.setObjectName("promptButton")
         self._btn_prompt.clicked.connect(self._edit_prompt)
         self._btn_prompt.hide()
         popup.addWidget(self._btn_prompt)
+        self._btn_done = QPushButton(t("mainwindow.button.done"), self._popup_surface)
+        self._btn_done.setObjectName("doneButton")
+        self._btn_done.clicked.connect(self._options_popup.hide)
+        popup.addWidget(self._btn_done)
         self._btn_dictation = QPushButton(t("mainwindow.button.dictation"), self._popup_surface)
         self._btn_dictation.setObjectName("dictationToggle")
         self._btn_dictation.setCheckable(True)
@@ -441,6 +482,7 @@ class MainWindow(QWidget):
         self._btn_discard.setEnabled(False)
         self._btn_discard.clicked.connect(self._on_discard_clicked)
         popup.addWidget(self._btn_discard)
+        self._sync_mode_widgets()
         self._options_popup.adjustSize()
         self._options_popup.hide()
 
@@ -463,10 +505,54 @@ class MainWindow(QWidget):
 
     @pyqtSlot()
     def _on_workflow_changed(self) -> None:
-        visible = self._selected_workflow() == WorkflowType.TEXT_IMPROVER
-        # The style stays findable in every mode; it is only usable for "improve".
-        self._preset_combo.setEnabled(visible and self._state == "IDLE")
-        self._btn_prompt.setVisible(visible)
+        self._sync_mode_widgets()
+
+    def _segment_button(self, text: str, side: str) -> QPushButton:
+        button = QPushButton(text, self._main_panel)
+        button.setObjectName("segButton")
+        button.setProperty("side", side)
+        button.setCheckable(True)
+        button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        return button
+
+    def _set_ai_mode(self, ai: bool) -> None:
+        """The switch picks a workflow; AI remembers the last AI action."""
+        workflow = self._last_ai_workflow if ai else WorkflowType.TRANSCRIPTION
+        index = self._workflow_combo.findData(workflow)
+        if index >= 0:
+            self._workflow_combo.setCurrentIndex(index)
+        self._sync_mode_widgets()
+
+    @pyqtSlot()
+    def _on_action_changed(self) -> None:
+        workflow = self._action_combo.currentData()
+        index = self._workflow_combo.findData(workflow)
+        if index >= 0 and workflow != self._selected_workflow():
+            self._workflow_combo.setCurrentIndex(index)
+
+    def _sync_mode_widgets(self) -> None:
+        """Make the switch, the popup fields and the state line agree with the workflow."""
+        if not hasattr(self, "_btn_done") or not hasattr(self, "_seg_ai"):
+            return
+        workflow = self._selected_workflow()
+        ai = workflow in LLM_WORKFLOWS
+        improver = workflow == WorkflowType.TEXT_IMPROVER
+        if ai:
+            self._last_ai_workflow = workflow
+        self._seg_ai.setChecked(ai)
+        self._seg_local.setChecked(not ai)
+        self._action_combo.blockSignals(True)
+        index = self._action_combo.findData(workflow)
+        if index >= 0:
+            self._action_combo.setCurrentIndex(index)
+        self._action_combo.blockSignals(False)
+        self._popup_title.setText(t("mainwindow.mode.switch.ai" if ai else "mainwindow.mode.switch.local"))
+        # Fields that do not apply disappear instead of being greyed out.
+        for widget in (self._caption_action, self._action_combo,
+                       self._caption_provider, self._provider_combo):
+            widget.setVisible(ai)
+        for widget in (self._caption_preset, self._preset_combo, self._btn_prompt):
+            widget.setVisible(improver)
         self._refresh_mode_summary()
         self._options_popup.adjustSize()
 
@@ -479,10 +565,12 @@ class MainWindow(QWidget):
         if not hasattr(self, "_mode_label") or not hasattr(self, "_model_combo"):
             return
         workflow = self._selected_workflow()
-        parts = [t(f"mainwindow.mode.{workflow.value}")]
+        model = self._model_combo.currentData() or ""
         if workflow in LLM_WORKFLOWS:
-            parts.append(self._provider_combo.currentText())
-        parts.append(self._model_combo.currentData() or "")
+            parts = [t("mainwindow.mode.switch.ai"), self._provider_combo.currentText(),
+                     t(f"mainwindow.mode.{workflow.value}")]
+        else:
+            parts = [t("mainwindow.mode.switch.local"), f"Whisper {model}".strip()]
         self._mode_label.setText(" · ".join(p for p in parts if p))
 
     def _caption(self, key: str) -> QLabel:
@@ -560,13 +648,11 @@ class MainWindow(QWidget):
         self._btn_toggle.set_mode("RECORDING" if recording else "PROCESSING" if busy else "IDLE")
         self._btn_discard.setEnabled(recording)
         for control in (
-            self._workflow_combo, self._btn_prompt,
-            self._provider_combo, self._model_combo,
+            self._workflow_combo, self._action_combo, self._btn_prompt,
+            self._provider_combo, self._model_combo, self._preset_combo,
+            self._seg_local, self._seg_ai,
         ):
             control.setEnabled(state == "IDLE")
-        self._preset_combo.setEnabled(
-            state == "IDLE" and self._selected_workflow() == WorkflowType.TEXT_IMPROVER
-        )
         if error:
             self._set_status(t("mainwindow.status.error"), theme.STATE_ERROR)
         elif recording:

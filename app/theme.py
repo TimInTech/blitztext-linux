@@ -338,7 +338,25 @@ QFrame#popupSurface {{
     border-radius: 14px;
 }}
 QLabel#panelTitle {{ color: {APP_TEXT_DIM}; font-size: 12px; font-weight: 600; padding-left: 2px; }}
-QLabel#modeLabel {{ color: {APP_TEXT_DIM}; font-size: 11px; }}
+QPushButton#modeLabel {{
+    background: transparent; border: none; color: {APP_TEXT_DIM};
+    font-size: 11px; padding: 0; min-height: 22px; max-height: 22px;
+}}
+QPushButton#modeLabel:hover {{ color: {APP_TEXT}; }}
+QPushButton#segButton {{
+    background: transparent; border: 1px solid {APP_LINE_SOFT}; color: {APP_TEXT_DIM};
+    font-weight: 600; padding: 0; min-height: 24px; max-height: 24px; min-width: 76px;
+}}
+QPushButton#segButton[side="left"] {{ border-top-left-radius: 9px; border-bottom-left-radius: 9px; }}
+QPushButton#segButton[side="right"] {{ border-top-right-radius: 9px; border-bottom-right-radius: 9px; }}
+QPushButton#segButton:hover {{ background: {APP_SURFACE_HOVER}; }}
+QPushButton#segButton:checked {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {BLITZ_300}, stop:0.55 {BLITZ_500}, stop:1 #a57c35);
+    border-color: rgba(255, 236, 177, 0.62); color: #1b1608;
+}}
+QLabel#popupTitle {{ color: {APP_TEXT}; font-size: 13px; font-weight: 700; }}
+QPushButton#doneButton {{ color: {BLITZ_300}; font-weight: 600; }}
 QLabel#statusLabel {{ color: {APP_TEXT}; font-size: 12px; font-weight: 600; }}
 QLabel#timerLabel {{ color: {APP_TEXT_DIM}; font-family: monospace; font-size: 12px; }}
 QPushButton#windowControl {{
