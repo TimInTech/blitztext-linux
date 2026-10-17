@@ -289,6 +289,58 @@ class TestTtsApiKey:
         assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
 
 
+class TestTtsApiKeyMigration:
+    """Bestandskonfigurationen ohne tts_openai_api_key_env behalten ihren TTS-Key."""
+
+    @staticmethod
+    def _write(config_dir, data):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(json.dumps(data), encoding="utf-8")
+
+    def test_openai_provider_with_custom_env_is_adopted_for_tts(self, config_dir, monkeypatch):
+        self._write(config_dir, {"llm_provider": "openai", "openai_api_key_env": "MY_OPENAI_KEY"})
+        monkeypatch.setenv("MY_OPENAI_KEY", "openai-placeholder")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config = BlitztextConfig(config_dir=config_dir)
+        assert config.tts_openai_api_key_env == "MY_OPENAI_KEY"
+        assert config.resolve_tts_openai_api_key() == "openai-placeholder"
+
+    def test_openrouter_provider_never_donates_its_key_to_tts(self, config_dir, monkeypatch):
+        self._write(config_dir, {
+            "llm_provider": "openrouter",
+            "llm_base_url": "https://openrouter.ai/api/v1",
+            "openai_api_key_env": "OPENROUTER_API_KEY",
+        })
+        monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key-must-not-reach-openai")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config = BlitztextConfig(config_dir=config_dir)
+        assert config.tts_openai_api_key_env == "OPENAI_API_KEY"
+        assert config.resolve_tts_openai_api_key() == ""
+
+    def test_custom_provider_env_is_not_adopted_for_tts(self, config_dir):
+        self._write(config_dir, {
+            "llm_provider": "custom",
+            "llm_base_url": "https://llm.example.com/v1",
+            "openai_api_key_env": "MY_CUSTOM_KEY",
+        })
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
+
+    def test_stale_openrouter_env_name_with_openai_provider_is_not_adopted(self, config_dir):
+        self._write(config_dir, {"llm_provider": "openai", "openai_api_key_env": "OPENROUTER_API_KEY"})
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
+
+    def test_explicit_tts_env_wins_over_migration(self, config_dir):
+        self._write(config_dir, {
+            "llm_provider": "openai",
+            "openai_api_key_env": "MY_OPENAI_KEY",
+            "tts_openai_api_key_env": "TTS_ONLY_KEY",
+        })
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "TTS_ONLY_KEY"
+
+    def test_missing_config_file_uses_default(self, config_dir):
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
+
+
 class TestLLMBaseUrlSecurity:
     @pytest.mark.parametrize(
         ("value", "expected"),

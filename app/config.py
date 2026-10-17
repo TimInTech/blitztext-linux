@@ -140,6 +140,7 @@ class BlitztextConfig:
             self._legacy_openai_api_key_value = legacy_api_key.strip() if isinstance(legacy_api_key, str) else ""
             sanitized = dict(data)
             sanitized.pop("openai_api_key", None)
+            self._adopt_legacy_tts_key_env(sanitized)
             return _deep_merge(DEFAULTS, sanitized)
         except (json.JSONDecodeError, UnicodeDecodeError):
             logger.warning("Config file is not valid JSON, using defaults", exc_info=True)
@@ -147,6 +148,21 @@ class BlitztextConfig:
         except OSError:
             logger.warning("Config file could not be read, using defaults", exc_info=True)
             return _deep_merge(DEFAULTS, {})
+
+    @staticmethod
+    def _adopt_legacy_tts_key_env(data: dict[str, Any]) -> None:
+        """Keep the TTS key of configs saved before tts_openai_api_key_env existed.
+
+        Cloud TTS used to read openai_api_key_env. Only an OpenAI LLM provider
+        shares that key with api.openai.com; any other provider's variable (and
+        the OpenRouter name left over from a provider switch) must never reach
+        OpenAI TTS, so those configs keep the default.
+        """
+        if "tts_openai_api_key_env" in data or data.get("llm_provider", DEFAULTS["llm_provider"]) != "openai":
+            return
+        legacy = _normalize_env_var_name(data.get("openai_api_key_env", DEFAULTS["openai_api_key_env"]))
+        if legacy != "OPENROUTER_API_KEY":
+            data["tts_openai_api_key_env"] = legacy
 
     def save(self) -> None:
         """Speichert Config als JSON mit Berechtigungen 0o600 ab erstem Schreibvorgang."""
