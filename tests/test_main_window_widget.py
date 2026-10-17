@@ -741,7 +741,7 @@ def test_every_popup_combo_has_a_visible_caption_naming_its_job(qapp):
 
     captions = {w.text() for w in window._popup_surface.findChildren(QLabel)
                 if w.objectName() == "popupCaption" and w.isVisible()}
-    assert {"Betriebsart", "KI-Anbieter (Cloud)", "Spracherkennung (lokal)"} <= captions
+    assert {"Betriebsart", "KI-Anbieter (Cloud)", "Whisper-Modell (lokal)"} <= captions
     # Entries show only the value; the caption says what it is.
     assert window._provider_combo.currentText() == "OpenAI"
     assert window._model_combo.currentText() == "tiny"
@@ -776,7 +776,7 @@ def test_options_button_names_what_is_behind_it(qapp):
 
     window = MainWindow(_Controller())
     for text in (window._btn_options.toolTip(), window._btn_options.accessibleName()):
-        assert "KI" in text and "Spracherkennung" in text
+        assert "KI" in text and "Whisper" in text
 
 
 @gui_only
@@ -785,3 +785,15 @@ def test_mode_summary_is_filled_right_after_construction(qapp):
 
     window = MainWindow(_Controller())
     assert window._mode_label.text() == "Diktieren · tiny"
+
+
+@gui_only
+def test_provider_selector_stays_usable_in_every_mode_when_idle(qapp):
+    """Switching the provider must not need a mode change first (3-click budget)."""
+    from app.main_window import MainWindow
+    from app.workflows import WorkflowType
+
+    window = MainWindow(_Controller())
+    for workflow in WorkflowType:
+        window.update_state("IDLE", workflow, None)
+        assert window._provider_combo.isEnabled(), workflow
