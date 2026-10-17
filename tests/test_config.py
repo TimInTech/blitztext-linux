@@ -229,6 +229,24 @@ class TestLLMProvider:
 
         assert config.resolve_llm_api_key() == ""
 
+    def test_non_openai_provider_never_uses_legacy_openai_key(self, config_dir, monkeypatch):
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps({
+                "openai_api_key": "legacy-openai-key-must-not-leave-the-app",
+                "llm_provider": "openrouter",
+                "llm_base_url": "https://openrouter.ai/api/v1",
+                "openai_api_key_env": "OPENROUTER_API_KEY",
+            }),
+            encoding="utf-8",
+        )
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        loaded = BlitztextConfig(config_dir=config_dir)
+
+        assert loaded.resolve_llm_api_key() == ""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-placeholder")
+        assert loaded.resolve_llm_api_key() == "openrouter-placeholder"
+
 
 class TestLLMBaseUrlSecurity:
     @pytest.mark.parametrize(

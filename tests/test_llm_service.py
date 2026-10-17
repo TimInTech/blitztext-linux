@@ -7,7 +7,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import DEFAULTS
-from app.llm_service import LLMService, LLMServiceError, _NullLLMClient, sanitize_external_error
+from app.llm_service import (
+    LLM_MAX_RETRIES,
+    LLM_REQUEST_TIMEOUT,
+    LLMService,
+    LLMServiceError,
+    _NullLLMClient,
+    sanitize_external_error,
+)
 from app.workflows import WorkflowType
 from app.writing_presets import WRITING_PRESETS
 
@@ -183,14 +190,22 @@ class TestProviderConfig:
         with patch.dict("sys.modules", {"openai": fake_openai}):
             LLMService(api_key=DUMMY_API_KEY, base_url="https://openrouter.ai/api/v1")
         fake_openai.OpenAI.assert_called_once_with(
-            api_key=DUMMY_API_KEY, base_url="https://openrouter.ai/api/v1"
+            api_key=DUMMY_API_KEY,
+            base_url="https://openrouter.ai/api/v1",
+            max_retries=LLM_MAX_RETRIES,
         )
 
     def test_empty_base_url_uses_sdk_default(self):
         fake_openai = MagicMock()
         with patch.dict("sys.modules", {"openai": fake_openai}):
             LLMService(api_key=DUMMY_API_KEY, base_url="")
-        fake_openai.OpenAI.assert_called_once_with(api_key=DUMMY_API_KEY, base_url=None)
+        fake_openai.OpenAI.assert_called_once_with(
+            api_key=DUMMY_API_KEY, base_url=None, max_retries=LLM_MAX_RETRIES
+        )
+
+    def test_chat_completion_uses_bounded_timeout(self, service, mock_client):
+        service.rewrite(WorkflowType.TEXT_IMPROVER, RAW_TRANSCRIPT)
+        assert mock_client.chat.completions.create.call_args.kwargs["timeout"] == LLM_REQUEST_TIMEOUT
 
 
 class TestDampfAblassen:

@@ -91,7 +91,7 @@ class TestTranscriptionHints:
 
     def test_openai_backend_receives_initial_prompt(self, tmp_path):
         wav_file = tmp_path / "sample.wav"
-        wav_file.write_bytes(b"not-empty")
+        wav_file.write_bytes(b"RIFF" + bytes(40) + b"not-empty")
 
         class FakeModel:
             def __init__(self):
@@ -124,7 +124,7 @@ class TestTranscriptionHints:
 
     def test_faster_backend_receives_initial_prompt_and_hotwords(self, tmp_path):
         wav_file = tmp_path / "sample.wav"
-        wav_file.write_bytes(b"not-empty")
+        wav_file.write_bytes(b"RIFF" + bytes(40) + b"not-empty")
 
         class FakeSegment:
             def __init__(self, text):

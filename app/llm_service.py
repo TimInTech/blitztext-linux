@@ -20,6 +20,10 @@ logger = logging.getLogger("blitztext.llm_service")
 
 LLM_WORKFLOWS = {WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT}
 DEFAULT_LLM_MODEL = DEFAULTS["llm_model"]
+# The SDK default (600 s read timeout, 2 retries) would keep the app in
+# LLM_REWRITING for up to ~30 min on a hanging endpoint.
+LLM_REQUEST_TIMEOUT = 60.0
+LLM_MAX_RETRIES = 1
 
 _REDACTED = "[REDACTED]"
 _URL_USERINFO_PATTERN = re.compile(
@@ -220,7 +224,11 @@ class LLMService:
                 self.client = _NullLLMClient()
             else:
                 if self.api_key and self.api_key.strip():
-                    self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url or None)
+                    self.client = openai.OpenAI(
+                        api_key=self.api_key,
+                        base_url=self.base_url or None,
+                        max_retries=LLM_MAX_RETRIES,
+                    )
                 else:
                     # Ohne API-Key keinen echten Client bauen: Neuere openai-Versionen
                     # werfen bereits im Konstruktor bei leerem Key. Der eigentliche
@@ -325,6 +333,7 @@ class LLMService:
                 {"role": "user", "content": user.strip()},
             ],
             temperature=0.7,
+            timeout=LLM_REQUEST_TIMEOUT,
         )
         content = response.choices[0].message.content
         if content is None:

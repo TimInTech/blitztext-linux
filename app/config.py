@@ -178,11 +178,11 @@ class BlitztextConfig:
 
     def resolve_llm_api_key(self) -> str:
         """Return a key only when it is safe for the selected LLM provider."""
-        if (
-            self.llm_provider != "openai"
-            and self.openai_api_key_env == DEFAULTS["openai_api_key_env"]
-        ):
-            return ""
+        if self.llm_provider != "openai":
+            if self.openai_api_key_env == DEFAULTS["openai_api_key_env"]:
+                return ""
+            # The legacy config value is an OpenAI key; never send it to a third party.
+            return os.environ.get(self.openai_api_key_env, "").strip()
         return self.resolve_openai_api_key()
 
     @property

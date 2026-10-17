@@ -30,6 +30,16 @@ def _block_real_notifications():
 
 
 @pytest.fixture(autouse=True)
+def _disable_whisper_model_cache(monkeypatch):
+    """Keine Modell-Caches oder Idle-Timer zwischen Tests; Cache-Tests setzen den Wert selbst."""
+    monkeypatch.setenv("BLITZTEXT_MODEL_CACHE_SECONDS", "0")
+    yield
+    from app import transcribe
+
+    transcribe.unload_cached_models()
+
+
+@pytest.fixture(autouse=True)
 def _collect_leaked_qobjects():
     """Sammelt nach JEDEM Test geleakte, parentlose QObjects deterministisch ein.
 

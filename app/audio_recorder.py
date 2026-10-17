@@ -30,6 +30,8 @@ _RATE = 16000
 _CHANNELS = 1
 _LATENCY_MS = 100
 _STOP_TIMEOUT = 2.0
+# parec --file-format=wav writes a 44-byte header even without any samples.
+_WAV_HEADER_BYTES = 44
 # The child cannot capture audio until the parent has pinned its identity. EOF
 # aborts startup without a signal; exec preserves the PID and its pidfd binding.
 _START_GATE = (
@@ -406,10 +408,10 @@ class AudioRecorder:
         except (OSError, AudioRecorderError) as exc:
             self._finish_job()
             raise AudioRecorderError("WAV-Datei konnte nicht sicher geprueft werden.") from exc
-        if info.st_size == 0:
+        if info.st_size <= _WAV_HEADER_BYTES:
             detail = self._read_parec_err()
             self._finish_job()
-            logger.warning("Kein Audio aufgezeichnet: %s", detail or "leere WAV-Datei")
+            logger.warning("Kein Audio aufgezeichnet: %s", detail or "WAV-Datei ohne Audiodaten")
             return None
 
         logger.debug("Aufnahme gestoppt: %s (%d Bytes)", self._job_name, info.st_size)

@@ -2,15 +2,21 @@
 """Transcribe a WAV file with Whisper.
 
 Supports both openai-whisper and faster-whisper backends.
+
+Loaded models stay cached between dictations and are released after
+BLITZTEXT_MODEL_CACHE_SECONDS of inactivity (default 600; 0 disables caching
+and reloads the model for every call).
 """
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import sys
+import threading
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger("blitztext.transcribe")
 
@@ -19,6 +25,14 @@ VALID_MODEL_NAMES = {
     "large", "large-v2", "large-v3", "large-v3-turbo",
 }
 VALID_BACKENDS = {"openai-whisper", "faster-whisper"}
+# A WAV with only its header carries no samples (e.g. an accidental short press).
+_WAV_HEADER_BYTES = 44
+_MODEL_CACHE_ENV = "BLITZTEXT_MODEL_CACHE_SECONDS"
+_MODEL_CACHE_DEFAULT_SECONDS = 600.0
+
+_model_cache: dict[tuple, Any] = {}
+_model_cache_lock = threading.Lock()
+_model_unload_timer: Optional[threading.Timer] = None
 
 
 class TranscribeError(Exception):
@@ -64,8 +78,8 @@ def transcribe(
         )
     if not wav_file.is_file():
         raise TranscribeError(f"WAV-Datei nicht gefunden: {wav_file}")
-    if wav_file.stat().st_size == 0:
-        raise TranscribeError(f"WAV-Datei ist leer: {wav_file}")
+    if wav_file.stat().st_size <= _WAV_HEADER_BYTES:
+        raise TranscribeError(f"WAV-Datei enthält keine Audiodaten: {wav_file}")
 
     try:
         hint = _build_transcription_hint(custom_terms)
@@ -77,6 +91,64 @@ def transcribe(
         raise TranscribeError(str(exc)) from exc
     except Exception as exc:
         raise TranscribeError(f"Transkription fehlgeschlagen: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Model cache
+# ---------------------------------------------------------------------------
+
+def _model_cache_idle_seconds() -> float:
+    raw = os.environ.get(_MODEL_CACHE_ENV, "")
+    if not raw.strip():
+        return _MODEL_CACHE_DEFAULT_SECONDS
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        logger.warning("Invalid %s=%r, using %.0fs", _MODEL_CACHE_ENV, raw, _MODEL_CACHE_DEFAULT_SECONDS)
+        return _MODEL_CACHE_DEFAULT_SECONDS
+
+
+def _schedule_model_unload(idle_seconds: float) -> None:
+    """(Re)start the idle timer. Caller must hold ``_model_cache_lock``."""
+    global _model_unload_timer
+    if _model_unload_timer is not None:
+        _model_unload_timer.cancel()
+    timer = threading.Timer(idle_seconds, unload_cached_models)
+    timer.daemon = True
+    timer.start()
+    _model_unload_timer = timer
+
+
+def _get_model(key: tuple, loader: Callable[[], Any]) -> Any:
+    """Return a cached model for ``key`` or load it; only one model stays resident."""
+    idle_seconds = _model_cache_idle_seconds()
+    if idle_seconds <= 0:
+        return loader()
+    with _model_cache_lock:
+        model = _model_cache.get(key)
+        if model is None:
+            if _model_cache:
+                _model_cache.clear()
+                gc.collect()
+            model = loader()
+            _model_cache[key] = model
+            logger.info("Whisper model loaded and cached: %s", key)
+        _schedule_model_unload(idle_seconds)
+    return model
+
+
+def unload_cached_models() -> None:
+    """Drop cached models so their RAM/VRAM can be released."""
+    global _model_unload_timer
+    with _model_cache_lock:
+        had_models = bool(_model_cache)
+        _model_cache.clear()
+        if _model_unload_timer is not None:
+            _model_unload_timer.cancel()
+            _model_unload_timer = None
+    if had_models:
+        gc.collect()
+        logger.info("Cached Whisper model released after idle timeout")
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +222,10 @@ def _transcribe_openai(wav_file: str, model_name: str, language: str, hint: str 
     try:
         whisper = _load_openai_whisper_module()
 
-        model = whisper.load_model(model_name)
+        model = _get_model(
+            ("openai-whisper", model_name, should_force_cpu),
+            lambda: whisper.load_model(model_name),
+        )
         result = model.transcribe(
             wav_file,
             language=_normalize_language(language),
@@ -184,7 +259,10 @@ def _transcribe_faster(
     hf_cache = os.path.expanduser("~/.cache/huggingface/hub")
     os.makedirs(hf_cache, exist_ok=True)
 
-    model = WhisperModel(model_name, device="auto", compute_type="int8")
+    model = _get_model(
+        ("faster-whisper", model_name),
+        lambda: WhisperModel(model_name, device="auto", compute_type="int8"),
+    )
     segments, _ = model.transcribe(
         wav_file,
         language=_normalize_language(language),
@@ -218,8 +296,8 @@ def main() -> int:
     if not os.path.isfile(wav_file):
         logger.error("WAV file not found: %s", wav_file)
         return 1
-    if os.path.getsize(wav_file) == 0:
-        logger.error("WAV file is empty")
+    if os.path.getsize(wav_file) <= _WAV_HEADER_BYTES:
+        logger.error("WAV file contains no audio data")
         return 1
 
     try:

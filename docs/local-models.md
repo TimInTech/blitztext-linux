@@ -19,6 +19,12 @@ bash scripts/install.sh
 
 Under the hood, the installer prepares a Python 3.11-compatible virtual environment, installs `openai-whisper`, and can inject `faster-whisper`.
 
+## Model cache
+
+The loaded Whisper model stays in memory between dictations, so only the first dictation pays the model load time.
+After 10 minutes without a dictation the model is released again.
+Set `BLITZTEXT_MODEL_CACHE_SECONDS` (e.g. in `~/.config/blitztext-linux/secrets.env`) to change the idle time; `0` disables the cache and reloads the model for every dictation (lowest idle RAM, slowest response).
+
 ## Notes
 
 - No separate WhisperKit/CoreML cache directory is used on Linux.

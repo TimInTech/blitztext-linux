@@ -12,7 +12,7 @@ from app.paste_service import (
     _CTRL_SHIFT_V_KEYCODES,
     _CTRL_V_KEYCODES,
     _COPYQ_TIMEOUT,
-    _PASTE_DELAY,
+    _RESTORE_DELAY,
     _XDOTOOL_TIMEOUT,
     _WL_PASTE_TIMEOUT,
     _XCLIP_PASTE_TIMEOUT,
@@ -396,7 +396,7 @@ class TestPasteClipboardRestore:
         read_mock.assert_called_once_with()
         copy_mock.assert_called_once_with("neu")
         paste_mock.assert_called_once_with()
-        sleep_mock.assert_called_once_with(_PASTE_DELAY)
+        sleep_mock.assert_called_once_with(_RESTORE_DELAY)
         restore_mock.assert_called_once_with("")
         cleanup_mock.assert_called_once_with("neu")
 

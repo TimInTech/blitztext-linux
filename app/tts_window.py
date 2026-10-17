@@ -938,6 +938,11 @@ class TtsWindow(QDialog):
         self._schedule_status_clear(2500)
 
     def _on_cloud_thread_finished(self) -> None:
+        # A cancelled thread can report 'finished' (queued) after a new job has
+        # started; it must not clear the references of the newer thread.
+        sender = self.sender()
+        if sender is not None and self._cloud_thread is not None and sender is not self._cloud_thread:
+            return
         self._cleanup_cloud_state()
         self._update_speak_button_state()
 
@@ -1084,9 +1089,20 @@ class TtsWindow(QDialog):
         if not self._is_speaking():
             self._refresh_status_hint()
 
-    def closeEvent(self, event: QCloseEvent) -> None:
+    def _shutdown_playback(self) -> None:
+        """Stoppt laufende Prozesse und loest den Cloud-Thread vom Dialog. Idempotent."""
         if self._is_speaking():
             self._stop_tts()
         # Sicherstellen, dass kein Cloud-Thread mehr am Dialog haengt, bevor er zerstoert wird.
         self._detach_cloud_thread()
+
+    def done(self, result: int) -> None:
+        # accept()/reject() (Schliessen-Button, Esc) laufen ueber done() und loesen
+        # kein closeEvent aus. Der Owner gibt den Dialog bei 'finished' frei; ein
+        # noch laufender Kind-QThread wuerde dann die App per qFatal beenden.
+        self._shutdown_playback()
+        super().done(result)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._shutdown_playback()
         super().closeEvent(event)

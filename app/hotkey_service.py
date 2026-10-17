@@ -297,15 +297,8 @@ class HotkeyWorker(QObject):
                                         time.monotonic() - _hold_started_at
                                         if _hold_started_at is not None else 0.0
                                     )
-                                    if classify_hold_release(held_seconds) == "process":
-                                        self.recording_stop.emit()
-                                    else:
-                                        logger.info(
-                                            "Accidental hold press ignored: %.3fs < %.3fs",
-                                            held_seconds, MIN_HOLD_PRESS_SECONDS,
-                                        )
+                                    if not self._emit_hold_release(held_seconds):
                                         last_trigger.pop(wf, None)
-                                        self.recording_discard.emit()
                                     _hold_active = None
                                     _hold_started_at = None
                                     break
@@ -334,14 +327,42 @@ class HotkeyWorker(QObject):
                             break
 
                 except OSError:
-                    fd_to_dev.pop(fd, None)
+                    lost_dev = fd_to_dev.pop(fd, None)
+                    if lost_dev is not None:
+                        _close_devices([lost_dev])
+                    if _hold_active is not None:
+                        # The key-up of an active hold can no longer arrive from
+                        # the lost device; end the recording instead of leaving it open.
+                        held_seconds = (
+                            time.monotonic() - _hold_started_at
+                            if _hold_started_at is not None else 0.0
+                        )
+                        if not self._emit_hold_release(held_seconds):
+                            last_trigger.pop(_hold_active, None)
                     fd_to_dev = _refresh_keyboard_devices(
                         fd_to_dev, self._transcription_key, reason="read_error"
                     )
+                    if not fd_to_dev:
+                        logger.warning(
+                            "Last keyboard device lost; waiting for periodic rescan every %.0fs",
+                            DEVICE_REFRESH_SECONDS,
+                        )
                     pressed.clear()
                     _hold_active = None
                     _hold_started_at = None
                     break
+
+    def _emit_hold_release(self, held_seconds: float) -> bool:
+        """Emit stop or discard for an ended hold; True when the press is processed."""
+        if classify_hold_release(held_seconds) == "process":
+            self.recording_stop.emit()
+            return True
+        logger.info(
+            "Accidental hold press ignored: %.3fs < %.3fs",
+            held_seconds, MIN_HOLD_PRESS_SECONDS,
+        )
+        self.recording_discard.emit()
+        return False
 
     def stop(self) -> None:
         self._running = False

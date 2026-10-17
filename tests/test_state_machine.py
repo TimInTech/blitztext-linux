@@ -367,6 +367,50 @@ def _run_worker_with_events(
 # ---------------------------------------------------------------------------
 
 class TestHoldWorkerEvents:
+    def test_lost_device_during_hold_closes_it_and_stops_recording(self):
+        ec = _make_fake_ecodes()
+        worker = HotkeyWorker(hotkey_mode="hold", transcription_key="KEY_LEFTALT")
+        triggered, stopped, discarded = [], [], []
+        worker.workflow_triggered.connect(lambda wf: triggered.append(wf))
+        worker.recording_stop.connect(lambda: stopped.append(True))
+        worker.recording_discard.connect(lambda: discarded.append(True))
+
+        class _VanishingDevice(_FakeDevice):
+            closed = 0
+
+            def read(self):
+                if not self._read_done:
+                    self._read_done = True
+                    return [_FakeEvent(_KEYCODES["KEY_LEFTALT"], 1, self._ec.EV_KEY)]
+                self._worker._running = False
+                raise OSError(19, "No such device")
+
+            def close(self):
+                _VanishingDevice.closed += 1
+
+        devices = []
+
+        def fake_input_device(_path):
+            dev = _VanishingDevice(worker, [], ec)
+            devices.append(dev)
+            return dev
+
+        fake_evdev = types.ModuleType("evdev")
+        fake_evdev.ecodes = ec
+        fake_evdev.list_devices = lambda: ["/dev/input/event-fake"]
+        fake_evdev.InputDevice = fake_input_device
+
+        with patch.dict(sys.modules, {"evdev": fake_evdev}), \
+             patch("select.select", side_effect=lambda r, w, x, t: (list(r), [], [])), \
+             patch("app.hotkey_service._discover_keyboards", side_effect=[[fake_input_device("x")], []]), \
+             patch("app.hotkey_service.time.monotonic", side_effect=[10.0, 10.0, 10.0, 11.0, 11.0]):
+            worker.run()
+
+        assert triggered == [WorkflowType.TRANSCRIPTION]
+        assert stopped == [True]
+        assert discarded == []
+        assert _VanishingDevice.closed == 1
+
     def test_short_hold_emits_discard_not_stop(self):
         result = _run_worker_with_events(
             [(_KEYCODES["KEY_LEFTALT"], 1), (_KEYCODES["KEY_LEFTALT"], 0)],

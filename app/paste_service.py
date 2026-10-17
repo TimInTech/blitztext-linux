@@ -20,6 +20,10 @@ logger = logging.getLogger("blitztext.paste_service")
 
 # Delay between clipboard write and simulated paste key.
 _PASTE_DELAY = 0.15
+# Delay between the paste key and restoring the previous clipboard. The target
+# app reads the selection asynchronously; slow clients (Electron, browsers) can
+# take longer than _PASTE_DELAY and would otherwise paste the restored content.
+_RESTORE_DELAY = 0.5
 # ydotool key-delay in ms.
 _KEY_DELAY_MS = 80
 # ydotool >=1.0 expects raw Linux input keycodes.
@@ -140,8 +144,8 @@ class PasteService:
         self._copy_to_clipboard(text)
 
         if do_autopaste and self._ydotool_paste():
-            # Kurze Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
-            time.sleep(_PASTE_DELAY)
+            # Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
+            time.sleep(_RESTORE_DELAY)
             self._cleanup_copyq(text)
             self._restore_clipboard(previous_clipboard)
 
@@ -186,8 +190,6 @@ class PasteService:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
-        except subprocess.TimeoutExpired:
-            return None
         except (OSError, ValueError) as exc:
             logger.debug("Clipboard-Inhalt konnte nicht gelesen werden: %s", exc)
             return None

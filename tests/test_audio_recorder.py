@@ -39,6 +39,10 @@ def test_pid_file_never_authorizes_a_signal(tmp_path: Path, pid_text: str, opera
     assert not recorder._pid_file.exists()
 
 
+# Fake parec output: 44-byte WAV header followed by sample data.
+FINISHED_WAV = b"RIFF" + bytes(40) + b"finished"
+
+
 @pytest.fixture
 def recording(tmp_path: Path, monkeypatch):
     """Exercise real Popen/pidfd with a disposable, microphone-free parec."""
@@ -54,11 +58,14 @@ def recording(tmp_path: Path, monkeypatch):
         "if mode == 'crash':\n"
         "    sys.stderr.write('isolated recorder failure\\n')\n"
         "    sys.exit(7)\n"
+        "header = b'RIFF' + bytes(40)\n"
+        "def payload(data):\n"
+        "    return {'empty': b'', 'header_only': header}.get(mode, header + data)\n"
         "def finish(*_):\n"
-        "    wav.write_bytes(b'finished' if mode != 'empty' else b'')\n"
+        "    wav.write_bytes(payload(b'finished'))\n"
         "    sys.exit(0)\n"
         "signal.signal(signal.SIGTERM, signal.SIG_IGN if mode == 'ignore' else finish)\n"
-        "wav.write_bytes(b'recording' if mode != 'empty' else b'')\n"
+        "wav.write_bytes(payload(b'recording'))\n"
         "while True: time.sleep(0.01)\n"
     )
     executable.chmod(0o755)
@@ -108,7 +115,7 @@ def test_normal_stop_waits_for_owned_recording_and_closes_pidfd(recording):
     fd = recorder._pidfd
     assert recorder.is_recording()
     assert recorder.stop() == wav
-    assert wav.read_bytes() == b"finished"
+    assert wav.read_bytes() == FINISHED_WAV
     assert processes[0].returncode == 0
     assert not recorder.is_recording()
     assert not recorder._pid_file.exists()
@@ -178,9 +185,10 @@ def test_crashed_recording_reports_error_and_releases_identity(recording, monkey
     assert not recorder._wav_file.exists()
 
 
-def test_empty_recording_returns_none_after_stopping_owned_child(recording, monkeypatch):
+@pytest.mark.parametrize("mode", ["empty", "header_only"])
+def test_empty_recording_returns_none_after_stopping_owned_child(recording, monkeypatch, mode):
     recorder, processes = recording
-    monkeypatch.setenv("BT_TEST_PAREC_MODE", "empty")
+    monkeypatch.setenv("BT_TEST_PAREC_MODE", mode)
     recorder.start()
     assert recorder.stop() is None
     assert processes[0].returncode == 0
@@ -452,11 +460,11 @@ def test_successful_wav_survives_discard_and_next_recording(recording):
     first = recorder.start()
     assert recorder.stop() == first
     recorder.discard()
-    assert first.read_bytes() == b"finished"
+    assert first.read_bytes() == FINISHED_WAV
     second = recorder.start()
     assert second != first
     recorder.discard()
-    assert first.read_bytes() == b"finished"
+    assert first.read_bytes() == FINISHED_WAV
     assert not second.parent.exists()
 
 
@@ -504,7 +512,7 @@ def test_worker_keeps_wav_until_transcription_finishes_then_removes_job(recordin
     )
     with patch("app.blitztext_linux.transcribe", side_effect=transcribe):
         worker.run()
-    assert observed == [b"finished", b"finished"]
+    assert observed == [FINISHED_WAV, FINISHED_WAV]
     assert not wav.parent.exists()
 
 
@@ -638,5 +646,5 @@ def test_destroying_stopped_recorder_preserves_successful_wav(recording):
     wav = recorder.start()
     recorder.stop()
     recorder.__del__()
-    assert wav.read_bytes() == b"finished"
+    assert wav.read_bytes() == FINISHED_WAV
     AudioRecorder.cleanup_recording(wav)

@@ -20,6 +20,9 @@
 Description=Blitztext Linux — Speech-to-Text Tray App
 Documentation=https://github.com/TimInTech/blitztext-linux
 After=graphical-session.target graphical-session-ready.target
+# Recording checks 'pactl info' at start; order after the PipeWire Pulse server
+# without requiring it (plain PulseAudio systems lack these units).
+After=pipewire-pulse.socket pipewire-pulse.service
 PartOf=graphical-session.target
 
 [Service]
