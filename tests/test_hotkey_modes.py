@@ -535,6 +535,9 @@ class TestHotkeyWorkerShutdown:
         import threading
         from app.hotkey_service import HotkeyWorker
 
+        # Without evdev run() returns at the ImportError and the test would pass vacuously.
+        pytest.importorskip("evdev")
+
         read_fd, write_fd = os.pipe()
         fake_device = MagicMock(fd=read_fd)
         worker = HotkeyWorker()
