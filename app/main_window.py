@@ -12,7 +12,7 @@ from PyQt6.QtGui import (QBrush, QCloseEvent, QColor, QConicalGradient,
                          QRadialGradient)
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFrame,
                              QGraphicsDropShadowEffect, QHBoxLayout, QLabel,
-                             QLayout, QPushButton, QVBoxLayout, QWidget)
+                             QLayout, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from app import theme
 from app.i18n import t
@@ -59,6 +59,9 @@ _SHADOW_MARGINS = (10, 6, 10, 14)  # left, top, right, bottom
 # Quick choices only; the full list stays in the settings dialog.
 _PROVIDER_ORDER = ("openai", "openrouter")  # "custom" is added while it is active
 _MODEL_ORDER = ("tiny", "base", "small", "medium", "large-v3-turbo")
+# The status row ("Recording: 00:00") and the state line must never widen the window on
+# fonts that are wider than the development machine's; the tool row stays centred.
+_PANEL_MIN_WIDTH = 212
 _PANEL_PADDING = (10, 6, 10, 10)  # plus the 1 px QSS border
 _TOOL_GAP = 6
 _TOOLBAR_TOP_GAP = 8
@@ -272,6 +275,7 @@ class MainWindow(QWidget):
         panel = QVBoxLayout(self._main_panel)
         panel.setContentsMargins(*_PANEL_PADDING)
         panel.setSpacing(0)
+        self._main_panel.setMinimumWidth(_PANEL_MIN_WIDTH)
 
         header = QHBoxLayout()
         header.setSpacing(2)
@@ -335,6 +339,7 @@ class MainWindow(QWidget):
         self._mode_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._mode_label.setToolTip(t("mainwindow.tooltip.mode_details"))
         self._mode_label.setAccessibleName(t("mainwindow.tooltip.mode_details"))
+        self._mode_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._mode_label.clicked.connect(self._show_options_popup)
         panel.addWidget(self._mode_label)
         panel.addSpacing(_TOOLBAR_TOP_GAP)
@@ -342,6 +347,7 @@ class MainWindow(QWidget):
         # The tool row is part of the same surface; its width sets the panel width.
         tools = QHBoxLayout()
         tools.setSpacing(_TOOL_GAP)
+        tools.addStretch(1)
         self._btn_edit_text = self._toolbar_button(
             "edit", t("mainwindow.tooltip.edit_text"),
             self._controller.show_compose_window, accent=True,
@@ -365,6 +371,7 @@ class MainWindow(QWidget):
             self._btn_options,
         ):
             tools.addWidget(button)
+        tools.addStretch(1)
         panel.addLayout(tools)
         root.addWidget(self._main_panel)
         self._setup_options_popup()

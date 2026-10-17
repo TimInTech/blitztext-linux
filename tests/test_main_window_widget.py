@@ -492,8 +492,12 @@ def test_header_microphone_status_and_tools_stack_inside_the_panel(qapp):
     assert close.bottom() <= record.top()
     assert record.bottom() <= status.top()
     assert status.bottom() < options.top()
-    # Header controls and tool row share the panel's right edge.
-    assert close.right() == options.right()
+    # The header reaches the panel's right edge; the tool row is centred in the panel.
+    from app.main_window import _PANEL_PADDING
+
+    assert close.right() == inner.right() - _PANEL_PADDING[2]
+    tools_left = window._btn_edit_text.geometry().left()
+    assert abs((tools_left - inner.left()) - (inner.right() - options.right())) <= 1
     assert window._btn_minimize.geometry().right() < close.left()
     assert abs(record.center().x() - inner.center().x()) <= 1
 
@@ -531,8 +535,8 @@ def test_window_size_follows_compact_content_with_small_shadow_margins(qapp):
     assert panel.top() <= 8
     assert window.height() - panel.bottom() - 1 <= 16
     assert window.width() <= 260 and window.height() <= 282
-    # The panel has no dead filler around its content.
-    assert panel.size() == window._main_panel.sizeHint()
+    # The panel has no dead filler around its content (it only keeps its minimum width).
+    assert panel.size() == window._main_panel.sizeHint().expandedTo(window._main_panel.minimumSize())
 
 
 @gui_only
@@ -799,3 +803,24 @@ def test_provider_selector_stays_usable_in_every_mode_when_idle(qapp):
     for workflow in WorkflowType:
         window.update_state("IDLE", workflow, None)
         assert window._provider_combo.isEnabled(), workflow
+
+
+@gui_only
+def test_wide_status_text_never_widens_the_window(qapp):
+    """CI fonts are wider than local ones; text must not drive the window width."""
+    from app.main_window import MainWindow
+    from app.workflows import WorkflowType
+
+    window = MainWindow(_Controller())
+    window.show()
+    qapp.processEvents()
+    size = window.size()
+    font = window.font()
+    font.setPointSize(font.pointSize() + 4)
+    window.setFont(font)
+    window._main_panel.setFont(font)
+    window.update_state("RECORDING", WorkflowType.TEXT_IMPROVER, None)
+    window.set_llm_provider("openrouter")
+    window.set_history_count(999)
+    qapp.processEvents()
+    assert window.size() == size
