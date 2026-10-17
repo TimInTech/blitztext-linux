@@ -786,3 +786,13 @@ class TestDictationSafetyNet:
         self._reply(mock_client, "Zahlen bitte.")
         svc = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="shorten")
         assert svc.rewrite(WorkflowType.TEXT_IMPROVER, "kannst du mir bis morgen die zahlen schicken") == "Zahlen bitte."
+
+    def test_swapped_word_in_a_short_dictation_falls_back_to_the_transcript(self, service, mock_client):
+        # Codex review: "Ja, bitte." -> "Nein, bitte." kept 1 of 2 words and passed at 50 %.
+        self._reply(mock_client, "Nein, bitte.")
+        assert service.rewrite(WorkflowType.TEXT_IMPROVER, "ja bitte") == "ja bitte"
+
+    def test_one_word_fix_in_a_sentence_is_kept(self, service, mock_client):
+        self._reply(mock_client, "Ich hätte gern einen vernünftigen Text.")
+        src = "ich hätte gern ein vernünftigen text"
+        assert service.rewrite(WorkflowType.TEXT_IMPROVER, src) == "Ich hätte gern einen vernünftigen Text."

@@ -176,8 +176,9 @@ def sanitize_external_error(message: object, max_length: int = 240) -> str:
 
 
 # The default improver only fixes the obvious, so a result sharing less than this
-# fraction of the dictated words is an answer or a refusal, not an improved dictation.
-_MIN_DICTATION_RETENTION = 0.5
+# fraction of the dictated words is an answer, a refusal or a swapped word, not an
+# improved dictation (correct outputs measured at >= 0.88).
+_MIN_DICTATION_RETENTION = 0.75
 _WORD_PATTERN = re.compile(r"\w+", re.UNICODE)
 
 
