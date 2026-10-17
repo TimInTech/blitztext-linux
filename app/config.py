@@ -35,6 +35,10 @@ DEFAULTS: dict[str, Any] = {
     "hotkey_mode": "hold",
     "transcription_hotkey": "KEY_LEFTALT",
     "openai_api_key_env": "OPENAI_API_KEY",
+    # Variable name of the OpenAI key while another provider uses openai_api_key_env.
+    "openai_provider_key_env": "",
+    # Same for a personal OpenRouter variable while OpenAI is active.
+    "openrouter_provider_key_env": "",
     "llm_provider": "openai",
     "llm_base_url": "",
     "llm_model": "gpt-4o-mini",
@@ -156,29 +160,35 @@ class BlitztextConfig:
         """Speichert Config als JSON mit Berechtigungen 0o600 ab erstem Schreibvorgang."""
         try:
             self.config_dir.mkdir(parents=True, exist_ok=True)
-            tmp = self.config_file.with_suffix(".json.tmp")
-            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-            fd = os.open(str(tmp), flags, 0o600)
-            # Fix the mode before the file can replace the config: a failure after the
-            # replace would report an error although the new content is already live.
-            try:
-                os.fchmod(fd, 0o600)
-            except OSError:
-                os.close(fd)
-                tmp.unlink(missing_ok=True)
-                raise
+            # Build the payload first: nothing is opened or left behind if it cannot be built.
             payload = _deep_copy_without_legacy_key(self._data)
             if not self._tts_env_explicit:
                 payload.pop("tts_openai_api_key_env", None)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
-                f.write("\n")
-            tmp.replace(self.config_file)
+            tmp = self.config_file.with_suffix(".json.tmp")
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            fd = os.open(str(tmp), flags, 0o600)
+            try:
+                # Fix the mode before the file can replace the config: a failure after the
+                # replace would report an error although the new content is already live.
+                try:
+                    os.fchmod(fd, 0o600)
+                except BaseException:
+                    os.close(fd)
+                    raise
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2, ensure_ascii=False)
+                    f.write("\n")
+                tmp.replace(self.config_file)
+            except BaseException:
+                # Any failure before the replace (I/O or serialization) must leave no
+                # half-written temp file behind and the existing config untouched.
+                tmp.unlink(missing_ok=True)
+                raise
             self._data = payload
             self._legacy_openai_api_key_present = False
             self._legacy_openai_api_key_value = ""
             self._has_unsafe_llm_base_url = False
-        except OSError as exc:
+        except (OSError, TypeError, ValueError) as exc:
             raise ConfigError(f"Config konnte nicht gespeichert werden: {exc}") from exc
 
     def has_api_key(self) -> bool:
@@ -192,6 +202,26 @@ class BlitztextConfig:
     @openai_api_key_env.setter
     def openai_api_key_env(self, value: str) -> None:
         self._data["openai_api_key_env"] = _normalize_env_var_name(value)
+
+    @property
+    def openai_provider_key_env(self) -> str:
+        """Name (never the value) of the OpenAI key variable parked while another provider is active."""
+        value = self._data.get("openai_provider_key_env", "")
+        return _normalize_env_var_name(value, "") if isinstance(value, str) else ""
+
+    @openai_provider_key_env.setter
+    def openai_provider_key_env(self, value: str) -> None:
+        self._data["openai_provider_key_env"] = _normalize_env_var_name(value, "")
+
+    @property
+    def openrouter_provider_key_env(self) -> str:
+        """Name (never the value) of the OpenRouter key variable parked while OpenAI is active."""
+        value = self._data.get("openrouter_provider_key_env", "")
+        return _normalize_env_var_name(value, "") if isinstance(value, str) else ""
+
+    @openrouter_provider_key_env.setter
+    def openrouter_provider_key_env(self, value: str) -> None:
+        self._data["openrouter_provider_key_env"] = _normalize_env_var_name(value, "")
 
     def resolve_openai_api_key(self) -> str:
         env_name = self.openai_api_key_env
@@ -584,6 +614,8 @@ class BlitztextConfig:
         self._data["tts_openai_api_key_env"] = _normalize_env_var_name(
             self._data.get("tts_openai_api_key_env"), DEFAULTS["tts_openai_api_key_env"]
         )
+        self._data["openai_provider_key_env"] = self.openai_provider_key_env
+        self._data["openrouter_provider_key_env"] = self.openrouter_provider_key_env
         self._data.pop("openai_api_key", None)
 
         if self._data.get("llm_provider") not in VALID_LLM_PROVIDERS:

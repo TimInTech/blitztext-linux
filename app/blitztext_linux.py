@@ -173,6 +173,24 @@ def _apply_window_icon(window: QWidget) -> None:
         pass
 
 
+def _parked_env(config, remembered: dict, parked_provider: str, selected: str) -> str:
+    """Key variable name to park for a provider that is not the one being saved."""
+    if selected == parked_provider:
+        return ""
+    if parked_provider in remembered:
+        value = remembered[parked_provider]
+    elif config.llm_provider == parked_provider:
+        value = config.openai_api_key_env
+    else:
+        value = getattr(config, f"{parked_provider}_provider_key_env")
+    default = DEFAULTS["openai_api_key_env"] if parked_provider == "openai" else "OPENROUTER_API_KEY"
+    return "" if value == default else value
+
+
+# Key variable shown for a provider that has none stored yet; custom must be typed.
+_PROVIDER_DEFAULT_KEY_ENV = {"openai": DEFAULTS["openai_api_key_env"], "openrouter": "OPENROUTER_API_KEY"}
+
+
 class SettingsDialog(QDialog):
     """Settings dialog for configuring BlitztextLinux."""
 
@@ -262,6 +280,14 @@ class SettingsDialog(QDialog):
         self.edit_api_key_env.setText(self.config.openai_api_key_env)
         self.edit_api_key_env.setPlaceholderText("OPENAI_API_KEY")
         self.edit_api_key_env.textChanged.connect(lambda *_: self._refresh_api_key_status())
+        # Key variable last used per provider, so a switch never carries one provider's
+        # variable over to another and switching back restores what the user typed.
+        self._env_provider = self.config.llm_provider
+        self._env_by_provider = {self._env_provider: self.config.openai_api_key_env}
+        if self._env_provider != "openai" and self.config.openai_provider_key_env:
+            self._env_by_provider["openai"] = self.config.openai_provider_key_env
+        if self._env_provider != "openrouter" and self.config.openrouter_provider_key_env:
+            self._env_by_provider["openrouter"] = self.config.openrouter_provider_key_env
 
         self.lbl_api_key_status = QLabel()
         self.lbl_api_key_status.setWordWrap(True)
@@ -537,11 +563,14 @@ class SettingsDialog(QDialog):
         provider = self.combo_llm_provider.currentData()
         api_key_field = getattr(self, "edit_api_key_env", None)
         if api_key_field is not None:
-            current_env = normalize_llm_api_key_env(api_key_field.text())
-            if provider == "openrouter" and current_env == DEFAULTS["openai_api_key_env"]:
-                api_key_field.setText("OPENROUTER_API_KEY")
-            elif provider == "openai" and current_env == "OPENROUTER_API_KEY":
-                api_key_field.setText(DEFAULTS["openai_api_key_env"])
+            remembered = getattr(self, "_env_by_provider", {})
+            previous = getattr(self, "_env_provider", None)
+            if previous is not None:
+                remembered[previous] = api_key_field.text().strip()
+            self._env_provider = provider
+            api_key_field.setText(
+                remembered.get(provider) or _PROVIDER_DEFAULT_KEY_ENV.get(provider, "")
+            )
         if provider == "openrouter":
             if not self.edit_base_url.text().strip():
                 self.edit_base_url.setText("https://openrouter.ai/api/v1")
@@ -624,6 +653,10 @@ class SettingsDialog(QDialog):
             self.config.hotkey_mode = self.combo_hotkey_mode.currentText()
             self.config.transcription_hotkey = self.combo_transcription_key.currentText()
 
+            remembered = getattr(self, "_env_by_provider", {})
+            self.config.openai_provider_key_env = _parked_env(self.config, remembered, "openai", provider)
+            self.config.openrouter_provider_key_env = _parked_env(
+                self.config, remembered, "openrouter", provider)
             self.config.openai_api_key_env = api_key_env
             self.config.llm_provider = provider
             self.config.llm_base_url = base_url
@@ -676,6 +709,7 @@ class _TranscribeWorker(QRunnable):
         paste_service: PasteService,
         custom_terms: Optional[list[str]] = None,
         route_to_compose: bool = False,
+        skip_llm: bool = False,
         replacements: Optional[list[dict[str, str]]] = None,
         cleanup_wav: Callable[[], None] | None = None,
     ) -> None:
@@ -693,6 +727,7 @@ class _TranscribeWorker(QRunnable):
         self.custom_terms = list(custom_terms or [])
         self.replacements = list(replacements or [])
         self.route_to_compose = route_to_compose
+        self.skip_llm = skip_llm or route_to_compose
 
     def _emit(self, signal_name: str, *args) -> None:
         try:
@@ -717,9 +752,11 @@ class _TranscribeWorker(QRunnable):
                 return
 
             # Compose routing always receives the raw recognized text; the
-            # compose window owns any later rewrite workflow selected there.
+            # compose window owns any later rewrite workflow selected there. A recording
+            # started for compose stays raw even if the window closed meanwhile; it then
+            # falls back to the normal clipboard/autopaste delivery below.
             # rewrite() reports a missing API key as LLMServiceError itself.
-            if self.workflow in LLM_WORKFLOWS and not self.route_to_compose:
+            if self.workflow in LLM_WORKFLOWS and not self.skip_llm:
                 self._emit("status_changed", "rewriting")
                 result_text = self.llm_service.rewrite(self.workflow, transcript)
             else:
@@ -1077,23 +1114,33 @@ class BlitztextApp(QObject):
         cfg = self.config
         if provider == cfg.llm_provider:
             return
-        previous = (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env)
+        previous = (
+            cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env,
+            cfg.openai_provider_key_env, cfg.openrouter_provider_key_env,
+        )
         problem = None
         if provider == "custom" or cfg.llm_provider == "custom":
             problem = (t("settings.save_error.title"), t("mainwindow.provider.custom_in_settings.message"))
         else:
             if cfg.llm_provider == "openai":
-                # Remember a personal OpenAI key variable so the way back restores it.
-                self._openai_key_env_memo = cfg.openai_api_key_env
+                # Park a personal OpenAI key variable (its name only) in the config so the
+                # way back restores it, also after a restart.
+                cfg.openai_provider_key_env = cfg.openai_api_key_env
+            elif cfg.llm_provider == "openrouter":
+                cfg.openrouter_provider_key_env = (
+                    "" if cfg.openai_api_key_env == "OPENROUTER_API_KEY" else cfg.openai_api_key_env
+                )
             cfg.llm_provider = provider
             if provider == "openrouter":
                 cfg.llm_base_url = "https://openrouter.ai/api/v1"
-                cfg.openai_api_key_env = "OPENROUTER_API_KEY"
+                cfg.openai_api_key_env = cfg.openrouter_provider_key_env or "OPENROUTER_API_KEY"
+                cfg.openrouter_provider_key_env = ""
             else:
                 cfg.llm_base_url = ""
-                cfg.openai_api_key_env = getattr(
-                    self, "_openai_key_env_memo", DEFAULTS["openai_api_key_env"]
+                cfg.openai_api_key_env = (
+                    cfg.openai_provider_key_env or DEFAULTS["openai_api_key_env"]
                 )
+                cfg.openai_provider_key_env = ""
             if not cfg.resolve_llm_api_key():
                 problem = (
                     t("mainwindow.provider.no_key.title"),
@@ -1109,7 +1156,8 @@ class BlitztextApp(QObject):
                     t("settings.save_error.message").format(error=exc),
                 )
         if problem is not None:
-            cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env = previous
+            (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env,
+             cfg.openai_provider_key_env, cfg.openrouter_provider_key_env) = previous
             if self._main_window is not None:
                 self._main_window.set_llm_provider(cfg.llm_provider)
             self.show_tray_warning(*problem)
@@ -1123,7 +1171,7 @@ class BlitztextApp(QObject):
     def _confirm_model_download(self, model: str) -> bool:
         if self._main_window is not None:
             # The selector popup is a Qt.Popup; a modal box over it would be unreliable.
-            self._main_window._options_popup.hide()
+            self._main_window.hide_options_popup()
         answer = QMessageBox.question(
             self._main_window,
             t("mainwindow.model.download.title"),
@@ -1259,6 +1307,18 @@ class BlitztextApp(QObject):
             logger.info("Ignored hotkey trigger %s while busy", workflow)
 
     def _start_recording(self, workflow: WorkflowType) -> None:
+        if (
+            workflow in LLM_WORKFLOWS
+            and not self._compose_voice_routing_enabled()
+            and not self.llm_service.is_available()
+        ):
+            # Fail before speaking: otherwise the transcript is lost at the rewrite step.
+            # Compose routing delivers the raw text and never calls the LLM.
+            self.show_tray_warning(
+                t("mainwindow.provider.no_key.title"),
+                t("mainwindow.recording.no_key.message").format(env=self.config.openai_api_key_env),
+            )
+            return
         had_tray_error = self._tray_error_message is not None
         self._tray_error_message = None
         logger.info(
@@ -1285,13 +1345,6 @@ class BlitztextApp(QObject):
         Fallback wenn der Hotkey nicht greift oder keine Tastatur zur Hand ist.
         """
         if self.state == "IDLE":
-            if workflow in LLM_WORKFLOWS and not self.llm_service.is_available():
-                # Fail before speaking: otherwise the transcript is lost at the rewrite step.
-                self.show_tray_warning(
-                    t("mainwindow.provider.no_key.title"),
-                    t("mainwindow.provider.no_key.message").format(env=self.config.openai_api_key_env),
-                )
-                return
             self._start_recording(workflow)
         elif self.state == "RECORDING":
             self._stop_recording_and_process()
@@ -1322,9 +1375,11 @@ class BlitztextApp(QObject):
 
     def _stop_recording_and_process(self) -> None:
         try:
-            route_to_compose = (
-                self._recording_routes_to_compose and self._compose_voice_routing_enabled()
-            )
+            # The processing path was fixed when the recording started: a compose recording
+            # never reaches the LLM, even if the window is closed or routing is switched
+            # off meanwhile. Only the delivery follows the current window state.
+            skip_llm = self._recording_routes_to_compose
+            route_to_compose = skip_llm and self._compose_voice_routing_enabled()
             wav_path = self.audio_recorder.stop()
             self._recording_routes_to_compose = False
             if not wav_path:
@@ -1353,6 +1408,7 @@ class BlitztextApp(QObject):
                 custom_terms=self.config.custom_terms,
                 replacements=self.config.replacements,
                 route_to_compose=route_to_compose,
+                skip_llm=skip_llm,
                 cleanup_wav=lambda: AudioRecorder.cleanup_recording(wav_path),
             )
 

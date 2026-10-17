@@ -612,12 +612,20 @@ class MainWindow(QWidget):
         if model:
             self._controller.main_window_model_changed(model)
 
+    def hide_options_popup(self) -> None:
+        self._options_popup.hide()
+
     def set_llm_provider(self, provider: str) -> None:
         """Show the active provider without notifying the controller."""
+        self._provider_combo.blockSignals(True)
+        # A listed entry outside the quick choices (custom) is only valid while active.
+        for index in reversed(range(self._provider_combo.count())):
+            data = self._provider_combo.itemData(index)
+            if data not in _PROVIDER_ORDER and data != provider:
+                self._provider_combo.removeItem(index)
         if self._provider_combo.findData(provider) < 0:
-            self._provider_combo.blockSignals(True)
             self._provider_combo.addItem(t(f"mainwindow.provider.{provider}"), userData=provider)
-            self._provider_combo.blockSignals(False)
+        self._provider_combo.blockSignals(False)
         self._select_silently(self._provider_combo, provider)
 
     def set_model(self, model: str) -> None:

@@ -264,3 +264,12 @@ def test_tq_escapes_ampersands_for_qt_widgets(language, key, expected):
     """Qt liest "&" als Mnemonic — tq maskiert es, sonst fehlt es in der UI."""
     set_language(language)
     assert tq(key) == expected
+
+
+def test_removed_dead_main_window_keys_are_gone_and_new_key_is_in_both_languages():
+    from app.i18n import TRANSLATIONS
+
+    for lang, table in TRANSLATIONS.items():
+        for dead in ("mainwindow.mode.transcription", "mainwindow.mode.local", "mainwindow.caption.workflow"):
+            assert dead not in table, (lang, dead)
+        assert "{env}" in table["mainwindow.recording.no_key.message"]

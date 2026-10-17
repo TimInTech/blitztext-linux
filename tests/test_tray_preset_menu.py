@@ -477,28 +477,404 @@ class TestModeSwitchHardening:
 
 @gui_only
 class TestAiGate:
-    def test_ai_recording_without_a_key_is_refused_before_recording(self, tray_app, monkeypatch):
-        from app.workflows import WorkflowType
+    """The missing-key check lives in _start_recording, so GUI and hotkeys behave alike."""
+
+    @pytest.fixture
+    def recorder(self, tray_app, monkeypatch):
+        from unittest.mock import MagicMock
 
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         tray_app.config._legacy_openai_api_key_value = ""
         tray_app._rebuild_llm_service()
-        started = []
-        monkeypatch.setattr(tray_app, "_start_recording", lambda wf: started.append(wf))
+        warnings = []
+        monkeypatch.setattr(tray_app, "show_tray_warning", lambda *a: warnings.append(a))
+        tray_app.audio_recorder = MagicMock()
+        tray_app.warnings = warnings
+        return tray_app.audio_recorder
+
+    def test_gui_ai_recording_without_a_key_never_starts_audio(self, tray_app, recorder):
+        from app.workflows import WorkflowType
 
         tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+
+        recorder.start.assert_not_called()
+        assert tray_app.state == "IDLE"
+        assert len(tray_app.warnings) == 1
+
+    def test_hotkey_ai_recording_without_a_key_never_starts_audio(self, tray_app, recorder):
+        from app.workflows import WorkflowType
+
+        for workflow in (WorkflowType.TEXT_IMPROVER, WorkflowType.DAMPF_ABLASSEN, WorkflowType.EMOJI_TEXT):
+            tray_app._on_workflow_triggered(workflow)
+
+        recorder.start.assert_not_called()
+        assert tray_app.state == "IDLE"
+        assert len(tray_app.warnings) == 3
+
+    def test_refusal_says_no_recording_started_not_provider_unchanged(self, tray_app, recorder):
+        from app.i18n import t
+        from app.workflows import WorkflowType
+
+        tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+
+        title, message = tray_app.warnings[0]
+        assert title == t("mainwindow.provider.no_key.title")
+        assert tray_app.config.openai_api_key_env in message
+        assert message == t("mainwindow.recording.no_key.message").format(
+            env=tray_app.config.openai_api_key_env)
+        assert "provider" not in message.lower()
+
+    def test_local_workflow_starts_without_a_key(self, tray_app, recorder):
+        from app.workflows import WorkflowType
+
         tray_app.gui_toggle_recording(WorkflowType.TRANSCRIPTION)
 
-        assert started == [WorkflowType.TRANSCRIPTION]
+        recorder.start.assert_called_once()
+        assert tray_app.state == "RECORDING"
+        assert tray_app.warnings == []
 
-    def test_ai_recording_with_a_key_starts(self, tray_app, monkeypatch):
+    def test_compose_voice_routing_records_ai_workflow_without_a_key(self, tray_app, recorder, monkeypatch):
+        from app.workflows import WorkflowType
+
+        monkeypatch.setattr(tray_app, "_compose_voice_routing_enabled", lambda: True)
+
+        tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+
+        recorder.start.assert_called_once()
+        assert tray_app.state == "RECORDING"
+        assert tray_app._recording_routes_to_compose is True
+        assert tray_app.warnings == []
+
+    def test_compose_voice_routing_hotkey_records_without_a_key(self, tray_app, recorder, monkeypatch):
+        from app.workflows import WorkflowType
+
+        monkeypatch.setattr(tray_app, "_compose_voice_routing_enabled", lambda: True)
+
+        tray_app._on_workflow_triggered(WorkflowType.EMOJI_TEXT)
+
+        recorder.start.assert_called_once()
+        assert tray_app.state == "RECORDING"
+
+    def test_ai_recording_with_a_key_starts(self, tray_app, recorder, monkeypatch):
         from app.workflows import WorkflowType
 
         monkeypatch.setenv("OPENAI_API_KEY", "dummy-not-a-real-key")
         tray_app._rebuild_llm_service()
-        started = []
-        monkeypatch.setattr(tray_app, "_start_recording", lambda wf: started.append(wf))
 
         tray_app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
 
-        assert started == [WorkflowType.TEXT_IMPROVER]
+        recorder.start.assert_called_once()
+        assert tray_app.state == "RECORDING"
+        assert tray_app.warnings == []
+
+
+@gui_only
+class TestProviderKeyMemo:
+    def test_personal_openai_variable_survives_a_restart(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        monkeypatch.setenv("WORK_OPENAI_KEY", "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.llm_provider = "openai"
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+
+        tray_app.main_window_provider_changed("openrouter")
+        tray_app.config = BlitztextConfig(config_dir=cfg.config_dir)  # restart
+        tray_app.main_window_provider_changed("openai")
+
+        assert tray_app.config.openai_api_key_env == "WORK_OPENAI_KEY"
+        assert tray_app.config.openai_provider_key_env == ""
+
+    def test_memo_stores_a_variable_name_never_a_key_value(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        monkeypatch.setenv("OPENAI_API_KEY", "dummy-secret-value-123")
+        tray_app.main_window_provider_changed("openrouter")
+
+        raw = (tray_app.config.config_dir / "config.json").read_text(encoding="utf-8")
+
+        assert "dummy-secret-value-123" not in raw
+        assert "dummy-not-a-real-key" not in raw
+
+    def test_failed_save_restores_the_memo(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        monkeypatch.setattr(cfg, "save", lambda: (_ for _ in ()).throw(OSError("disk full")))
+
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert cfg.openai_provider_key_env == ""
+        assert cfg.openai_api_key_env == "WORK_OPENAI_KEY"
+        assert cfg.llm_provider == "openai"
+
+    def test_settings_dialog_parks_and_clears_the_memo(self, tray_app):
+        from app.blitztext_linux import SettingsDialog
+
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        dialog = SettingsDialog(cfg)
+        dialog.combo_llm_provider.setCurrentIndex(dialog.combo_llm_provider.findData("openrouter"))
+        dialog.edit_base_url.setText("https://openrouter.ai/api/v1")
+        dialog.edit_api_key_env.setText("OPENROUTER_API_KEY")
+        dialog.save_settings()
+        assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
+
+        dialog = SettingsDialog(cfg)
+        dialog.combo_llm_provider.setCurrentIndex(dialog.combo_llm_provider.findData("openai"))
+        dialog.edit_api_key_env.setText("OPENAI_API_KEY")
+        dialog.save_settings()
+        assert cfg.openai_provider_key_env == ""
+        assert cfg.openai_api_key_env == "OPENAI_API_KEY"
+
+
+@gui_only
+class TestMainWindowSurface:
+    def test_stale_custom_entry_leaves_the_provider_list(self, tray_app):
+        main = tray_app._ensure_main_window()
+        main.set_llm_provider("custom")
+        assert main._provider_combo.findData("custom") >= 0
+
+        main.set_llm_provider("openrouter")
+
+        assert main._provider_combo.findData("custom") < 0
+        assert main._provider_combo.currentData() == "openrouter"
+        assert [main._provider_combo.itemData(i) for i in range(main._provider_combo.count())] == [
+            "openai", "openrouter"]
+
+    def test_hide_options_popup_is_public(self, tray_app):
+        main = tray_app._ensure_main_window()
+        main._show_options_popup()
+
+        main.hide_options_popup()
+
+        assert not main._options_popup.isVisible()
+
+
+@gui_only
+class TestComposeRouteIsFixedAtStart:
+    @pytest.fixture
+    def pipeline(self, tray_app, monkeypatch, tmp_path):
+        """Start a recording, then let the test change the window state before stopping."""
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        tray_app.config._legacy_openai_api_key_value = ""
+        tray_app._rebuild_llm_service()
+        wav = tmp_path / "rec.wav"
+        wav.write_bytes(b"RIFF")
+        tray_app.audio_recorder = MagicMock()
+        tray_app.audio_recorder.stop.return_value = Path(wav)
+        tray_app.llm_service = MagicMock()
+        tray_app.llm_service.is_available.return_value = False
+        tray_app.paste_service = MagicMock()
+        workers = []
+        from PyQt6.QtCore import QThreadPool
+        monkeypatch.setattr(QThreadPool.globalInstance(), "start", workers.append)
+        monkeypatch.setattr("app.blitztext_linux.AudioRecorder.cleanup_recording", lambda p: None)
+        return tray_app, workers
+
+    def _run(self, workers):
+        from unittest.mock import patch
+        worker = workers[0]
+        with patch("app.blitztext_linux.transcribe", return_value="hallo welt"):
+            worker.run()
+        return worker
+
+    @pytest.mark.parametrize("how", ["window_closed", "routing_off"])
+    def test_keyless_compose_recording_never_reaches_the_llm_after_the_window_changes(
+            self, pipeline, monkeypatch, how):
+        from app.workflows import WorkflowType
+
+        app, workers = pipeline
+        state = {"on": True}
+        monkeypatch.setattr(app, "_compose_voice_routing_enabled", lambda: state["on"])
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        assert app.state == "RECORDING"
+        state["on"] = False  # window closed / voice routing disabled mid-recording
+
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        worker = self._run(workers)
+
+        app.llm_service.rewrite.assert_not_called()
+        assert worker.skip_llm is True and worker.route_to_compose is False
+        assert app.paste_service.method_calls, "raw text must fall back to clipboard/autopaste"
+        delivered = [c.args[0] for c in app.paste_service.method_calls if c.args]
+        assert delivered == ["hallo welt"]
+
+    def test_compose_recording_with_window_still_open_is_routed_raw(self, pipeline, monkeypatch):
+        from app.workflows import WorkflowType
+
+        app, workers = pipeline
+        monkeypatch.setattr(app, "_compose_voice_routing_enabled", lambda: True)
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        worker = self._run(workers)
+
+        app.llm_service.rewrite.assert_not_called()
+        assert worker.route_to_compose is True and worker.skip_llm is True
+
+    def test_ai_recording_without_compose_still_rewrites(self, pipeline, monkeypatch):
+        from app.workflows import WorkflowType
+
+        app, workers = pipeline
+        app.llm_service.is_available.return_value = True
+        app.llm_service.rewrite.return_value = "umgeschrieben"
+        monkeypatch.setattr(app, "_compose_voice_routing_enabled", lambda: False)
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        app.gui_toggle_recording(WorkflowType.TEXT_IMPROVER)
+        worker = self._run(workers)
+
+        app.llm_service.rewrite.assert_called_once()
+        assert worker.skip_llm is False
+
+
+@gui_only
+class TestSettingsDialogKeyVariables:
+    def _dialog(self, cfg):
+        from app.blitztext_linux import SettingsDialog
+        return SettingsDialog(cfg)
+
+    def _select(self, dialog, provider):
+        dialog.combo_llm_provider.setCurrentIndex(dialog.combo_llm_provider.findData(provider))
+
+    def test_switch_never_adopts_the_previous_providers_variable(self, tray_app):
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        dialog = self._dialog(cfg)
+
+        self._select(dialog, "openrouter")
+        assert dialog.edit_api_key_env.text() == "OPENROUTER_API_KEY"
+        self._select(dialog, "custom")
+        assert dialog.edit_api_key_env.text() == ""
+
+    def test_user_typed_names_come_back_in_both_directions(self, tray_app):
+        cfg = tray_app.config
+        dialog = self._dialog(cfg)
+        dialog.edit_api_key_env.setText("MY_OPENAI")
+        self._select(dialog, "openrouter")
+        dialog.edit_api_key_env.setText("MY_ROUTER")
+        self._select(dialog, "openai")
+        assert dialog.edit_api_key_env.text() == "MY_OPENAI"
+        self._select(dialog, "openrouter")
+        assert dialog.edit_api_key_env.text() == "MY_ROUTER"
+
+    def test_openai_to_openrouter_to_openai_through_save_and_restart(self, tray_app):
+        from app.config import BlitztextConfig
+
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        dialog = self._dialog(cfg)
+        self._select(dialog, "openrouter")
+        dialog.save_settings()
+        assert (cfg.llm_provider, cfg.openai_api_key_env) == ("openrouter", "OPENROUTER_API_KEY")
+        assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
+
+        reloaded = BlitztextConfig(config_dir=cfg.config_dir)  # restart
+        dialog = self._dialog(reloaded)
+        assert dialog.edit_api_key_env.text() == "OPENROUTER_API_KEY"
+        self._select(dialog, "openai")
+        assert dialog.edit_api_key_env.text() == "WORK_OPENAI_KEY"
+        dialog.save_settings()
+        assert (reloaded.llm_provider, reloaded.openai_api_key_env) == ("openai", "WORK_OPENAI_KEY")
+        assert reloaded.openai_provider_key_env == ""
+
+    def test_custom_endpoint_with_typed_variable_and_back(self, tray_app):
+        from app.config import BlitztextConfig
+
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        dialog = self._dialog(cfg)
+        self._select(dialog, "custom")
+        dialog.edit_base_url.setText("https://llm.example.org/v1")
+        dialog.edit_api_key_env.setText("MY_CUSTOM_KEY")
+        dialog.save_settings()
+        assert (cfg.llm_provider, cfg.openai_api_key_env) == ("custom", "MY_CUSTOM_KEY")
+        assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
+
+        dialog = self._dialog(BlitztextConfig(config_dir=cfg.config_dir))
+        self._select(dialog, "openai")
+        assert dialog.edit_api_key_env.text() == "WORK_OPENAI_KEY"
+        self._select(dialog, "custom")
+        assert dialog.edit_api_key_env.text() == "MY_CUSTOM_KEY"
+
+    def test_custom_without_typed_variable_is_rejected_not_inherited(self, tray_app, monkeypatch):
+        from unittest.mock import patch
+
+        cfg = tray_app.config
+        cfg.openai_api_key_env = "WORK_OPENAI_KEY"
+        dialog = self._dialog(cfg)
+        self._select(dialog, "custom")
+        dialog.edit_base_url.setText("https://llm.example.org/v1")
+        with patch("app.blitztext_linux.QMessageBox") as box:
+            dialog.save_settings()
+
+        box.critical.assert_called_once()
+        assert (cfg.llm_provider, cfg.openai_api_key_env) == ("openai", "WORK_OPENAI_KEY")
+
+
+@gui_only
+class TestOpenRouterCustomKeyVariable:
+    def _setup(self, tray_app, monkeypatch):
+        for name in ("MY_ROUTER_KEY", "WORK_OPENAI_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY"):
+            monkeypatch.setenv(name, "dummy-not-a-real-key")
+        cfg = tray_app.config
+        cfg.llm_provider = "openrouter"
+        cfg.llm_base_url = "https://openrouter.ai/api/v1"
+        cfg.openai_api_key_env = "MY_ROUTER_KEY"
+        cfg.openai_provider_key_env = "WORK_OPENAI_KEY"
+        cfg.save()
+        return cfg
+
+    def test_quick_switch_round_trip_keeps_both_custom_variables(self, tray_app, monkeypatch):
+        cfg = self._setup(tray_app, monkeypatch)
+
+        tray_app.main_window_provider_changed("openai")
+        assert cfg.openai_api_key_env == "WORK_OPENAI_KEY"
+        assert cfg.openrouter_provider_key_env == "MY_ROUTER_KEY"
+
+        tray_app.main_window_provider_changed("openrouter")
+        assert cfg.openai_api_key_env == "MY_ROUTER_KEY"
+        assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
+        assert cfg.openrouter_provider_key_env == ""
+
+    def test_round_trip_survives_a_restart(self, tray_app, monkeypatch):
+        from app.config import BlitztextConfig
+
+        cfg = self._setup(tray_app, monkeypatch)
+        tray_app.main_window_provider_changed("openai")
+        tray_app.config = BlitztextConfig(config_dir=cfg.config_dir)  # restart
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert tray_app.config.openai_api_key_env == "MY_ROUTER_KEY"
+
+    def test_default_openrouter_variable_is_not_parked(self, tray_app, monkeypatch):
+        cfg = self._setup(tray_app, monkeypatch)
+        cfg.openai_api_key_env = "OPENROUTER_API_KEY"
+
+        tray_app.main_window_provider_changed("openai")
+
+        assert cfg.openrouter_provider_key_env == ""
+
+    def test_failed_save_restores_the_parked_names(self, tray_app, monkeypatch):
+        cfg = self._setup(tray_app, monkeypatch)
+        monkeypatch.setattr(cfg, "save", lambda: (_ for _ in ()).throw(OSError("disk full")))
+
+        tray_app.main_window_provider_changed("openai")
+
+        assert (cfg.llm_provider, cfg.openai_api_key_env) == ("openrouter", "MY_ROUTER_KEY")
+        assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
+        assert cfg.openrouter_provider_key_env == ""
+
+    def test_settings_dialog_keeps_the_openrouter_variable_when_switching_to_openai(self, tray_app, monkeypatch):
+        from app.blitztext_linux import SettingsDialog
+
+        cfg = self._setup(tray_app, monkeypatch)
+        dialog = SettingsDialog(cfg)
+        dialog.combo_llm_provider.setCurrentIndex(dialog.combo_llm_provider.findData("openai"))
+        assert dialog.edit_api_key_env.text() == "WORK_OPENAI_KEY"
+        dialog.save_settings()
+
+        assert cfg.openrouter_provider_key_env == "MY_ROUTER_KEY"
+        assert cfg.openai_provider_key_env == ""
+        tray_app.main_window_provider_changed("openrouter")
+        assert cfg.openai_api_key_env == "MY_ROUTER_KEY"

@@ -831,3 +831,100 @@ def test_failed_mode_change_never_replaces_the_existing_config(tmp_path, monkeyp
 
     assert cfg.config_file.read_text(encoding="utf-8") == before
     assert not cfg.config_file.with_suffix(".json.tmp").exists()
+
+
+@pytest.mark.parametrize("failing", ["write", "replace"])
+def test_failed_write_or_replace_leaves_no_temp_file(tmp_path, monkeypatch, failing):
+    """ENOSPC while writing or a failing replace must not strand config.json.tmp."""
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    cfg.model = "base"
+    cfg.save()
+    before = cfg.config_file.read_text(encoding="utf-8")
+    cfg.model = "tiny"
+
+    if failing == "write":
+        def broken_dump(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(json, "dump", broken_dump)
+    else:
+        def broken_replace(self, target):
+            raise OSError("replace refused")
+
+        monkeypatch.setattr(Path, "replace", broken_replace)
+
+    with pytest.raises(ConfigError):
+        cfg.save()
+
+    assert cfg.config_file.read_text(encoding="utf-8") == before
+    assert not cfg.config_file.with_suffix(".json.tmp").exists()
+
+
+def test_openai_provider_key_env_is_a_persisted_name_and_old_configs_still_load(tmp_path):
+    (tmp_path / "config.json").write_text(
+        json.dumps({"openai_api_key_env": "MY_KEY", "llm_provider": "openai"}), encoding="utf-8"
+    )
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    assert cfg.openai_api_key_env == "MY_KEY"
+    assert cfg.openai_provider_key_env == ""
+
+    cfg.openai_provider_key_env = "work_key"
+    cfg.save()
+
+    assert BlitztextConfig(config_dir=tmp_path).openai_provider_key_env == "WORK_KEY"
+
+
+def test_invalid_openai_provider_key_env_is_dropped(tmp_path):
+    (tmp_path / "config.json").write_text(
+        json.dumps({"openai_provider_key_env": "not a valid name!"}), encoding="utf-8"
+    )
+    assert BlitztextConfig(config_dir=tmp_path).openai_provider_key_env == ""
+
+
+def test_unexpected_serialization_error_keeps_config_and_leaves_no_temp_file(tmp_path):
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    cfg.model = "base"
+    cfg.save()
+    before = cfg.config_file.read_text(encoding="utf-8")
+    cfg._data["workflows"]["custom_terms"] = {object()}  # not JSON serializable
+
+    with pytest.raises(ConfigError):
+        cfg.save()
+
+    assert cfg.config_file.read_text(encoding="utf-8") == before
+    assert not cfg.config_file.with_suffix(".json.tmp").exists()
+    assert BlitztextConfig(config_dir=tmp_path).model == "base"
+
+
+def test_serialization_error_on_first_save_creates_no_files(tmp_path):
+    cfg = BlitztextConfig(config_dir=tmp_path / "new")
+    cfg._data["workflows"]["custom_terms"] = {object()}
+
+    with pytest.raises(ConfigError):
+        cfg.save()
+
+    assert not cfg.config_file.exists()
+    assert not cfg.config_file.with_suffix(".json.tmp").exists()
+
+
+def test_save_does_not_leak_a_file_descriptor_on_failure(tmp_path, monkeypatch):
+    import os
+
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    cfg.save()
+    cfg._data["workflows"]["custom_terms"] = {object()}
+    before = len(os.listdir("/proc/self/fd"))
+    for _ in range(5):
+        with pytest.raises(ConfigError):
+            cfg.save()
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_openrouter_provider_key_env_is_a_persisted_name(tmp_path):
+    cfg = BlitztextConfig(config_dir=tmp_path)
+    assert cfg.openrouter_provider_key_env == ""
+    cfg.openrouter_provider_key_env = "my_router_key"
+    cfg.save()
+    assert BlitztextConfig(config_dir=tmp_path).openrouter_provider_key_env == "MY_ROUTER_KEY"
+    (tmp_path / "config.json").write_text(json.dumps({"openrouter_provider_key_env": 5}), encoding="utf-8")
+    assert BlitztextConfig(config_dir=tmp_path).openrouter_provider_key_env == ""
