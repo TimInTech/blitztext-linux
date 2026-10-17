@@ -175,7 +175,8 @@ class HotkeyWorker(QObject):
             raise ValueError(f"hotkey_mode muss 'toggle' oder 'hold' sein, nicht {hotkey_mode!r}")
         self._mode = hotkey_mode
         self._transcription_key = transcription_key
-        self._running = False
+        # Armed at construction so a stop() that arrives before run() is not undone.
+        self._running = True
 
     @pyqtSlot()
     def run(self) -> None:
@@ -223,7 +224,6 @@ class HotkeyWorker(QObject):
             }
             hotkeys.append((workflow, tcode, meta_codes, shift_codes))
 
-        self._running = True
         next_device_refresh = time.monotonic() + DEVICE_REFRESH_SECONDS
         logger.debug(
             "Hotkey worker started mode=%s transcription_key=%s devices=%s wayland=%s display=%s",

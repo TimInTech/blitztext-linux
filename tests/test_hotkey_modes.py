@@ -525,6 +525,33 @@ class TestHotkeyDisplayName:
 
 
 class TestHotkeyWorkerShutdown:
+    def test_stop_before_run_is_not_undone(self):
+        """stop() vor dem ersten run() darf nicht durch run() aufgehoben werden.
+
+        Mit lesbaren evdev-Geraeten lief der Worker sonst endlos weiter und der
+        Thread wurde beim Aufraeumen noch laufend zerstoert (qFatal-Abbruch).
+        """
+        import os
+        import threading
+        from app.hotkey_service import HotkeyWorker
+
+        read_fd, write_fd = os.pipe()
+        fake_device = MagicMock(fd=read_fd)
+        worker = HotkeyWorker()
+        runner = threading.Thread(target=worker.run, daemon=True)
+        try:
+            with patch("app.hotkey_service._discover_keyboards", return_value=[fake_device]):
+                worker.stop()
+                runner.start()
+                runner.join(timeout=3.0)
+                still_running = runner.is_alive()
+        finally:
+            worker.stop()
+            runner.join(timeout=3.0)
+            os.close(read_fd)
+            os.close(write_fd)
+        assert not still_running, "run() hat das vorherige stop() ueberschrieben"
+
     def test_sleep_while_running_returns_false_once_stopped(self):
         from app.hotkey_service import HotkeyWorker
 
