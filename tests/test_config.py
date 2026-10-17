@@ -358,6 +358,38 @@ class TestTtsApiKeyMigration:
         monkeypatch.setenv("OPENAI_API_KEY", "openai-placeholder")
         assert config.resolve_tts_openai_api_key() == "openai-placeholder"
 
+    def test_derived_tts_env_follows_provider_switch_with_different_names(self, config_dir, monkeypatch):
+        """Adopted name must not stay frozen: switching to openrouter drops it even if names differ."""
+        self._write(config_dir, {"llm_provider": "openai", "openai_api_key_env": "ANTHROPIC_API_KEY"})
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "third-party-key-must-not-reach-openai")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config = BlitztextConfig(config_dir=config_dir)
+        assert config.tts_openai_api_key_env == "ANTHROPIC_API_KEY"
+
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        # Provider changed, variable name untouched: only the provider condition cuts it off.
+        assert config.openai_api_key_env == "ANTHROPIC_API_KEY"
+        assert config.tts_openai_api_key_env == "OPENAI_API_KEY"
+        assert config.resolve_tts_openai_api_key() == ""
+        config.openai_api_key_env = "OPENROUTER_API_KEY"
+        assert config.tts_openai_api_key_env == "OPENAI_API_KEY"
+        assert config.resolve_tts_openai_api_key() == ""
+
+    def test_derived_tts_env_is_not_written_to_the_config_file(self, config_dir):
+        self._write(config_dir, {"llm_provider": "openai", "openai_api_key_env": "MY_OPENAI_KEY"})
+        config = BlitztextConfig(config_dir=config_dir)
+        config.save()
+        saved = json.loads((config_dir / "config.json").read_text(encoding="utf-8"))
+        assert "tts_openai_api_key_env" not in saved
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "MY_OPENAI_KEY"
+
+    def test_explicit_tts_env_set_via_setter_is_persisted(self, config_dir):
+        config = BlitztextConfig(config_dir=config_dir)
+        config.tts_openai_api_key_env = "TTS_ONLY_KEY"
+        config.save()
+        assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "TTS_ONLY_KEY"
+
     def test_missing_config_file_uses_default(self, config_dir):
         assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
 
