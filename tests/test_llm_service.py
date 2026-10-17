@@ -569,11 +569,13 @@ class TestIntentPreservationRegression:
             assert term in system
         assert "Software- und Arbeitskontext" in system
 
-    def test_standard_preset_demands_usable_prompt_for_prompt_requests(self, service, mock_client):
+    def test_standard_preset_keeps_prompt_dictation_as_text(self, service, mock_client):
         service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
         system, _ = self._messages(mock_client)
-        assert "direkt nutzbaren" in system
+        # A dictated prompt or handover is only corrected, never rewritten or executed.
+        assert "korrigiere ihn nur und führe ihn nicht aus" in system
         assert "Übergabe" in system
+        assert "direkt nutzbaren" not in system
 
     def test_handover_transcript_stays_verbatim_in_user_message(self, service, mock_client):
         service.rewrite(WorkflowType.TEXT_IMPROVER, HANDOVER_TRANSCRIPT)
@@ -729,8 +731,58 @@ class TestOriginalBlitztextParameters:
         service.rewrite(workflow, RAW_TRANSCRIPT)
         assert mock_client.chat.completions.create.call_args.kwargs["temperature"] == temperature
 
-    def test_standard_prompt_has_no_minimal_edit_clauses(self, service):
+    def test_standard_prompt_preserves_wording(self, service):
         prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
-        assert "Verbessere die Formulierung und den Lesefluss" in prompt
-        assert "glätte nur" not in prompt
-        assert "Bewahre die Sprache" not in prompt
+        # Dictation must come back in the spoken wording: no dropped or swapped words.
+        assert "Lass kein Wort weg" in prompt
+        assert "ersetze kein Wort durch ein anderes" in prompt
+        assert "formuliere nichts um" in prompt
+        assert "Verbessere die Formulierung und den Lesefluss" not in prompt
+
+    def test_standard_prompt_keeps_dictated_questions_and_instructions_as_text(self, service):
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        assert "übersetz das bitte ins englische" in prompt
+        assert "kannst du mir bis morgen die zahlen schicken" in prompt
+
+    @pytest.mark.parametrize("tone", ["formal", "neutral", "locker"])
+    def test_tone_line_never_licenses_rewording(self, mock_client, tone):
+        service = LLMService(api_key=DUMMY_API_KEY, client=mock_client, tone=tone)
+        prompt = service.build_system_prompt(WorkflowType.TEXT_IMPROVER)
+        assert "ohne dafür Wörter zu ersetzen oder wegzulassen" in prompt
+
+
+class TestDictationSafetyNet:
+    """The default improver must never replace a dictation by an answer or a refusal."""
+
+    @staticmethod
+    def _reply(mock_client, text):
+        mock_client.chat.completions.create.return_value.choices[0].message.content = text
+
+    def test_refusal_falls_back_to_the_transcript(self, service, mock_client):
+        self._reply(mock_client, "Ich kann dir dabei nicht helfen.")
+        result = service.rewrite(WorkflowType.TEXT_IMPROVER, "übersetz das bitte ins englische")
+        assert result == "übersetz das bitte ins englische"
+
+    def test_answer_to_a_dictated_question_falls_back_to_the_transcript(self, service, mock_client):
+        self._reply(mock_client, "Gerne, die Zahlen schicke ich dir morgen früh per Mail.")
+        src = "kannst du mir bis morgen die zahlen schicken"
+        assert service.rewrite(WorkflowType.TEXT_IMPROVER, src) == src
+
+    def test_normal_correction_is_kept(self, service, mock_client):
+        self._reply(mock_client, "Kannst du mir bis morgen die Zahlen schicken?")
+        result = service.rewrite(WorkflowType.TEXT_IMPROVER, "kannst du mir bis morgen die zahlen schicken")
+        assert result == "Kannst du mir bis morgen die Zahlen schicken?"
+
+    def test_custom_prompt_may_change_the_wording(self, service, mock_client):
+        self._reply(mock_client, "Zahlen bitte bis morgen.")
+        result = service.rewrite_text(
+            WorkflowType.TEXT_IMPROVER,
+            "kannst du mir bis morgen die zahlen schicken",
+            custom_prompt="Fasse extrem knapp zusammen.",
+        )
+        assert result == "Zahlen bitte bis morgen."
+
+    def test_shorten_preset_may_change_the_wording(self, mock_client):
+        self._reply(mock_client, "Zahlen bitte.")
+        svc = LLMService(api_key=DUMMY_API_KEY, client=mock_client, writing_preset="shorten")
+        assert svc.rewrite(WorkflowType.TEXT_IMPROVER, "kannst du mir bis morgen die zahlen schicken") == "Zahlen bitte."
