@@ -156,3 +156,16 @@ def test_action_combo_lists_only_ai_actions_and_sets_the_workflow(qapp):
     target = next(w for w in items if w != window._selected_workflow())
     window._action_combo.setCurrentIndex(window._action_combo.findData(target))
     assert window._selected_workflow() == target
+
+
+@gui_only
+def test_clicking_the_side_that_is_already_active_keeps_the_workflow(qapp):
+    from app.workflows import WorkflowType
+
+    window = _window(qapp)
+    window.update_state("IDLE", WorkflowType.LOCAL, None)
+    window._seg_local.click()
+    assert window._selected_workflow() == WorkflowType.LOCAL
+    window.update_state("IDLE", WorkflowType.EMOJI_TEXT, None)
+    window._seg_ai.click()
+    assert window._selected_workflow() == WorkflowType.EMOJI_TEXT

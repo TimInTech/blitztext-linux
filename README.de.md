@@ -209,7 +209,7 @@ Das Hauptfenster ist ein kompaktes, rahmenloses Desktop-Widget mit einheitlicher
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/main-menu-de.png" width="170"><br><br>
         <b>Aktions-Menü</b><br>
-        <i>Workflows und Schnellzugriff direkt am Widget.</i>
+        <i>Details zur gewählten Seite: Aktion, Stil, KI-Anbieter, Whisper-Modell.</i>
       </td>
     </tr>
   </table>
@@ -220,12 +220,13 @@ Das Hauptfenster ist ein kompaktes, rahmenloses Desktop-Widget mit einheitlicher
   - **Bereit (IDLE):** Grüner Statuspunkt und Zeitanzeige (`Bereit: 00:00`).
   - **Aufnahme (RECORDING):** Gelber Statuspunkt, sekundengenaue Zeitanzeige und animierte Wellenbalken links und rechts des Mikrofons.
   - **Verarbeitung (TRANSCRIBING):** Rotierender goldener Kreisbogen um das Mikrofon (`Transkribiere…`).
+- **Umschalter Lokal | Mit KI:** Zwei Knöpfe direkt unter dem Mikrofon. **Lokal** = nur lokale Whisper-Transkription, nichts verlässt den Rechner. **Mit KI** = lokal transkribieren, danach bearbeitet dein Cloud-KI-Anbieter den Text. Die gewählte Seite ist gold; die Zustandszeile darunter (zum Beispiel `Lokal · Whisper base` oder `Mit KI · OpenAI · Verbessern`) zeigt, was die nächste Aufnahme tut, und öffnet per Klick das Detail-Popup. Hotkey-Workflows stellen den Umschalter auf die passende Seite, während der Aufnahme ist er gesperrt.
 - **Kompakte Werkzeugleiste:**
   - ✍ **Compose-Button** (hervorgehobenes Stift-Symbol): Öffnet das Entwurfsfenster für Texteingabe und KI-Verfeinerung.
   - 🕒 **Verlauf-Button** (mit Zähler-Badge): Öffnet den Transkript- und Diktat-Verlauf.
   - 🔊 **Vorlesen-Button** (Lautsprecher-Symbol): Öffnet das TTS-Fenster zur Sprachausgabe.
-  - ⚙ **Einstellungen-Button** (Zahnrad): Öffnet den Konfigurations-Dialog.
-  - ⋯ **Mehr-Button**: Öffnet das Popup-Menü für *Diktieren & verbessern*, Text-Aktionen (*Kürzen*, *Ausformulieren*, *Tonfall ändern*), *Eigene Anweisung*, *Sammel-Diktat* und *Verwerfen*.
+  - ⋯ **Mehr-Button** (gleiches Popup wie die Zustandszeile): Zeigt nur die Felder, die zur gewählten Seite passen — *Lokal*: Whisper-Modell; *Mit KI*: Aktion (*Diktieren & verbessern*, *Sachlich formulieren*, *Emojis ergänzen*), Schreibstil für *Diktieren & verbessern* (*Kürzen*, *Ausformulieren*, *Tonfall ändern*, *Eigene Anweisung*), KI-Anbieter (OpenAI oder OpenRouter; einen eigenen Endpunkt änderst du nur in den Einstellungen) und Whisper-Modell. Ein **Fertig**-Knopf schließt das Popup; *Sammel-Diktat* und *Verwerfen* stehen darunter. Der Anbieterwechsel braucht die passende API-Key-Variable, größere Whisper-Modelle fragen vorher, weil sie heruntergeladen werden können.
+- **Einstellungs-Zahnrad:** Kleiner ⚙-Knopf in der Titelleiste neben Minimieren und Schließen; öffnet den Konfigurations-Dialog.
 
 *Das Widget öffnet sich beim Start sowie über den Tray-Eintrag **Fenster anzeigen** oder einen Klick auf das Tray-Icon. Schließen blendet das Widget aus — die App läuft im Hintergrund im Tray weiter.*
 

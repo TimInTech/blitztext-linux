@@ -208,7 +208,7 @@ The main window is a compact, frameless desktop widget with a consistent dark lo
       <td align="center" width="25%">
         <img src="docs/screenshots/linux/main-menu-en.png" width="170"><br><br>
         <b>Options menu</b><br>
-        <i>Workflows and quick actions.</i>
+        <i>Details for the chosen side: action, style, AI provider, Whisper model.</i>
       </td>
     </tr>
   </table>
@@ -219,12 +219,13 @@ The main window is a compact, frameless desktop widget with a consistent dark lo
   - **Idle:** Green status dot with duration counter (`Ready: 00:00`).
   - **Recording:** Amber indicator, live recording timer, and animated stereo wave bars flanking the mic.
   - **Processing:** Rotating gold progress ring around the microphone (`Transcribing…`).
+- **Local | With AI switch:** Two buttons right under the microphone. **Local** = local Whisper transcription only, nothing leaves your machine. **With AI** = local transcription, then the text is edited by your cloud AI provider. The chosen side is gold; the state line below it (for example `Local · Whisper base` or `With AI · OpenAI · Improve`) shows what the next recording does and opens the details popup when clicked. Hotkey workflows move the switch to the matching side, and it is locked while recording.
 - **Tool row:**
   - ✍ **Compose button** (highlighted pen icon): Opens the Compose window for drafting and rewriting.
   - 🕒 **History button** (with counter badge): Opens the transcript history with recent entries.
   - 🔊 **Read aloud button** (speaker icon): Opens the TTS window to synthesize speech.
-  - ⚙ **Settings button** (gear icon): Opens the settings dialog.
-  - ⋯ **More options button**: Pops up quick access to *Dictate & improve*, text improvement presets (*Shorten*, *Expand*, *Change tone*), *Custom instruction*, *Batch dictation*, and *Discard*.
+  - ⋯ **More options button** (same popup as the state line): Shows only the fields that apply to the chosen side — *Local*: Whisper model; *With AI*: action (*Dictate & improve*, *Make it factual*, *Add emojis*), the writing style for *Dictate & improve* (*Shorten*, *Expand*, *Change tone*, *Custom instruction*), the AI provider (OpenAI or OpenRouter; a custom endpoint is changed in the settings only), and the Whisper model. A **Done** button closes the popup; *Batch dictation* and *Discard* sit below it. Switching the AI provider needs the matching API key variable; larger Whisper models ask before they may be downloaded.
+- **Settings gear:** Small ⚙ button in the title bar next to minimize and close; opens the settings dialog.
 
 *The widget opens at startup, via the tray entry **Show window**, or by clicking the tray icon. Closing only hides the widget — the app keeps running in the background tray.*
 

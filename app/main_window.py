@@ -517,6 +517,9 @@ class MainWindow(QWidget):
 
     def _set_ai_mode(self, ai: bool) -> None:
         """The switch picks a workflow; AI remembers the last AI action."""
+        if (self._selected_workflow() in LLM_WORKFLOWS) == ai:
+            self._sync_mode_widgets()
+            return  # already on that side: keep the exact workflow (e.g. LOCAL, EMOJI_TEXT)
         workflow = self._last_ai_workflow if ai else WorkflowType.TRANSCRIPTION
         index = self._workflow_combo.findData(workflow)
         if index >= 0:
