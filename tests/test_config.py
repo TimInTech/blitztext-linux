@@ -337,6 +337,27 @@ class TestTtsApiKeyMigration:
         })
         assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "TTS_ONLY_KEY"
 
+    def test_switching_back_to_third_party_provider_cuts_off_adopted_tts_key(self, config_dir, monkeypatch):
+        """Migration adopts MY_OR_KEY while provider is openai; going back to openrouter must not leak it."""
+        self._write(config_dir, {"llm_provider": "openai", "openai_api_key_env": "MY_OR_KEY"})
+        monkeypatch.setenv("MY_OR_KEY", "openrouter-key-must-not-reach-openai")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config = BlitztextConfig(config_dir=config_dir)
+        assert config.tts_openai_api_key_env == "MY_OR_KEY"
+
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        assert config.openai_api_key_env == "MY_OR_KEY"
+        assert config.resolve_tts_openai_api_key() == ""
+
+    def test_default_tts_env_still_resolves_under_third_party_provider(self, config_dir, monkeypatch):
+        config = BlitztextConfig(config_dir=config_dir)
+        config.llm_provider = "openrouter"
+        config.llm_base_url = "https://openrouter.ai/api/v1"
+        config.openai_api_key_env = "OPENROUTER_API_KEY"
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-placeholder")
+        assert config.resolve_tts_openai_api_key() == "openai-placeholder"
+
     def test_missing_config_file_uses_default(self, config_dir):
         assert BlitztextConfig(config_dir=config_dir).tts_openai_api_key_env == "OPENAI_API_KEY"
 

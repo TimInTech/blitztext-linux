@@ -216,7 +216,16 @@ class BlitztextConfig:
 
     def resolve_tts_openai_api_key(self) -> str:
         """Key for OpenAI Cloud-TTS; never the key of another LLM provider."""
-        env_value = os.environ.get(self.tts_openai_api_key_env, "").strip()
+        env_name = self.tts_openai_api_key_env
+        if (
+            self.llm_provider != "openai"
+            and env_name == self.openai_api_key_env
+            and env_name != DEFAULTS["tts_openai_api_key_env"]
+        ):
+            # The variable currently belongs to a third-party LLM provider (e.g. after
+            # a provider switch); only the legacy OpenAI key may stand in for it.
+            return self._legacy_openai_api_key_value
+        env_value = os.environ.get(env_name, "").strip()
         if env_value:
             return env_value
         return self._legacy_openai_api_key_value
