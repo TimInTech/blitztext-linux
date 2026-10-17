@@ -1,13 +1,12 @@
 """Drive the main window offscreen, count clicks, grab screenshots, audit widgets.
 
-Usage: QT_QPA_PLATFORM=offscreen python scripts/gui_usability_check.py OUTDIR
-Writes OUTDIR/report.json plus one PNG per step. The PNGs and the task text feed
+Usage: QT_QPA_PLATFORM=offscreen python scripts/gui_usability_check.py
+Writes report.json plus one PNG per step into a fresh temp directory and prints its path. The PNGs and the task text feed
 a blind reviewer; the audit part needs no LLM.
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -147,21 +146,11 @@ def audit_widgets(window) -> list[dict]:
     return findings
 
 
-def _checked_outdir(outdir: Path) -> Path:
-    """Resolve the output directory and only accept the working tree or the temp dir."""
-    resolved = os.path.realpath(str(outdir))
-    allowed = [os.path.realpath(os.getcwd()), os.path.realpath(tempfile.gettempdir())]
-    if not any(resolved == base or resolved.startswith(base + os.sep) for base in allowed):
-        raise SystemExit(f"output directory must be inside the working tree or the temp dir: {resolved}")
-    return Path(resolved)
-
-
 def run_checks(outdir: Path) -> dict:
     from PyQt6.QtWidgets import QApplication
 
     from app.main_window import MainWindow
 
-    outdir = _checked_outdir(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([])
     tasks = []
@@ -203,8 +192,10 @@ def run_checks(outdir: Path) -> dict:
 
 
 if __name__ == "__main__":
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "gui-review-out")
+    # No path argument on purpose: the output always goes to a fresh temp directory.
+    out = Path(tempfile.mkdtemp(prefix="gui-usability-"))
     result = run_checks(out)
+    print(f"report: {out / 'report.json'}")
     for task in result["tasks"]:
         print(f"{task['id']}: {task['clicks']} clicks (budget {task['budget']}), goal={task['goal_reached']}")
     for finding in result["audit"]:

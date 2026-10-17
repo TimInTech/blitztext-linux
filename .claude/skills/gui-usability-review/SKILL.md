@@ -18,8 +18,8 @@ controller methods the window calls.
 - `tests/test_gui_usability.py` (hard gates)
 
 ## Procedure
-1. Run the driver: `QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/gui_usability_check.py OUTDIR`.
-   It writes `OUTDIR/report.json` and one PNG per click step.
+1. Run the driver: `QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/gui_usability_check.py`.
+   It prints a fresh temp directory containing `report.json` and one PNG per click step; copy what you want to keep.
 2. Hard gates (no LLM): `WHISPER_GUI_TESTS=1 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests/test_gui_usability.py`.
    Click budgets, goal reached, accessible names, keyboard focus, minimum target 22 px.
 3. Blind LLM rating, at least 3 independent runs per task. The reviewer gets ONLY
