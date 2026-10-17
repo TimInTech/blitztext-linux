@@ -56,6 +56,9 @@ _MIC_BODY = _mic_body_path()
 # Main window: a single frameless surface holds header, microphone, status and
 # tools. The window margins only reserve the measured reach of its shadow.
 _SHADOW_MARGINS = (10, 6, 10, 14)  # left, top, right, bottom
+# Quick choices only; the full list stays in the settings dialog.
+_PROVIDER_ORDER = ("openai", "openrouter", "custom")
+_MODEL_ORDER = ("tiny", "base", "small", "medium", "large-v3-turbo")
 _PANEL_PADDING = (10, 6, 10, 10)  # plus the 1 px QSS border
 _TOOL_GAP = 6
 _TOOLBAR_TOP_GAP = 8
@@ -275,6 +278,12 @@ class MainWindow(QWidget):
         self.windowTitleChanged.connect(self._title_label.setText)
         header.addWidget(self._title_label)
         header.addStretch(1)
+        # Rarely needed: a small header control instead of a full toolbar slot.
+        self._btn_settings = self._window_button(
+            "settings", t("mainwindow.tooltip.settings"),
+            self._controller.show_settings_dialog,
+        )
+        header.addWidget(self._btn_settings)
         self._btn_minimize = self._window_button(
             "minimize", t("mainwindow.tooltip.minimize"), self.showMinimized
         )
@@ -320,17 +329,13 @@ class MainWindow(QWidget):
         self._btn_tts = self._toolbar_button(
             "speaker", t("mainwindow.tooltip.tts"), self._controller.show_tts_window
         )
-        self._btn_settings = self._toolbar_button(
-            "settings", t("mainwindow.tooltip.settings"),
-            self._controller.show_settings_dialog
-        )
         self._btn_options = self._toolbar_button(
             "more", t("mainwindow.tooltip.more"), self._show_options_popup
         )
         self._btn_options.setObjectName("panelTrigger")
         for button in (
             self._btn_edit_text, self._btn_history, self._btn_tts,
-            self._btn_settings, self._btn_options,
+            self._btn_options,
         ):
             tools.addWidget(button)
         panel.addLayout(tools)
@@ -391,6 +396,22 @@ class MainWindow(QWidget):
         self._preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         self._preset_combo.hide()
         popup.addWidget(self._preset_combo)
+        self._provider_combo = QComboBox(self._popup_surface)
+        self._provider_combo.setObjectName("popupCombo")
+        self._provider_combo.setToolTip(t("mainwindow.tooltip.provider"))
+        self._provider_combo.setAccessibleName(t("mainwindow.tooltip.provider"))
+        for provider in _PROVIDER_ORDER:
+            self._provider_combo.addItem(t(f"mainwindow.provider.{provider}"), userData=provider)
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        popup.addWidget(self._provider_combo)
+        self._model_combo = QComboBox(self._popup_surface)
+        self._model_combo.setObjectName("popupCombo")
+        self._model_combo.setToolTip(t("mainwindow.tooltip.model"))
+        self._model_combo.setAccessibleName(t("mainwindow.tooltip.model"))
+        for model in _MODEL_ORDER:
+            self._add_model_item(model)
+        self._model_combo.currentIndexChanged.connect(self._on_model_changed)
+        popup.addWidget(self._model_combo)
         self._btn_prompt = QPushButton(t("compose.custom.edit"), self._popup_surface)
         self._btn_prompt.setObjectName("promptButton")
         self._btn_prompt.clicked.connect(self._edit_prompt)
@@ -437,6 +458,41 @@ class MainWindow(QWidget):
         self._options_popup.hide()
         self._controller.show_custom_prompt()
 
+    def _add_model_item(self, model: str) -> None:
+        self._model_combo.addItem(t("mainwindow.model.item").format(model=model), userData=model)
+
+    @pyqtSlot()
+    def _on_provider_changed(self) -> None:
+        provider = self._provider_combo.currentData()
+        if provider:
+            self._controller.main_window_provider_changed(provider)
+
+    @pyqtSlot()
+    def _on_model_changed(self) -> None:
+        model = self._model_combo.currentData()
+        if model:
+            self._controller.main_window_model_changed(model)
+
+    def set_llm_provider(self, provider: str) -> None:
+        """Show the active provider without notifying the controller."""
+        self._select_silently(self._provider_combo, provider)
+
+    def set_model(self, model: str) -> None:
+        """Show the active Whisper model, adding it if it is not a quick choice."""
+        if self._model_combo.findData(model) < 0:
+            self._model_combo.blockSignals(True)
+            self._add_model_item(model)
+            self._model_combo.blockSignals(False)
+        self._select_silently(self._model_combo, model)
+
+    @staticmethod
+    def _select_silently(combo: QComboBox, data: str) -> None:
+        index = combo.findData(data)
+        if index >= 0:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(index)
+            combo.blockSignals(False)
+
     @pyqtSlot()
     def _on_preset_changed(self) -> None:
         key = self._preset_combo.currentData()
@@ -465,7 +521,10 @@ class MainWindow(QWidget):
         self._btn_toggle.setEnabled(state in ("IDLE", "RECORDING"))
         self._btn_toggle.set_mode("RECORDING" if recording else "PROCESSING" if busy else "IDLE")
         self._btn_discard.setEnabled(recording)
-        for control in (self._workflow_combo, self._preset_combo, self._btn_prompt):
+        for control in (
+            self._workflow_combo, self._preset_combo, self._btn_prompt,
+            self._provider_combo, self._model_combo,
+        ):
             control.setEnabled(state == "IDLE")
         if error:
             self._set_status(t("mainwindow.status.error"), theme.STATE_ERROR)

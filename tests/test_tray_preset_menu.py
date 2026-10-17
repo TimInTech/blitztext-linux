@@ -332,3 +332,61 @@ def test_goal_settings_rebuild_refreshes_service_in_open_compose(tray_app, monke
 
     assert tray_app.llm_service is not old_service
     assert compose._llm_service is tray_app.llm_service
+
+
+@gui_only
+class TestModeSwitch:
+    def test_provider_switch_needs_a_key_and_reverts_without_one(self, tray_app, monkeypatch):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        main = tray_app._ensure_main_window()
+        before = (tray_app.config.llm_provider, tray_app.config.llm_base_url)
+
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert (tray_app.config.llm_provider, tray_app.config.llm_base_url) == before
+        assert main._provider_combo.currentData() == before[0]
+
+    def test_provider_switch_with_key_persists_and_rebuilds(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        main = tray_app._ensure_main_window()
+        old_service = tray_app.llm_service
+
+        tray_app.main_window_provider_changed("openrouter")
+
+        assert tray_app.config.llm_provider == "openrouter"
+        assert tray_app.config.llm_base_url == "https://openrouter.ai/api/v1"
+        assert tray_app.config.openai_api_key_env == "OPENROUTER_API_KEY"
+        assert tray_app.llm_service is not old_service
+        assert main._provider_combo.currentData() == "openrouter"
+        on_disk = BlitztextConfig(config_dir=tray_app.config.config_dir)
+        assert on_disk.llm_provider == "openrouter"
+
+    def test_provider_switch_back_to_openai_restores_defaults(self, tray_app, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-not-a-real-key")
+        monkeypatch.setenv("OPENAI_API_KEY", "dummy-not-a-real-key")
+        tray_app.main_window_provider_changed("openrouter")
+        tray_app.main_window_provider_changed("openai")
+
+        assert tray_app.config.llm_provider == "openai"
+        assert tray_app.config.llm_base_url == ""
+        assert tray_app.config.openai_api_key_env == "OPENAI_API_KEY"
+
+    def test_model_switch_persists_and_skips_noop(self, tray_app, monkeypatch):
+        monkeypatch.setattr(tray_app, "_confirm_model_download", lambda model: True)
+        tray_app.main_window_model_changed("tiny")
+        assert tray_app.config.model == "tiny"
+        assert BlitztextConfig(config_dir=tray_app.config.config_dir).model == "tiny"
+
+    def test_heavy_model_switch_asks_first_and_can_be_declined(self, tray_app, monkeypatch):
+        main = tray_app._ensure_main_window()
+        tray_app.config.model = "base"
+        asked = []
+        monkeypatch.setattr(
+            tray_app, "_confirm_model_download", lambda model: asked.append(model) or False
+        )
+
+        tray_app.main_window_model_changed("small")
+
+        assert asked == ["small"]
+        assert tray_app.config.model == "base"
+        assert main._model_combo.currentData() == "base"

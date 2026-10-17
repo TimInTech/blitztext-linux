@@ -39,6 +39,12 @@ class _Controller:
     def main_window_preset_changed(self, key: str) -> None:
         self.calls.append(("preset", key))
 
+    def main_window_provider_changed(self, provider: str) -> None:
+        self.calls.append(("provider", provider))
+
+    def main_window_model_changed(self, model: str) -> None:
+        self.calls.append(("model", model))
+
     def show_history_panel(self) -> None:
         self.calls.append("history")
 
@@ -498,7 +504,7 @@ def test_toolbar_buttons_keep_full_size_after_stylesheet_polish(qapp):
 
     window = _shown_window(qapp)
     buttons = (window._btn_edit_text, window._btn_history, window._btn_tts,
-               window._btn_settings, window._btn_options)
+               window._btn_options)
 
     for button in buttons:
         assert button.height() == theme.TOOL_BUTTON_SIZE
@@ -518,7 +524,7 @@ def test_window_size_follows_compact_content_with_small_shadow_margins(qapp):
     panel = window._main_panel.geometry()
 
     assert window.size() == window.layout().sizeHint()
-    assert 200 <= panel.width() <= 250
+    assert 170 <= panel.width() <= 250
     assert 170 <= panel.height() <= 220
     assert panel.left() <= 12
     assert window.width() - panel.right() - 1 <= 12
@@ -668,3 +674,57 @@ def test_brand_bolt_stays_cut_into_the_gold_microphone_in_every_state(
     gold = pixel(QPointF(inner.x(), bolt.boundingRect().top() - 4))
     assert gold.red() > 150 and gold.green() > 110 and gold.red() - gold.blue() > 60
     assert paint_errors == []
+
+
+@gui_only
+def test_settings_gear_is_small_and_sits_in_the_header(qapp):
+    from app import theme
+
+    window = _shown_window(qapp)
+    gear = window._btn_settings
+
+    assert gear.width() == theme.WINDOW_BUTTON_SIZE < theme.TOOL_BUTTON_SIZE
+    assert gear.height() == theme.WINDOW_BUTTON_SIZE
+    assert gear.geometry().bottom() < window._btn_toggle.geometry().top()
+    assert gear.geometry().right() < window._btn_minimize.geometry().left()
+    assert gear.accessibleName() and gear.toolTip()
+
+
+@gui_only
+def test_mode_combos_live_in_the_popup_and_report_changes(qapp):
+    from app.main_window import MainWindow
+
+    controller = _Controller()
+    window = MainWindow(controller)
+    window.show()
+    qapp.processEvents()
+
+    providers = [window._provider_combo.itemData(i) for i in range(window._provider_combo.count())]
+    assert providers == ["openai", "openrouter", "custom"]
+    models = [window._model_combo.itemData(i) for i in range(window._model_combo.count())]
+    assert models[:3] == ["tiny", "base", "small"]
+
+    window._provider_combo.setCurrentIndex(1)
+    window._model_combo.setCurrentIndex(2)
+    assert ("provider", "openrouter") in controller.calls
+    assert ("model", "small") in controller.calls
+
+
+@gui_only
+def test_mode_combos_sync_without_feedback_and_lock_while_busy(qapp):
+    from app.main_window import MainWindow
+
+    controller = _Controller()
+    window = MainWindow(controller)
+
+    window.set_llm_provider("custom")
+    window.set_model("large-v3")  # not in the quick list: must still be shown
+    assert window._provider_combo.currentData() == "custom"
+    assert window._model_combo.currentData() == "large-v3"
+    assert controller.calls == []
+
+    window.update_state("RECORDING", None, None)
+    assert not window._provider_combo.isEnabled()
+    assert not window._model_combo.isEnabled()
+    window.update_state("IDLE", None, None)
+    assert window._provider_combo.isEnabled() and window._model_combo.isEnabled()

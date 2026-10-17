@@ -1067,6 +1067,81 @@ class BlitztextApp(QObject):
         self._refresh_preset_menu()
         logger.info("Writing preset changed via main window: %s", key)
 
+    def main_window_provider_changed(self, provider: str) -> None:
+        """Switch the AI provider from the main window; refuse without a usable key."""
+        cfg = self.config
+        if provider == cfg.llm_provider:
+            return
+        previous = (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env)
+        cfg.llm_provider = provider
+        if provider == "openrouter":
+            cfg.llm_base_url = "https://openrouter.ai/api/v1"
+            cfg.openai_api_key_env = "OPENROUTER_API_KEY"
+        elif provider == "openai":
+            cfg.llm_base_url = ""
+            cfg.openai_api_key_env = DEFAULTS["openai_api_key_env"]
+        problem = None
+        if provider == "custom" and not cfg.llm_base_url:
+            problem = (t("settings.save_error.title"), t("mainwindow.provider.no_url.message"))
+        elif not cfg.resolve_llm_api_key():
+            problem = (
+                t("mainwindow.provider.no_key.title"),
+                t("mainwindow.provider.no_key.message").format(env=cfg.openai_api_key_env),
+            )
+        if problem is None:
+            try:
+                cfg.save()
+            except Exception as exc:
+                logger.error("Failed to save LLM provider: %s", exc)
+                problem = (
+                    t("settings.save_error.title"),
+                    t("settings.save_error.message").format(error=exc),
+                )
+        if problem is not None:
+            cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env = previous
+            if self._main_window is not None:
+                self._main_window.set_llm_provider(cfg.llm_provider)
+            self.show_tray_warning(*problem)
+            return
+        self._rebuild_llm_service()
+        self.update_menu_availability()
+        if self._main_window is not None:
+            self._main_window.set_llm_provider(provider)
+        logger.info("LLM provider changed via main window: %s", provider)
+
+    def _confirm_model_download(self, model: str) -> bool:
+        answer = QMessageBox.question(
+            self._main_window,
+            t("mainwindow.model.download.title"),
+            t("mainwindow.model.download.message").format(model=model),
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def main_window_model_changed(self, model: str) -> None:
+        """Switch the Whisper model; larger models ask first because they may download."""
+        cfg = self.config
+        if model == cfg.model:
+            return
+        previous = cfg.model
+        if model not in ("tiny", "base") and not self._confirm_model_download(model):
+            if self._main_window is not None:
+                self._main_window.set_model(previous)
+            return
+        cfg.model = model
+        try:
+            cfg.save()
+        except Exception as exc:
+            cfg.model = previous
+            if self._main_window is not None:
+                self._main_window.set_model(previous)
+            logger.error("Failed to save model: %s", exc)
+            self.show_tray_error(
+                t("settings.save_error.title"),
+                t("settings.save_error.message").format(error=exc),
+            )
+            return
+        logger.info("Whisper model changed via main window: %s", model)
+
     def start_hotkey_worker(self) -> None:
         self.stop_hotkey_worker()
 
@@ -1120,6 +1195,8 @@ class BlitztextApp(QObject):
             self._refresh_preset_menu()
             if self._main_window is not None:
                 self._main_window.set_preset(self.config.writing_preset)
+                self._main_window.set_llm_provider(self.config.llm_provider)
+                self._main_window.set_model(self.config.model)
 
             # Restart hotkey listener if mode or key changed
             if self.hotkey_worker and (
@@ -1456,6 +1533,8 @@ class BlitztextApp(QObject):
                 window.set_history_count(self._history_panel.entry_count)
             window.update_state(self.state, self.current_workflow, self._tray_error_message)
             window.set_preset(self.config.writing_preset)
+            window.set_llm_provider(self.config.llm_provider)
+            window.set_model(self.config.model)
             self._main_window = window
         return self._main_window
 

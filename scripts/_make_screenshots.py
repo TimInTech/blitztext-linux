@@ -439,6 +439,8 @@ def _render_language_set(out_dir: Path, lang: str) -> None:
             show_settings_dialog=lambda *a, **k: None,
             show_tts_window=lambda *a, **k: None,
             main_window_preset_changed=lambda *a, **k: None,
+            main_window_provider_changed=lambda *a, **k: None,
+            main_window_model_changed=lambda *a, **k: None,
         )
 
         # 1. Main Window States
