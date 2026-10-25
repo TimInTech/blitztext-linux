@@ -365,6 +365,7 @@ class MainWindow(QWidget):
         self._btn_discard.hide()
         self._btn_discard.clicked.connect(self._on_discard_clicked)
         discard_container = QWidget(self._main_panel)
+        discard_container.setObjectName("discardContainer")
         discard_container.setMinimumHeight(24)
         discard_row = QHBoxLayout(discard_container)
         discard_row.setContentsMargins(0, 0, 0, 0)

@@ -325,6 +325,7 @@ QDialogButtonBox {{
 
 MAIN_WINDOW_QSS = f"""
 QWidget#mainWidgetWindow {{ background: transparent; }}
+QWidget#discardContainer {{ background: transparent; }}
 QFrame#mainPanel {{
     background: qradialgradient(cx:0.32, cy:0.20, radius:1.05,
         stop:0 #30343a, stop:0.58 {APP_SURFACE}, stop:1 #1e2125);
