@@ -14,19 +14,27 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import re
 import tarfile
 
 DEPENDENCIES = ['PyQt6', 'evdev', 'openai', 'openai-whisper', 'faster-whisper']
 TORCH = 'torch'
-SEMVER = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
 MAX_VERSION_LENGTH = 64
+
+
+def _is_stable_version(value: str) -> bool:
+    if not isinstance(value, str) or len(value) > MAX_VERSION_LENGTH:
+        return False
+    parts = value.split('.')
+    return len(parts) == 3 and all(
+        part.isascii() and part.isdecimal() and (part == '0' or not part.startswith('0'))
+        for part in parts
+    )
 
 
 def build_release(source: Path, output: Path, tag: str) -> Path:
     source = Path(source); output = Path(output)
     version = tag[1:] if tag.startswith('v') else tag
-    if len(version) > MAX_VERSION_LENGTH or not re.fullmatch(SEMVER, version):
+    if not _is_stable_version(version):
         raise ValueError('Tag must be a stable numeric version, optionally prefixed with v.')
     tree = ast.parse((source / 'app/__init__.py').read_text())
     versions = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
