@@ -383,11 +383,25 @@ systemctl --user enable --now ydotool.service   # nutzt /usr/local/bin/ydotoold
 
 ---
 
+## Aufnahme verwerfen
+
+Während einer Aufnahme erscheint **Verwerfen** direkt bei der Aufnahmesteuerung und im Tray-Menü. Die Aktion beendet die Aufnahme und löscht das temporäre Audio, ohne Transkription oder KI-Verarbeitung zu starten. **Stopp** beendet und verarbeitet die Aufnahme weiterhin. Vorhandener Text und Verlauf bleiben beim Verwerfen erhalten.
+
+## Updates aus den Einstellungen
+
+Unter **Einstellungen → Updates → Nach Updates suchen** eine neue Version prüfen und mit **Update herunterladen und installieren** einspielen. Öffentliche stabile GitHub-Releases benötigen weder GitHub-Konto noch Token, Git-Installation oder `git pull`. Die Prüfung erfolgt auf Knopfdruck; beim bloßen Öffnen der Einstellungen wird nichts geladen. Nach der Installation Blitztext beenden und erneut öffnen.
+
+Updates werden separat im Datenverzeichnis des Benutzers vorbereitet. Konfiguration, Zugangsdaten und Modell-Caches bleiben an ihren bisherigen Orten. Schlägt Download oder Vorbereitung fehl, bleibt die bisherige Version ausgewählt. Die erste Vorbereitung kann mehrere Minuten dauern und benötigt freien Speicher für eine separate Python-Umgebung. Die Erstinstallation stellt weiterhin die Systempakete bereit; ein App-Update benötigt keine Administratorrechte und führt `install.sh` nicht erneut aus.
+
+Der Updatekanal setzt eine Version voraus, die den Updater bereits enthält. Ältere Installationen müssen diese einmal über den bisherigen Installationsweg beziehen. Experimentelle Flatpak-Builds verwenden ihren eigenen Paketweg.
+
+Für Release-Ersteller: Ein stabiles Release mit Tag `vX.Y.Z` veröffentlichen, passend zu `app/__init__.py`. Der Release-Workflow baut das versionierte Updatearchiv samt Prüfsumme und hängt es an das Release. Solange diese Dateien fehlen, meldet die App, dass das Release noch nicht installierbar ist. Paketaufbau und Wiederherstellung stehen in der [Update-Dokumentation](docs/release-updates.md).
+
 ## Konfiguration
 
 Alles wird lokal unter `~/.config/blitztext-linux/config.json` gespeichert. Diese Datei enthält keine Secrets — der OpenAI-/OpenRouter-Key wird aus einer Umgebungsvariable gelesen (siehe [Secrets](#secrets)). Die Konfigurationsdatei lässt sich direkt aus den Einstellungen öffnen: **Einstellungen → Allgemein → „Konfigurationsdatei öffnen"**.
 
-Der Einstellungs-Dialog hat drei Tabs:
+Der Einstellungs-Dialog enthält Spracherkennung, Text & KI, Allgemein und Updates:
 
 <div align="center">
   <img src="docs/screenshots/linux/settings-speech-de.png" alt="Einstellungen: Spracherkennung" width="480">

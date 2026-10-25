@@ -183,7 +183,7 @@ def test_options_are_shown_only_in_transient_popup(qapp):
     qapp.processEvents()
     assert window._model_combo.isVisible()
     assert window._btn_dictation.isVisible()
-    assert window._btn_discard.isVisible()
+    assert not window._btn_discard.isVisible()
 
     window._options_popup.hide()
     assert window._options_popup.isVisible() is False
@@ -268,11 +268,13 @@ def test_recording_state_enables_discard_and_updates_gold_widget(qapp):
     assert window._btn_toggle._anim.isActive()
     assert window._btn_toggle.text() == "Stopp"
     assert window._btn_discard.isEnabled()
+    assert window._btn_discard.isVisible()
 
     window.update_state("TRANSCRIBING", WorkflowType.TRANSCRIPTION, None)
     assert window._btn_toggle.mode == "PROCESSING"
     assert window._btn_toggle._anim.isActive()
     assert window._btn_discard.isEnabled() is False
+    assert not window._btn_discard.isVisible()
     assert window._timer_label.isVisible() is False
 
     window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
@@ -824,3 +826,30 @@ def test_wide_status_text_never_widens_the_window(qapp):
     window.set_history_count(999)
     qapp.processEvents()
     assert window.size() == size
+
+
+@gui_only
+def test_discard_is_directly_clickable_only_while_recording(qapp):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+    from app.main_window import MainWindow
+    from app.workflows import WorkflowType
+
+    controller = _Controller()
+    window = MainWindow(controller)
+    window.show()
+    try:
+        for state in ("IDLE", "RECORDING", "TRANSCRIBING", "LLM_REWRITING", "IDLE"):
+            window.update_state(state, WorkflowType.TRANSCRIPTION, None)
+            qapp.processEvents()
+            assert not window._options_popup.isVisible()
+            assert window._btn_discard.isVisible() == (state == "RECORDING")
+            assert window._btn_discard.isEnabled() == (state == "RECORDING")
+            if state == "RECORDING":
+                assert window._btn_discard.height() >= 22
+                assert window._btn_discard.width() >= 22
+                assert window.rect().contains(window._btn_discard.mapTo(window, window._btn_discard.rect().center()))
+                QTest.mouseClick(window._btn_discard, Qt.MouseButton.LeftButton)
+        assert controller.calls == ["discard"]
+    finally:
+        window.close()
