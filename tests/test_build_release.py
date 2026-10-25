@@ -38,7 +38,7 @@ def test_package_contains_runtime_and_checksum_only(source, tmp_path):
         assert tar.getmember('run.sh').mode == 0o755
 
 
-@pytest.mark.parametrize('tag', ['v1.2.4', '1.2.3rc1', 'v01.2.3', '../../bad'])
+@pytest.mark.parametrize('tag', ['v1.2.4', '1.2.3rc1', 'v01.2.3', '../../bad', '1' * 65])
 def test_tag_must_match_version(source, tmp_path, tag):
     with pytest.raises(ValueError): build_release(source, tmp_path / 'dist', tag)
 
