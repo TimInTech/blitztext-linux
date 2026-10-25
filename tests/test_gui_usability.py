@@ -68,3 +68,9 @@ def test_no_blocking_accessibility_findings(report):
 @gui_only
 def test_report_is_json_serialisable(report):
     json.dumps(report)
+
+
+def test_discard_is_a_one_click_usability_task():
+    tasks = {task[0]: task for task in _load().TASKS}
+    assert 'F_discard' in tasks
+    assert tasks['F_discard'][2] == 1

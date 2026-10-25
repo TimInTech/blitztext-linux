@@ -3,7 +3,26 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python"
+# Resolve the pointer once, then invoke Python directly: no launcher recursion.
+# Incomplete or broken current installations fall back to the retained release.
+DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+if [[ "${DATA_HOME}" != /* ]]; then DATA_HOME="${HOME}/.local/share"; fi
+RELEASES_DIR="${DATA_HOME}/blitztext-linux/releases"
+APP_DIR="${SCRIPT_DIR}"
+if [[ -z "${FLATPAK_ID:-}" && ! -f /.flatpak-info ]]; then
+    RELEASES_REAL="$(readlink -f -- "${RELEASES_DIR}" 2>/dev/null || true)"
+    for POINTER in current previous; do
+        [[ -L "${RELEASES_DIR}/${POINTER}" ]] || continue
+        TARGET="$(readlink -f -- "${RELEASES_DIR}/${POINTER}" 2>/dev/null || true)"
+        [[ -n "${TARGET}" && "$(dirname "${TARGET}")" == "${RELEASES_REAL}" ]] || continue
+        [[ "$(basename "${TARGET}")" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[a-f0-9]+$ ]] || continue
+        if [[ -f "${TARGET}/.ready" && -f "${TARGET}/app/blitztext_linux.py" && -x "${TARGET}/.venv/bin/python" ]]; then
+            APP_DIR="${TARGET}"
+            break
+        fi
+    done
+fi
+VENV_PYTHON="${APP_DIR}/.venv/bin/python"
 LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/blitztext_linux.pid"
 SECRETS_FILE="${HOME}/.config/blitztext-linux/secrets.env"
 
@@ -43,4 +62,4 @@ if [[ ! -x "${VENV_PYTHON}" ]]; then
     exit 1
 fi
 
-exec "${VENV_PYTHON}" "${SCRIPT_DIR}/app/blitztext_linux.py" "$@"
+exec "${VENV_PYTHON}" "${APP_DIR}/app/blitztext_linux.py" "$@"

@@ -30,6 +30,7 @@ def _run_script(script_path: Path, home_dir: Path, runtime_dir: Path) -> subproc
     env = os.environ.copy()
     env.update({
         "HOME": str(home_dir),
+        "XDG_DATA_HOME": str(home_dir / ".local/share"),
         "XDG_RUNTIME_DIR": str(runtime_dir),
     })
     proc = subprocess.Popen(
@@ -101,3 +102,44 @@ def test_run_script_stays_quiet_when_file_permissions_are_0600(tmp_path: Path):
     assert result.returncode == 0
     assert "BT_SAMPLE_VAR=from-env" in result.stdout
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize('valid', [True, False])
+def test_dispatches_only_ready_managed_release(tmp_path, valid):
+    repo = Path(__file__).resolve().parents[1]
+    script = _prepare_run_script(tmp_path, repo)
+    home = tmp_path / 'home'; runtime = tmp_path / 'runtime'; runtime.mkdir()
+    releases = home / '.local/share/blitztext-linux/releases'
+    managed = releases / '1.2.0-abcdef'; (managed / 'app').mkdir(parents=True)
+    (managed / 'app/blitztext_linux.py').write_text('pass')
+    python = managed / '.venv/bin/python'; python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/bash\nprintf "managed:%s\\n" "$@"\n'); python.chmod(0o755)
+    if valid: (managed / '.ready').touch()
+    (releases / 'current').symlink_to(managed.name)
+    result = _run_script(script, home, runtime)
+    assert result.returncode == 0
+    assert ('managed:' in result.stdout) is valid
+
+
+@pytest.mark.parametrize('current_state', ['missing', 'unready', 'outside'])
+def test_previous_fallback_and_managed_launcher_do_not_recurse(tmp_path, current_state):
+    repo = Path(__file__).resolve().parents[1]
+    home = tmp_path / 'home'; runtime = tmp_path / 'runtime'; runtime.mkdir()
+    releases = home / '.local/share/blitztext-linux/releases'
+    previous = releases / '1.1.0-abc'; previous.mkdir(parents=True)
+    script = _prepare_run_script(previous, repo)
+    (previous / '.ready').touch()
+    python = previous / '.venv/bin/python'
+    python.write_text('#!/bin/bash\nprintf "previous:%s\\n" "$@"\n'); python.chmod(0o755)
+    (releases / 'previous').symlink_to(previous.name)
+    target = releases / '1.2.0-def'
+    if current_state == 'unready': target.mkdir()
+    if current_state == 'outside':
+        target = tmp_path / 'outside'
+        target.mkdir()
+        _prepare_run_script(target, repo)
+        (target / '.ready').touch()
+    (releases / 'current').symlink_to(target)
+    result = _run_script(script, home, runtime)
+    assert result.returncode == 0
+    assert f'previous:{previous}/app/blitztext_linux.py' in result.stdout

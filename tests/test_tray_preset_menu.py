@@ -878,3 +878,74 @@ class TestOpenRouterCustomKeyVariable:
         assert cfg.openai_provider_key_env == ""
         tray_app.main_window_provider_changed("openrouter")
         assert cfg.openai_api_key_env == "MY_ROUTER_KEY"
+
+
+@gui_only
+def test_tray_discard_only_available_during_recording(tray_app):
+    from unittest.mock import MagicMock
+    from app.i18n import t
+    from app.workflows import WorkflowType
+
+    recorder = MagicMock()
+    recorder.is_recording.return_value = False
+    tray_app.audio_recorder = recorder
+    action = tray_app.action_discard
+    assert action in tray_app.menu.actions()
+    assert action.text() == t("mainwindow.button.discard")
+    for state in ("IDLE", "TRANSCRIBING", "LLM_REWRITING", "RECORDING"):
+        tray_app._set_state(state, "test")
+        assert action.isVisible() == (state == "RECORDING")
+        assert action.isEnabled() == (state == "RECORDING")
+    tray_app.current_workflow = WorkflowType.TRANSCRIPTION
+    tray_app._recording_routes_to_compose = True
+    action.trigger()
+    recorder.discard.assert_called_once()
+    recorder.stop.assert_not_called()
+    assert tray_app.state == "IDLE"
+    assert tray_app.current_workflow is None
+    assert not tray_app._recording_routes_to_compose
+    assert not action.isVisible()
+    assert not action.isEnabled()
+
+
+@gui_only
+def test_tray_discard_failed_stop_remains_available_for_retry(tray_app, monkeypatch):
+    from unittest.mock import MagicMock
+    from app.workflows import WorkflowType
+
+    recorder = MagicMock()
+    recorder.is_recording.return_value = True
+    tray_app.audio_recorder = recorder
+    monkeypatch.setattr(tray_app, "show_tray_error", lambda *args: tray_app.update_tray_state())
+    tray_app.current_workflow = WorkflowType.TRANSCRIPTION
+    tray_app._recording_routes_to_compose = True
+    tray_app._set_state("RECORDING", "test")
+
+    tray_app.action_discard.trigger()
+
+    assert tray_app.state == "RECORDING"
+    assert tray_app.current_workflow == WorkflowType.TRANSCRIPTION
+    assert tray_app._recording_routes_to_compose
+    assert tray_app.action_discard.isEnabled()
+    assert tray_app.action_discard.isVisible()
+    recorder.stop.assert_not_called()
+
+    recorder.is_recording.return_value = False
+    tray_app.action_discard.trigger()
+    assert tray_app.state == "IDLE"
+    assert not tray_app.action_discard.isVisible()
+
+
+@gui_only
+def test_tray_discard_label_refreshes_with_language(tray_app):
+    from app.i18n import get_language, set_language
+
+    original = get_language()
+    try:
+        for language, label in (("en", "Discard"), ("de", "Verwerfen")):
+            set_language(language)
+            tray_app._refresh_i18n_texts()
+            assert tray_app.action_discard.text() == label
+    finally:
+        set_language(original)
+        tray_app._refresh_i18n_texts()

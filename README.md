@@ -381,11 +381,25 @@ systemctl --user enable --now ydotool.service   # uses /usr/local/bin/ydotoold
 
 ---
 
+## Discard a recording
+
+While recording, **Discard** is visible next to the recording controls and in the tray menu. It stops capture and deletes the temporary audio without starting transcription or AI processing. **Stop** still finishes the recording and processes it. Discarding does not clear existing text or history.
+
+## Updates from Settings
+
+Open **Settings → Updates → Check for updates**, then **Download and install update**. Public stable GitHub releases are checked without a GitHub account, token, Git installation, or `git pull`. Checking is manual; nothing is downloaded when you merely open Settings. After installation, quit and reopen Blitztext to use the new version.
+
+Updates are prepared separately in your user data directory. Configuration, credentials and model caches stay in their existing locations. A download or preparation failure keeps the previous version selected. The first preparation can take several minutes and requires free disk space for a separate Python environment. The initial installation still supplies system packages; an app update does not request administrator permissions or rerun `install.sh`.
+
+This update channel requires a version that already includes the updater. Older installations need to acquire that version once through the existing installation path. Experimental Flatpak builds use their packaging channel instead.
+
+Release maintainers: publish a stable release with a `vX.Y.Z` tag matching `app/__init__.py`. The release workflow builds and attaches the versioned update archive and checksum. Until those assets are attached, the app reports that the release is not yet available for installation. See [release update details](docs/release-updates.md) for packaging and recovery.
+
 ## Configuration
 
 Everything is stored locally under `~/.config/blitztext-linux/config.json`. This file holds no secrets — the OpenAI/OpenRouter key is read from an environment variable (see [Secrets](#secrets)). The configuration file can be opened directly from the settings: **Settings → General → "Open configuration file"**.
 
-The settings dialog has three tabs:
+The settings dialog includes Speech Recognition, Text & AI, General, and Updates:
 
 <div align="center">
   <img src="docs/screenshots/linux/settings-speech-en.png" alt="Settings: Speech Recognition" width="480">

@@ -64,7 +64,7 @@ _MODEL_ORDER = ("tiny", "base", "small", "medium", "large-v3-turbo")
 _PANEL_MIN_WIDTH = 212
 _PANEL_PADDING = (10, 6, 10, 10)  # plus the 1 px QSS border
 _TOOL_GAP = 6
-_TOOLBAR_TOP_GAP = 8
+_TOOLBAR_TOP_GAP = 0  # Keep the always-reserved discard row within the compact window height
 _HISTORY_BUTTON_WIDTH = 48
 
 
@@ -301,6 +301,8 @@ class MainWindow(QWidget):
         header.addWidget(self._btn_close)
         panel.addLayout(header)
 
+        capture_controls = QHBoxLayout()
+        capture_controls.setSpacing(8)
         self._btn_toggle = RecordButton(self._main_panel)
         self._btn_toggle.clicked.connect(self._on_toggle_clicked)
         panel.addWidget(self._btn_toggle, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -316,7 +318,6 @@ class MainWindow(QWidget):
         self._timer_label.setObjectName("timerLabel")
         status.addWidget(self._timer_label)
         panel.addLayout(status)
-        panel.addSpacing(4)
         switch = QHBoxLayout()
         switch.setSpacing(0)
         self._seg_local = self._segment_button(t("mainwindow.mode.switch.local"), "left")
@@ -342,6 +343,34 @@ class MainWindow(QWidget):
         self._mode_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._mode_label.clicked.connect(self._show_options_popup)
         panel.addWidget(self._mode_label)
+        self._btn_discard = QPushButton(t("mainwindow.button.discard"), self._main_panel)
+        self._btn_discard.setObjectName("discardButton")
+        # Fit the existing 22px summary row, keeping the recording controls stationary.
+        self._btn_discard.setStyleSheet(
+            f"""
+            QPushButton#discardButton {{
+                background: {theme.APP_SURFACE}; color: {theme.STATE_ERROR};
+                border: 1px solid {theme.APP_LINE}; border-radius: 5px;
+                padding: 0 8px; min-height: 22px; max-height: 22px;
+            }}
+            QPushButton#discardButton:hover {{
+                background: {theme.APP_SURFACE_HOVER}; border-color: {theme.STATE_ERROR};
+            }}
+            QPushButton#discardButton:focus {{ border-color: {theme.BLITZ_300}; }}
+            QPushButton#discardButton:pressed {{ background: {theme.APP_SURFACE_SUNK}; }}
+            """
+        )
+        self._btn_discard.setMinimumWidth(82)
+        self._btn_discard.setEnabled(False)
+        self._btn_discard.hide()
+        self._btn_discard.clicked.connect(self._on_discard_clicked)
+        discard_container = QWidget(self._main_panel)
+        discard_container.setMinimumHeight(24)
+        discard_row = QHBoxLayout(discard_container)
+        discard_row.setContentsMargins(0, 0, 0, 0)
+        discard_row.addStretch(1)
+        discard_row.addWidget(self._btn_discard)
+        panel.addWidget(discard_container)
         panel.addSpacing(_TOOLBAR_TOP_GAP)
 
         # The tool row is part of the same surface; its width sets the panel width.
@@ -484,11 +513,6 @@ class MainWindow(QWidget):
         self._btn_dictation.setCheckable(True)
         self._btn_dictation.clicked.connect(self._on_dictation_clicked)
         popup.addWidget(self._btn_dictation)
-        self._btn_discard = QPushButton(t("mainwindow.button.discard"), self._popup_surface)
-        self._btn_discard.setObjectName("discardButton")
-        self._btn_discard.setEnabled(False)
-        self._btn_discard.clicked.connect(self._on_discard_clicked)
-        popup.addWidget(self._btn_discard)
         self._sync_mode_widgets()
         self._options_popup.adjustSize()
         self._options_popup.hide()
@@ -672,6 +696,7 @@ class MainWindow(QWidget):
         self._btn_toggle.setEnabled(state in ("IDLE", "RECORDING"))
         self._btn_toggle.set_mode("RECORDING" if recording else "PROCESSING" if busy else "IDLE")
         self._btn_discard.setEnabled(recording)
+        self._btn_discard.setVisible(recording)
         for control in (
             self._workflow_combo, self._action_combo, self._btn_prompt,
             self._provider_combo, self._model_combo, self._preset_combo,

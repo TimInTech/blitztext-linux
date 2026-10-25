@@ -1,0 +1,64 @@
+name: Release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and validate (for example v0.9.0); no publication'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-assets-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # The release builder only supports stable numeric versions. Manual runs
+    # remain available for validating an existing tag, including prereleases.
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Build and validate tag against application version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: python scripts/build_release.py --tag "$RELEASE_TAG" --output dist
+      - name: Check archive and checksum
+        run: |
+          cd dist
+          sha256sum --check *.sha256
+          python -c 'import glob, tarfile; t = tarfile.open(glob.glob("*.tar.gz")[0]); assert all(n in t.getnames() for n in ("run.sh", "release.json", "app/blitztext_linux.py"))'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Attach public updater assets to the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256

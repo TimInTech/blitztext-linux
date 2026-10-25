@@ -485,6 +485,10 @@ class SettingsDialog(QDialog):
 
         self.tabs.addTab(self._scrollable(tab_general), tq("settings.tab.general"))
 
+        from app.update_widget import UpdateWidget
+        self.update_widget = UpdateWidget(self)
+        self.tabs.addTab(self._scrollable(self.update_widget), t("updates.tab"))
+
         layout.addWidget(self.tabs)
 
         def _target_widgets(item) -> list[QWidget]:
@@ -895,6 +899,11 @@ class BlitztextApp(QObject):
         self.action_custom_prompt.setIcon(theme.create_ui_icon("edit", theme.BLITZ_400))
         self.action_custom_prompt.triggered.connect(self.show_custom_prompt)
         self.menu.addAction(self.action_custom_prompt)
+        self.action_discard = QAction(t("mainwindow.button.discard"), self)
+        self.action_discard.setVisible(self.state == "RECORDING")
+        self.action_discard.setEnabled(self.state == "RECORDING")
+        self.action_discard.triggered.connect(self.gui_discard)
+        self.menu.addAction(self.action_discard)
         self.menu.addSeparator()
 
         # Actions für die fünf Workflows
@@ -1017,6 +1026,8 @@ class BlitztextApp(QObject):
             self.action_compose.setText(t("tray.compose"))
         if hasattr(self, "action_custom_prompt"):
             self.action_custom_prompt.setText(t("compose.custom.edit"))
+        if hasattr(self, "action_discard"):
+            self.action_discard.setText(t("mainwindow.button.discard"))
         if hasattr(self, "action_transcription"):
             self.action_transcription.setText(
                 f"{tq('workflow.transcription.name')}\t{hotkey_display_name(self.config.transcription_hotkey)}"
@@ -1655,6 +1666,8 @@ class BlitztextApp(QObject):
             self._main_window.update_state(self.state, self.current_workflow, self._tray_error_message)
 
     def update_tray_state(self) -> None:
+        self.action_discard.setVisible(self.state == "RECORDING")
+        self.action_discard.setEnabled(self.state == "RECORDING")
         if self._tray_error_message:
             self.tray_icon.setIcon(self._tray_icons["ERROR"])
             self.tray_icon.setToolTip(t("tray.tooltip.error").format(message=self._tray_error_message))

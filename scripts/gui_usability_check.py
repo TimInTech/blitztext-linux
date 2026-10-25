@@ -23,6 +23,7 @@ TASKS = (
     ("C_dictate", "Dictate with text improvement (start and stop)", 3),
     ("D_model", "Switch the Whisper model to 'tiny'", 3),
     ("E_settings", "Open the settings dialog", 1),
+    ("F_discard", "Discard a running recording without transcribing it", 1),
 )
 
 
@@ -96,6 +97,18 @@ def _controller_task(task_id, window, app, outdir, recorder):
         s.click(window._mode_label, "Zustandszeile (Details)")
         s.choose(window._model_combo, "tiny", "Whisper-Modell")
         goal = ("model", "tiny") in recorder.calls
+    elif task_id == "F_discard":
+        window.update_state("RECORDING", WorkflowType.TRANSCRIPTION, None)
+        s._shot("state: recording")
+        visible = window._btn_discard.isVisible()
+        s.click(window._btn_discard, "Verwerfen")
+        window.update_state("IDLE", None, None)
+        s._shot("state: ready")
+        ready = window._status_label.text()
+        from app.i18n import t
+        goal = visible and ready == t("mainwindow.status.ready") and ("gui_discard",) in recorder.calls and not any(
+            call[0] == "gui_toggle_recording" for call in recorder.calls
+        )
     else:
         s.click(window._btn_settings, "Zahnrad")
         goal = ("show_settings_dialog",) in recorder.calls
