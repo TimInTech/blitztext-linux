@@ -585,10 +585,12 @@ The original project is an experimental, non-commercial open-source project unde
   <sub>Made with ❤️ (and a little AI help).</sub>
 </div>
 
-### Latest release notes (v0.9.0): Local | With AI switch and safer recording
+### Latest release notes (v0.9.1): Discard, updater and cloud transcription
+
+A running recording can now be cancelled with **Discard** (main window and tray menu): the temporary audio is deleted and nothing is transcribed. Settings → Updates checks for new public GitHub releases and installs them without Git or a token. <kbd>Esc</kbd> closes the history window and the dictation popup. Cloud transcription backends `openrouter` and `openai-cloud` are available in the settings; see the privacy note under `backend`.
+
+### Release notes (v0.9.0): Local | With AI switch and safer recording
 
 The main window has a visible Local | With AI switch, quick switches for the AI provider and the Whisper model, and a small settings gear. Dictated text is cleaned locally (term joining, replacements, fillers, stutters) before pasting or rewriting.
 
 AI recordings without a usable key are refused before the audio starts, from the button and from hotkeys alike. Compose voice routing keeps working without a key. Personal key variable names (names only, never key values) survive provider switches and restarts, and a failed config save no longer leaves a temp file behind.
-
-A running recording can now be cancelled with **Discard** (main window and tray menu): the temporary audio is deleted and nothing is transcribed. Settings → Updates checks for new public GitHub releases and installs them without Git or a token. <kbd>Esc</kbd> closes the history window and the dictation popup.
