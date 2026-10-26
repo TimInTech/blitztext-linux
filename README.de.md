@@ -533,7 +533,7 @@ Details zu Manifest-Umfang, Build-Befehlen und bekannten Abweichungen von Flathu
 
 - **Linux Exclusive:** Nur für Linux-Systeme.
 - **Wayland Fokus:** Entwickelt für Wayland (`wl-clipboard`, `ydotool`).
-- **Datenschutz:** Lokale Workflows bleiben zu 100% auf deinem Rechner. OpenAI oder OpenRouter wird nur bei Bedarf für LLM- oder Cloud-TTS-Aufgaben kontaktiert.
+- **Datenschutz:** Lokale Workflows bleiben zu 100% auf deinem Rechner. OpenAI oder OpenRouter wird nur bei Bedarf für LLM, Cloud-TTS oder Cloud-Transkription (Backend `openrouter` / `openai-cloud`, das die Aufnahme sendet) kontaktiert.
 - **Sicherheit (`evdev` & `input`-Gruppe):** Das Tool liest Input global über `/dev/input/event*`. Auf System-Ebene bedeutet dies, dass alle Prozesse des Benutzers Eingaben mitlesen könnten (Trade-off unter Wayland ohne XDG GlobalShortcuts). Nutze Blitztext nur in Umgebungen, denen du vertraust!
 - **Flatpak-Sandbox:** Siehe [Flatpak-MVP-Status](#flatpak-mvp-status) oben — globale Hotkeys, Auto-Paste, lokales Whisper und Desktop-Benachrichtigungen sind innerhalb der Sandbox nicht verfügbar.
 

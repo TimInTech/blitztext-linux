@@ -5,6 +5,7 @@ On Linux, transcription runs through the Whisper Python backends configured in t
 
 - `openai-whisper` (default)
 - `faster-whisper` (optional)
+- `openrouter` and `openai-cloud` (optional cloud transcription; the audio leaves your machine, see [privacy notes](privacy.md))
 
 Supported model names in the Linux app are:
 `tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`, `large-v3-turbo`.

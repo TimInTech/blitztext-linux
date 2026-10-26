@@ -531,7 +531,7 @@ See [`packaging/flatpak/README.md`](packaging/flatpak/README.md) for the exact m
 
 - **Linux exclusive:** For Linux systems only.
 - **Wayland focus:** Developed for Wayland (`wl-clipboard`, `ydotool`).
-- **Privacy:** Local workflows stay 100% on your machine. OpenAI or OpenRouter is only contacted when needed for LLM or Cloud TTS tasks.
+- **Privacy:** Local workflows stay 100% on your machine. OpenAI or OpenRouter is only contacted when needed for LLM, Cloud TTS or cloud transcription (`openrouter` / `openai-cloud` backend, which sends the recorded audio).
 - **Security (`evdev` & `input` group):** The tool reads input globally via `/dev/input/event*`. At the system level, this means all of the user's processes could read along with input (a trade-off under Wayland without XDG GlobalShortcuts). Only use Blitztext in environments you trust!
 - **Flatpak sandbox:** See [Flatpak MVP status](#flatpak-mvp-status) above — global hotkeys, auto-paste, local Whisper, and desktop notifications are unavailable inside the sandbox.
 
