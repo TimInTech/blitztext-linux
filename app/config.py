@@ -70,7 +70,7 @@ DEFAULTS: dict[str, Any] = {
 }
 
 VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
-VALID_BACKENDS = {"openai-whisper", "faster-whisper"}
+VALID_BACKENDS = {"openai-whisper", "faster-whisper", "openrouter", "openai-cloud"}
 VALID_HOTKEY_MODES = {"toggle", "hold"}
 VALID_TONES = {"formal", "neutral", "locker"}
 VALID_EMOJI_DENSITIES = {"wenig", "mittel", "viel"}
@@ -274,6 +274,22 @@ class BlitztextConfig:
             # The legacy config value is an OpenAI key; never send it to a third party.
             return os.environ.get(self.openai_api_key_env, "").strip()
         return self.resolve_openai_api_key()
+
+    def resolve_transcription_api_key(self) -> str:
+        """Return the API key for cloud transcription backends without cross-provider leaks."""
+        if self.backend == "openrouter":
+            env_name = (
+                self.openai_api_key_env
+                if self.llm_provider == "openrouter" and self.openai_api_key_env != DEFAULTS["openai_api_key_env"]
+                else self.openrouter_provider_key_env or "OPENROUTER_API_KEY"
+            )
+            return os.environ.get(env_name, "").strip()
+        if self.backend == "openai-cloud":
+            if self.llm_provider == "openai":
+                return self.resolve_openai_api_key()
+            env_name = self.openai_provider_key_env or DEFAULTS["openai_api_key_env"]
+            return os.environ.get(env_name, "").strip() or self._legacy_openai_api_key_value
+        return ""
 
     @property
     def has_legacy_openai_api_key(self) -> bool:

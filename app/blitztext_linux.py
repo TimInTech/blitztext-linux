@@ -231,7 +231,7 @@ class SettingsDialog(QDialog):
         self.combo_model.setCurrentText(self.config.model)
 
         self.combo_backend = QComboBox()
-        self.combo_backend.addItems(["openai-whisper", "faster-whisper"])
+        self.combo_backend.addItems(["openai-whisper", "faster-whisper", "openrouter", "openai-cloud"])
         self.combo_backend.setCurrentText(self.config.backend)
 
         self.edit_language = QLineEdit()
@@ -716,6 +716,7 @@ class _TranscribeWorker(QRunnable):
         skip_llm: bool = False,
         replacements: Optional[list[dict[str, str]]] = None,
         cleanup_wav: Callable[[], None] | None = None,
+        transcription_api_key: str = "",
     ) -> None:
         super().__init__()
         self.signals = _WorkerSignals()
@@ -732,6 +733,7 @@ class _TranscribeWorker(QRunnable):
         self.replacements = list(replacements or [])
         self.route_to_compose = route_to_compose
         self.skip_llm = skip_llm or route_to_compose
+        self.transcription_api_key = transcription_api_key
 
     def _emit(self, signal_name: str, *args) -> None:
         try:
@@ -748,6 +750,7 @@ class _TranscribeWorker(QRunnable):
                 language=self.language,
                 backend=self.backend,
                 custom_terms=self.custom_terms,
+                api_key=self.transcription_api_key,
             )
             transcript = clean_transcript(transcript, self.custom_terms, self.replacements, self.language)
 
@@ -1406,12 +1409,23 @@ class BlitztextApp(QObject):
             self.paste_service.autopaste = self.config.autopaste
             self.paste_service.key_delay_ms = self.config.paste_key_delay_ms
 
+            effective_backend = (
+                "faster-whisper"
+                if self.current_workflow == WorkflowType.LOCAL and self.config.backend in {"openrouter", "openai-cloud"}
+                else self.config.backend
+            )
+            transcription_api_key = (
+                self.config.resolve_transcription_api_key()
+                if effective_backend in {"openrouter", "openai-cloud"}
+                else ""
+            )
+
             # Create the transcribe worker
             worker = _TranscribeWorker(
                 wav_file=wav_path,
                 model=self.config.model,
                 language=self.config.language,
-                backend=self.config.backend,
+                backend=effective_backend,
                 workflow=self.current_workflow,
                 llm_service=self.llm_service,
                 autopaste=self.config.autopaste,
@@ -1421,6 +1435,7 @@ class BlitztextApp(QObject):
                 route_to_compose=route_to_compose,
                 skip_llm=skip_llm,
                 cleanup_wav=lambda: AudioRecorder.cleanup_recording(wav_path),
+                transcription_api_key=transcription_api_key,
             )
 
             worker.signals.status_changed.connect(self._on_worker_status_changed)

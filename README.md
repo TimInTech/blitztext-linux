@@ -453,7 +453,7 @@ The settings dialog includes Speech Recognition, Text & AI, General, and Updates
 - **model**: Whisper model size (`tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`, `large-v3-turbo`). Default: `base`.
 - **language**: Transcription language (`de`, `en`) or `auto`.
 - **ui_language**: Language of the app interface (`de` or `en`). Default: `de`. Changes take effect after a restart.
-- **backend**: `openai-whisper` or `faster-whisper`.
+- **backend**: `openai-whisper` or `faster-whisper` (local), or `openrouter` / `openai-cloud` (cloud transcription with `openai/gpt-4o-transcribe` / `gpt-4o-transcribe`). **Privacy:** with a cloud backend the recorded audio is sent to OpenRouter or OpenAI; the key is read from `OPENROUTER_API_KEY` / `OPENAI_API_KEY` (or your configured variable names), never stored in the config. The *Local* workflow always transcribes locally with `faster-whisper`, even if a cloud backend is configured.
 - **hotkey_mode**:
   - `toggle`: press once to start, press again to stop.
   - `hold`: recording runs as long as the hotkey is held. Presses below 150 ms are discarded; empty recordings return to ready without a persistent error state.

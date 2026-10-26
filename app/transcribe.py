@@ -9,11 +9,15 @@ and reloads the model for every call).
 """
 from __future__ import annotations
 
+import base64
 import gc
+import json
 import logging
 import os
 import sys
 import threading
+import urllib.error
+import urllib.request
 import warnings
 import wave
 from pathlib import Path
@@ -25,7 +29,11 @@ VALID_MODEL_NAMES = {
     "tiny", "base", "small", "medium",
     "large", "large-v2", "large-v3", "large-v3-turbo",
 }
-VALID_BACKENDS = {"openai-whisper", "faster-whisper"}
+VALID_BACKENDS = {"openai-whisper", "faster-whisper", "openrouter", "openai-cloud"}
+DEFAULT_OPENROUTER_TRANSCRIBE_MODEL = "openai/gpt-4o-transcribe"
+DEFAULT_OPENAI_CLOUD_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
+_OPENROUTER_TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
+_CLOUD_REQUEST_TIMEOUT = 45.0
 # A WAV with only its header carries no samples (e.g. an accidental short press).
 _WAV_HEADER_BYTES = 44
 # As in the original Blitztext app: vocabulary hints only for recordings of at
@@ -56,15 +64,17 @@ def transcribe(
     language: str = "de",
     backend: str = "openai-whisper",
     custom_terms: list[str] | None = None,
+    api_key: str = "",
 ) -> str:
     """Transkribiert eine WAV-Datei und gibt den Text zurueck.
 
     Args:
         wav_file: Pfad zur WAV-Datei (16 kHz, mono).
-        model:    Whisper-Modellname (z. B. 'base', 'small').
+        model:    Whisper-Modellname (z. B. 'base', 'small') oder Cloud-Modell-ID.
         language: Sprachcode ('de', 'en', ...) oder 'auto' fuer Autodetect.
-        backend:  'openai-whisper' | 'faster-whisper'
+        backend:  'openai-whisper' | 'faster-whisper' | 'openrouter' | 'openai-cloud'
         custom_terms: Optionale Eigennamen/Fachbegriffe als Transkriptions-Hint.
+        api_key:  Optionaler API-Schluessel fuer Cloud-Backends (Fallback: Env).
 
     Returns:
         Transkribierter Text (stripped). Leer wenn nichts erkannt.
@@ -75,13 +85,13 @@ def transcribe(
     """
     wav_file = Path(wav_file).resolve()
 
-    if model not in VALID_MODEL_NAMES:
-        raise TranscribeError(
-            f"Ungültiger Modellname {model!r}. Gültig: {sorted(VALID_MODEL_NAMES)}"
-        )
     if backend not in VALID_BACKENDS:
         raise TranscribeError(
             f"Ungültiger Backend {backend!r}. Gültig: {sorted(VALID_BACKENDS)}"
+        )
+    if backend in {"openai-whisper", "faster-whisper"} and model not in VALID_MODEL_NAMES:
+        raise TranscribeError(
+            f"Ungültiger Modellname {model!r}. Gültig: {sorted(VALID_MODEL_NAMES)}"
         )
     if not wav_file.is_file():
         raise TranscribeError(f"WAV-Datei nicht gefunden: {wav_file}")
@@ -95,9 +105,15 @@ def transcribe(
     try:
         hint = _build_transcription_hint(custom_terms)
         hotwords = _build_hotwords(custom_terms)
+        if backend == "openrouter":
+            return _transcribe_openrouter(str(wav_file), model, language, hint=hint, api_key=api_key)
+        if backend == "openai-cloud":
+            return _transcribe_openai_cloud(str(wav_file), model, language, hint=hint, api_key=api_key)
         if backend == "faster-whisper":
             return _transcribe_faster(str(wav_file), model, language, hint=hint, hotwords=hotwords)
         return _transcribe_openai(str(wav_file), model, language, hint=hint)
+    except TranscribeError:
+        raise
     except ImportError as exc:
         raise TranscribeError(str(exc)) from exc
     except Exception as exc:
@@ -299,6 +315,135 @@ def _transcribe_faster(
     return " ".join(parts).strip()
 
 
+def _resolve_openrouter_model(model_name: str) -> str:
+    cleaned = (model_name or "").strip()
+    if not cleaned or cleaned in VALID_MODEL_NAMES:
+        return DEFAULT_OPENROUTER_TRANSCRIBE_MODEL
+    if "/" not in cleaned:
+        return f"openai/{cleaned}"
+    return cleaned
+
+
+def _resolve_openai_cloud_model(model_name: str) -> str:
+    cleaned = (model_name or "").strip()
+    if not cleaned or cleaned in VALID_MODEL_NAMES:
+        return DEFAULT_OPENAI_CLOUD_TRANSCRIBE_MODEL
+    if cleaned.startswith("openai/"):
+        return cleaned.split("/", 1)[1]
+    return cleaned
+
+
+def _transcribe_openrouter(
+    wav_file: str,
+    model_name: str,
+    language: str,
+    hint: str | None = None,
+    api_key: str = "",
+) -> str:
+    effective_key = (
+        api_key.strip()
+        or os.environ.get("OPENROUTER_API_KEY", "").strip()
+    )
+    if not effective_key:
+        raise TranscribeError(
+            "OpenRouter API-Key nicht gesetzt. Bitte OPENROUTER_API_KEY in "
+            "~/.config/blitztext-linux/secrets.env setzen."
+        )
+    target_model = _resolve_openrouter_model(model_name)
+    raw_bytes = Path(wav_file).read_bytes()
+    b64_audio = base64.b64encode(raw_bytes).decode("ascii")
+    payload: dict[str, Any] = {
+        "model": target_model,
+        "input_audio": {
+            "data": b64_audio,
+            "format": "wav",
+        },
+    }
+    norm_lang = _normalize_language(language)
+    if norm_lang:
+        payload["language"] = norm_lang
+    if hint:
+        payload["prompt"] = hint
+
+    req = urllib.request.Request(
+        _OPENROUTER_TRANSCRIPTIONS_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {effective_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/TimInTech/blitztext-linux",
+            "X-Title": "BlitztextLinux",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_CLOUD_REQUEST_TIMEOUT) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")
+            err_json = json.loads(err_body)
+            if isinstance(err_json, dict) and isinstance(err_json.get("error"), dict):
+                detail = str(err_json["error"].get("message") or "")
+        except Exception:
+            detail = ""
+        msg = f"OpenRouter STT HTTP {exc.code}"
+        if detail:
+            msg = f"{msg}: {detail}"
+        raise TranscribeError(msg) from exc
+
+    data = json.loads(body)
+    if not isinstance(data, dict):
+        return ""
+    if "error" in data:
+        err = data["error"]
+        err_msg = err.get("message") if isinstance(err, dict) else str(err)
+        raise TranscribeError(f"OpenRouter STT Fehler: {err_msg}")
+    text = data.get("text")
+    return text.strip() if isinstance(text, str) else ""
+
+
+def _transcribe_openai_cloud(
+    wav_file: str,
+    model_name: str,
+    language: str,
+    hint: str | None = None,
+    api_key: str = "",
+) -> str:
+    effective_key = (
+        api_key.strip()
+        or os.environ.get("OPENAI_API_KEY", "").strip()
+    )
+    if not effective_key:
+        raise TranscribeError(
+            "OpenAI API-Key nicht gesetzt. Bitte OPENAI_API_KEY in "
+            "~/.config/blitztext-linux/secrets.env setzen."
+        )
+    try:
+        import openai  # noqa: PLC0415
+    except ImportError as exc:
+        raise ImportError("openai-Paket nicht installiert. Bitte: pip install openai") from exc
+
+    target_model = _resolve_openai_cloud_model(model_name)
+    client = openai.OpenAI(api_key=effective_key, max_retries=1, timeout=_CLOUD_REQUEST_TIMEOUT)
+    kwargs: dict[str, Any] = {"model": target_model}
+    norm_lang = _normalize_language(language)
+    if norm_lang:
+        kwargs["language"] = norm_lang
+    if hint:
+        kwargs["prompt"] = hint
+
+    with open(wav_file, "rb") as audio_file:
+        response = client.audio.transcriptions.create(file=audio_file, **kwargs)
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    if isinstance(response, dict) and isinstance(response.get("text"), str):
+        return response["text"].strip()
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -313,11 +458,11 @@ def main() -> int:
     language = sys.argv[3] if len(sys.argv) > 3 else "de"
     backend = sys.argv[4] if len(sys.argv) > 4 else "openai-whisper"
 
-    if model_name not in VALID_MODEL_NAMES:
-        logger.error("Invalid model name '%s'. Valid: %s", model_name, sorted(VALID_MODEL_NAMES))
-        return 1
     if backend not in VALID_BACKENDS:
         logger.error("Invalid backend '%s'. Valid: %s", backend, sorted(VALID_BACKENDS))
+        return 1
+    if backend in {"openai-whisper", "faster-whisper"} and model_name not in VALID_MODEL_NAMES:
+        logger.error("Invalid model name '%s'. Valid: %s", model_name, sorted(VALID_MODEL_NAMES))
         return 1
     if not os.path.isfile(wav_file):
         logger.error("WAV file not found: %s", wav_file)
@@ -327,10 +472,7 @@ def main() -> int:
         return 1
 
     try:
-        if backend == "faster-whisper":
-            text = _transcribe_faster(wav_file, model_name, language)
-        else:
-            text = _transcribe_openai(wav_file, model_name, language)
+        text = transcribe(wav_file, model=model_name, language=language, backend=backend)
     except ImportError as exc:
         logger.error("Required dependency missing: %s", exc)
         return 1
