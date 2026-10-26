@@ -455,7 +455,7 @@ Der Einstellungs-Dialog enthält Spracherkennung, Text & KI, Allgemein und Updat
 - **model**: Whisper-Modellgröße (`tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`, `large-v3-turbo`). Standard: `base`.
 - **language**: Transkriptions-Sprache (`de`, `en`) oder `auto`.
 - **ui_language**: Sprache der App-Oberfläche (`de` oder `en`). Standard: `de`. Änderungen greifen nach einem Neustart.
-- **backend**: `openai-whisper` oder `faster-whisper`.
+- **backend**: `openai-whisper` oder `faster-whisper` (lokal), oder `openrouter` / `openai-cloud` (Cloud-Transkription mit `openai/gpt-4o-transcribe` / `gpt-4o-transcribe`). **Datenschutz:** Bei einem Cloud-Backend wird die Aufnahme an OpenRouter bzw. OpenAI gesendet; der Schlüssel kommt aus `OPENROUTER_API_KEY` / `OPENAI_API_KEY` (oder den konfigurierten Variablennamen) und wird nie in der Config gespeichert. Der Workflow *Lokal* transkribiert immer lokal mit `faster-whisper`, auch wenn ein Cloud-Backend eingestellt ist.
 - **hotkey_mode**:
   - `toggle`: Einmal drücken startet, erneutes Drücken beendet.
   - `hold`: Aufnahme läuft solange der Hotkey gedrückt wird. Tastendrücke unter 150 ms werden verworfen; leere Aufnahmen kehren ohne dauerhaften Fehlerzustand zu Bereit zurück.
