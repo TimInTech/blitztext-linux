@@ -245,7 +245,7 @@ Zusätzlich zu den Workflows bietet das Tool drei Komfort-Funktionen:
 | Menüpunkt | Beschreibung |
 | :--- | :--- |
 | **Diktat-Modus** | Umschalter. Ist er aktiv, werden alle Transkripte als Diktat-Einträge gesammelt und einzeln als Markdown-Datei gespeichert. Im Verlauf erscheint dann eine Schaltfläche **Zusammenführen**, die alle Einträge kombiniert und in die Zwischenablage kopiert. |
-| **Verlauf…** | Öffnet ein Fenster mit den letzten Transkripten. Pro Eintrag: In Zwischenablage kopieren oder löschen. |
+| **Verlauf…** | Öffnet ein Fenster mit den letzten Transkripten. Pro Eintrag: In Zwischenablage kopieren oder löschen. Der **Schließen**-Knopf oder <kbd>Esc</kbd> schließt das Fenster. |
 | **Vorlesen…** | Lässt dir beliebigen Text vorlesen — lokal per **Piper TTS** (Standard) oder optional über **OpenAI Cloud-TTS** (inklusive Anbieter-, Stimmen- und Modellauswahl). Nutze die Schaltfläche **Exportieren**, um die Audioausgabe als Datei zu speichern. |
 
 > [!NOTE]
@@ -592,3 +592,5 @@ Das Original-Projekt ist ein experimentelles, nicht-kommerzielles Open-Source-Pr
 Das Hauptfenster hat einen sichtbaren Schalter Lokal | Mit KI, schnelle Umschalter für KI-Anbieter und Whisper-Modell sowie ein kleines Einstellungs-Zahnrad. Diktierter Text wird lokal bereinigt (Begriffe zusammenführen, Ersetzungen, Füllwörter, Stottern), bevor er eingefügt oder umgeschrieben wird.
 
 KI-Aufnahmen ohne nutzbaren Schlüssel werden abgelehnt, bevor die Audioaufnahme startet, per Button wie per Hotkey. Das Voice-Routing ins Compose-Fenster funktioniert weiter ohne Schlüssel. Eigene Variablennamen für Schlüssel (nur Namen, nie Schlüsselwerte) bleiben bei Anbieterwechseln und Neustarts erhalten, und ein fehlgeschlagenes Speichern der Config hinterlässt keine Temp-Datei mehr.
+
+Eine laufende Aufnahme lässt sich jetzt mit **Verwerfen** abbrechen (Hauptfenster und Tray-Menü): Das temporäre Audio wird gelöscht, nichts wird transkribiert. Einstellungen → Updates prüft auf neue öffentliche GitHub-Releases und installiert sie ohne Git oder Token. <kbd>Esc</kbd> schließt das Verlaufsfenster und das Diktat-Popup.
