@@ -244,7 +244,7 @@ In addition to the workflows, the tool offers three convenience functions:
 | Menu item | Description |
 | :--- | :--- |
 | **Dictation mode** | Toggle. When active, all transcripts are collected as dictation entries and each saved as a Markdown file. The history then shows a **Merge** button that combines all entries and copies them to the clipboard. |
-| **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. |
+| **History…** | Opens a window with the most recent transcripts. Per entry: copy to clipboard or delete. A **Close** button or <kbd>Esc</kbd> closes the window. |
 | **Read aloud…** | Reads any text aloud to you — locally via **Piper TTS** (default) or optionally via **OpenAI Cloud TTS** (including provider, voice, and model selection). Use the **Export** button to save the audio as a file. |
 
 > [!NOTE]
@@ -590,3 +590,5 @@ The original project is an experimental, non-commercial open-source project unde
 The main window has a visible Local | With AI switch, quick switches for the AI provider and the Whisper model, and a small settings gear. Dictated text is cleaned locally (term joining, replacements, fillers, stutters) before pasting or rewriting.
 
 AI recordings without a usable key are refused before the audio starts, from the button and from hotkeys alike. Compose voice routing keeps working without a key. Personal key variable names (names only, never key values) survive provider switches and restarts, and a failed config save no longer leaves a temp file behind.
+
+A running recording can now be cancelled with **Discard** (main window and tray menu): the temporary audio is deleted and nothing is transcribed. Settings → Updates checks for new public GitHub releases and installs them without Git or a token. <kbd>Esc</kbd> closes the history window and the dictation popup.
