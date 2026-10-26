@@ -282,6 +282,10 @@ class HistoryPanel(QWidget):
         self._btn_clear.clicked.connect(self._on_clear_clicked)
         header_row.addWidget(self._btn_clear)
 
+        self._btn_close = QPushButton(t("history.button.close"))
+        self._btn_close.clicked.connect(self.close)
+        header_row.addWidget(self._btn_close)
+
         layout.addLayout(header_row)
 
         self._scroll = QScrollArea()
@@ -303,6 +307,13 @@ class HistoryPanel(QWidget):
         self._empty_label.setWordWrap(True)
         self._empty_label.setProperty("role", "muted")
         self._list_layout.insertWidget(0, self._empty_label, 1)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def add_entry(self, text: str, is_dictation: bool = False, source: Optional[str] = None) -> None:
         if not text or not text.strip():

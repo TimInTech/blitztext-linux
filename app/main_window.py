@@ -233,6 +233,13 @@ class DictationPopup(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
 
 class MainWindow(QWidget):
     """One frameless surface with header, microphone, status and tools.
@@ -688,6 +695,7 @@ class MainWindow(QWidget):
     def _on_dictation_clicked(self) -> None:
         self._update_dictation_text()
         self._controller.set_dictation_mode(self._btn_dictation.isChecked())
+        self._options_popup.hide()
 
     def update_state(self, state: str, workflow: Optional[WorkflowType], error: Optional[str]) -> None:
         self._state = state
