@@ -79,3 +79,18 @@ def test_compose_routing_still_skips_llm_and_paste(tmp_path):
     llm.rewrite.assert_not_called()
     paste.clipboard_only.assert_not_called()
     paste.paste.assert_not_called()
+
+
+def test_worker_passes_transcription_api_key_to_transcribe(tmp_path):
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    worker = _TranscribeWorker(
+        wav_file=wav, model="base", language="de", backend="openrouter",
+        workflow=WorkflowType.TRANSCRIPTION, llm_service=MagicMock(), autopaste=False,
+        paste_service=MagicMock(), transcription_api_key="test-key",
+    )
+    worker.signals = MagicMock()
+    with patch("app.blitztext_linux.transcribe", return_value="Hallo") as mock_transcribe:
+        worker.run()
+    assert mock_transcribe.call_args.kwargs["api_key"] == "test-key"
+    assert mock_transcribe.call_args.kwargs["backend"] == "openrouter"

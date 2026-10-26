@@ -137,3 +137,93 @@ def test_vocabulary_hint_only_for_recordings_of_at_least_0_9s(tmp_path: Path, se
 
     hint = backend_mock.call_args.kwargs["hint"]
     assert (hint is not None) is expect_hint
+
+
+def test_transcribe_openrouter_sends_base64_wav_and_prompt(tmp_path: Path, monkeypatch):
+    import json
+
+    wav_file = tmp_path / "sample.wav"
+    _write_pcm_wav(wav_file, 1.5)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
+
+    captured = {}
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({"text": " Hallo von OpenRouter "}).encode("utf-8")
+
+    def _fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["auth"] = req.get_header("Authorization")
+        captured["payload"] = json.loads(req.data.decode("utf-8"))
+        return _FakeResponse()
+
+    with patch("app.transcribe.urllib.request.urlopen", side_effect=_fake_urlopen):
+        result = transcribe(
+            wav_file,
+            model="base",
+            language="de",
+            backend="openrouter",
+            custom_terms=["Blitztext"],
+        )
+
+    assert result == "Hallo von OpenRouter"
+    assert captured["url"] == "https://openrouter.ai/api/v1/audio/transcriptions"
+    assert captured["auth"] == "Bearer test-or-key"
+    assert captured["payload"]["model"] == "openai/gpt-4o-transcribe"
+    assert captured["payload"]["language"] == "de"
+    assert captured["payload"]["input_audio"]["format"] == "wav"
+    assert captured["payload"]["prompt"] == "Eigennamen und Begriffe: Blitztext"
+
+
+def test_transcribe_openrouter_raises_without_api_key(tmp_path: Path, monkeypatch):
+    wav_file = tmp_path / "sample.wav"
+    _write_pcm_wav(wav_file, 1.0)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    with pytest.raises(TranscribeError, match="OpenRouter API-Key"):
+        transcribe(wav_file, backend="openrouter", api_key="")
+
+
+def test_transcribe_openai_cloud_uses_client_and_maps_model(tmp_path: Path, monkeypatch):
+    import sys
+    import types
+    from unittest.mock import MagicMock
+
+    wav_file = tmp_path / "sample.wav"
+    _write_pcm_wav(wav_file, 1.5)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    client = MagicMock()
+    client.audio.transcriptions.create.return_value = types.SimpleNamespace(text=" Hallo Cloud ")
+    fake_openai = types.SimpleNamespace(OpenAI=MagicMock(return_value=client))
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    result = transcribe(wav_file, model="base", language="de", backend="openai-cloud", api_key="test-oa-key")
+
+    assert result == "Hallo Cloud"
+    assert fake_openai.OpenAI.call_args.kwargs["api_key"] == "test-oa-key"
+    kwargs = client.audio.transcriptions.create.call_args.kwargs
+    assert kwargs["model"] == "gpt-4o-transcribe"
+    assert kwargs["language"] == "de"
+
+
+def test_transcribe_openai_cloud_raises_without_api_key(tmp_path: Path, monkeypatch):
+    wav_file = tmp_path / "sample.wav"
+    _write_pcm_wav(wav_file, 1.0)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with pytest.raises(TranscribeError, match="OpenAI API-Key"):
+        transcribe(wav_file, backend="openai-cloud", api_key="")
+
+
+def test_transcribe_cloud_backend_accepts_custom_model_id():
+    assert transcribe_module._resolve_openrouter_model("whisper-1") == "openai/whisper-1"
+    assert transcribe_module._resolve_openrouter_model("vendor/model") == "vendor/model"
+    assert transcribe_module._resolve_openai_cloud_model("openai/whisper-1") == "whisper-1"

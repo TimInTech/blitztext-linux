@@ -928,3 +928,27 @@ def test_openrouter_provider_key_env_is_a_persisted_name(tmp_path):
     assert BlitztextConfig(config_dir=tmp_path).openrouter_provider_key_env == "MY_ROUTER_KEY"
     (tmp_path / "config.json").write_text(json.dumps({"openrouter_provider_key_env": 5}), encoding="utf-8")
     assert BlitztextConfig(config_dir=tmp_path).openrouter_provider_key_env == ""
+
+
+class TestTranscriptionApiKey:
+    def test_local_backend_returns_no_key(self, config, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        assert config.resolve_transcription_api_key() == ""
+
+    def test_openrouter_backend_uses_openrouter_env(self, config, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-or")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-oa")
+        config.backend = "openrouter"
+        assert config.resolve_transcription_api_key() == "test-or"
+
+    def test_openai_cloud_uses_openai_env_when_llm_is_openrouter(self, config, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-or")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-oa")
+        config.backend = "openai-cloud"
+        config.llm_provider = "openrouter"
+        assert config.resolve_transcription_api_key() == "test-oa"
+
+    def test_openai_cloud_without_env_returns_empty(self, config, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config.backend = "openai-cloud"
+        assert config.resolve_transcription_api_key() == ""
