@@ -50,7 +50,6 @@ OPENAI_TTS_VOICES = [
     "marin",
     "cedar",
 ]
-OPENAI_TTS_MODEL_OPTIONS = [OPENAI_TTS_MODEL_DEFAULT, "tts-1", "tts-1-hd"]
 OPENAI_TTS_TIMEOUT = 30.0
 
 

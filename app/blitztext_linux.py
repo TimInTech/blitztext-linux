@@ -10,14 +10,13 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, QThreadPool, QRunnable, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (
-    QAction, QActionGroup, QBrush, QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QPixmap,
+    QAction, QActionGroup, QBrush, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
@@ -48,7 +47,7 @@ from app.hotkey_service import HotkeyWorker, hotkey_display_name
 from app.audio_recorder import AudioRecorder, AudioRecorderError
 from app.transcribe import transcribe
 from app.transcript_cleanup import clean_transcript
-from app.paste_service import PasteService, PasteServiceError
+from app.paste_service import PasteService
 from app.history_panel import HistoryPanel
 from app.compose_window import ComposeWindow
 from app.tts_window import TtsWindow

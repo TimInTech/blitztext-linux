@@ -11,7 +11,7 @@ import os
 import time
 import logging
 from enum import Enum
-from typing import Dict, List, Optional, Set, Callable, Any
+from typing import Dict, Optional, Set, Callable, Any
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 

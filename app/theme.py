@@ -23,7 +23,6 @@ BLITZ_500 = "#d6b260"
 BLITZ_400 = "#e6c878"
 BLITZ_300 = "#f4dda0"
 
-APP_BACKGROUND = "#151719"
 APP_WINDOW = "#1b1d20"
 APP_SURFACE = "#24272b"
 APP_SURFACE_RAISED = "#2c3035"
@@ -34,20 +33,9 @@ APP_LINE = "#3b4047"
 APP_LINE_SOFT = "rgba(255, 255, 255, 0.07)"
 APP_LINE_STRONG = "rgba(255, 255, 255, 0.14)"
 
-# Compatibility aliases used by older widgets while they share the new world.
-BREEZE_VIEW = APP_SURFACE_SUNK
-BREEZE_WINDOW = APP_WINDOW
-BREEZE_BUTTON = APP_SURFACE_RAISED
-BREEZE_BUTTON_HOV = APP_SURFACE_HOVER
-BREEZE_LINE = APP_LINE
-BREEZE_BLUE = BLITZ_500
-
 APP_TEXT = "#f2f1ed"
 APP_TEXT_DIM = "#bab8b1"
 APP_TEXT_FAINT = "#8e8d88"
-
-HAIRLINE = APP_LINE_SOFT
-HAIRLINE_STRONG = APP_LINE_STRONG
 
 STATE_IDLE = "#86c99a"
 STATE_RECORDING = BLITZ_400
@@ -603,7 +591,7 @@ def _painted_app_icon() -> QIcon:
 
     # dunkler abgerundeter Hintergrund
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QBrush(QColor(BREEZE_WINDOW)))
+    painter.setBrush(QBrush(QColor(APP_WINDOW)))
     painter.drawRoundedRect(4, 4, 56, 56, 14, 14)
 
     # Mikrofon (hell)

@@ -12,7 +12,6 @@ from app.workflows import WorkflowType
 from app.writing_presets import (
     CUSTOM_PRESET_KEY,
     DEFAULT_PRESET_KEY,
-    INTENT_RULES,
     migrate_preset_selection,
     resolve_preset_prompt,
 )
