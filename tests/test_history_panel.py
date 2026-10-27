@@ -1,13 +1,17 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
+from app.history_panel import HistoryPanel
 
-from app.history_panel import HistoryPanel, HistoryEntryWidget, HistoryEntry
+# Mock for `qapp` to make this run safely without `gui_app` complex dependencies,
+# effectively acting as our own isolated `QApplication` context.
+@pytest.fixture
+def isolated_qapp():
+    from PyQt6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
 
 @pytest.fixture
-def history_panel(qapp):
+def history_panel(isolated_qapp):
     panel = HistoryPanel(max_entries=3)
     return panel
 
@@ -29,13 +33,13 @@ def test_add_entry_respects_max_entries(history_panel):
     assert history_panel._entries[0].text == "14"
     assert history_panel._entries[-1].text == "12"
 
-def test_clear_all_removes_all_entries(history_panel, qapp):
+def test_clear_all_removes_all_entries(history_panel, isolated_qapp):
     history_panel.add_entry("1")
     history_panel.add_entry("2")
     history_panel.clear_all()
 
     # Process events so the widget hides properly
-    qapp.processEvents()
+    isolated_qapp.processEvents()
 
     assert history_panel.entry_count == 0
     # Because of Qt layout, we test logic property instead of isVisible which may be false if parent is hidden
