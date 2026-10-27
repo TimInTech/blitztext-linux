@@ -1358,6 +1358,10 @@ class BlitztextApp(QObject):
         Fallback wenn der Hotkey nicht greift oder keine Tastatur zur Hand ist.
         """
         if self.state == "IDLE":
+            # A hotkey may have mirrored cloud-capable TRANSCRIPTION into the
+            # window. New recordings from its Local side must still stay local.
+            if workflow == WorkflowType.TRANSCRIPTION:
+                workflow = WorkflowType.LOCAL
             self._start_recording(workflow)
         elif self.state == "RECORDING":
             self._stop_recording_and_process()

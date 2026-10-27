@@ -13,7 +13,7 @@ That file is written with restrictive permissions (`0600`) so only the current u
 ## Data flow
 
 - Local transcription workflows stay on the machine.
-- The `openrouter` and `openai-cloud` transcription backends send the recorded audio to OpenRouter or OpenAI. The *Local* workflow never uses them and always transcribes with `faster-whisper`.
+- The `openrouter` and `openai-cloud` transcription backends send the recorded audio to OpenRouter or OpenAI. The main window's *Local* mode and the dedicated *Local* tray/hotkey workflow never use them: they retain a configured local backend or use `faster-whisper` instead of a configured cloud backend. Explicit cloud-transcription tray/hotkey actions remain available.
 - LLM workflows optionally send the transcribed text to OpenAI, OpenRouter, or a configured custom endpoint for rewriting.
 - Temporary audio files are created during processing and are removed when the workflow finishes or is cancelled.
 - Workflow output may be placed on the clipboard so you can paste it into another app.

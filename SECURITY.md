@@ -27,7 +27,7 @@ Include:
 
 ## Security Notes
 
-- Local transcription stays on the machine. The optional `openrouter` and `openai-cloud` transcription backends upload recorded audio to OpenRouter or OpenAI. The dedicated `WorkflowType.LOCAL` workflow, selected through the tray’s local-transcription action or the `Meta+Shift+H` hotkey, enforces local transcription and never uploads audio for transcription. Current GUI limitation: the main window’s visible *Local/Lokal* switch selects `TRANSCRIPTION`, not this dedicated workflow; it can therefore upload recorded audio when a cloud transcription backend is configured. Rewrite workflows optionally send transcribed text to OpenAI, OpenRouter, or a configured custom LLM endpoint.
+- Recordings started from the main window's *Local/Lokal* mode stay on the machine, including after a cloud-transcription hotkey was used. The dedicated `WorkflowType.LOCAL` tray action and `Meta+Shift+H` hotkey also enforce local transcription. Explicit `TRANSCRIPTION` tray/hotkey actions and AI workflows may use the configured `openrouter` or `openai-cloud` transcription backend and upload audio to that provider. Rewrite workflows optionally send transcribed text to OpenAI, OpenRouter, or a configured custom LLM endpoint.
 - Your OpenAI API key is read from the environment. Put it in `~/.config/blitztext-linux/secrets.env` (chmod `600`) or export the configured environment variable before launch.
 - Temporary audio files may exist briefly during processing.
 - Auto-paste uses `ydotool` to inject `Ctrl+V` into the focused application.

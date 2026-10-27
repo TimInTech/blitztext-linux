@@ -52,7 +52,7 @@ def test_switch_is_visible_and_starts_on_local(qapp):
     window = _window(qapp)
     assert window._seg_local.isVisible() and window._seg_ai.isVisible()
     assert window._seg_local.isChecked() and not window._seg_ai.isChecked()
-    assert window._selected_workflow() == WorkflowType.TRANSCRIPTION
+    assert window._selected_workflow() == WorkflowType.LOCAL
     assert window._seg_local.text() == "Lokal" and window._seg_ai.text() == "Mit KI"
 
 
@@ -68,7 +68,7 @@ def test_clicking_the_switch_selects_the_workflow(qapp):
     window._btn_toggle.click()
     assert ("gui_toggle_recording", WorkflowType.TEXT_IMPROVER) in controller.calls
     window._seg_local.click()
-    assert window._selected_workflow() == WorkflowType.TRANSCRIPTION
+    assert window._selected_workflow() == WorkflowType.LOCAL
     assert window._seg_local.isChecked()
 
 
@@ -189,3 +189,22 @@ def test_open_popup_keeps_its_bottom_edge_when_it_grows(qapp):
 def test_local_tooltip_is_honest_about_hotkeys(qapp):
     window = _window(qapp)
     assert "Hotkey" in window._seg_local.toolTip()
+
+
+@gui_only
+def test_local_click_after_cloud_hotkey_selects_dedicated_local_workflow(qapp):
+    from app.workflows import WorkflowType
+
+    window = _window(qapp)
+    window.update_state("IDLE", WorkflowType.TRANSCRIPTION, None)
+    window._seg_local.click()
+    assert window._selected_workflow() == WorkflowType.LOCAL
+
+
+@gui_only
+def test_missing_workflow_selection_falls_back_to_local(qapp):
+    from app.workflows import WorkflowType
+
+    window = _window(qapp)
+    window._workflow_combo.setCurrentIndex(-1)
+    assert window._selected_workflow() == WorkflowType.LOCAL
