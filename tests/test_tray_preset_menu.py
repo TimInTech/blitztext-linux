@@ -28,7 +28,7 @@ gui_only = pytest.mark.skipif(not _GUI, reason="benötigt WHISPER_GUI_TESTS=1 (D
 
 
 @pytest.fixture
-def tray_app(tmp_path):
+def tray_app(tmp_path, monkeypatch):
     """Echte App mit isolierter Config (tmp), ohne evdev-Thread.
 
     Die Config wird nach dem Boot auf ein tmp-Verzeichnis umgehängt, damit der
@@ -39,6 +39,7 @@ def tray_app(tmp_path):
     from app.blitztext_linux import BlitztextApp
 
     qapp = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(BlitztextApp, "start_hotkey_worker", lambda self: None)
     app = BlitztextApp(qapp)
     app.stop_hotkey_worker()  # kein echter evdev-Thread im Test
 

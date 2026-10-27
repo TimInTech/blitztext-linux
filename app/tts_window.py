@@ -869,12 +869,12 @@ class TtsWindow(QDialog):
         worker = self._cloud_worker
         thread = self._cloud_thread
         if worker is not None:
-            for signal, callback in (
+            for sig, callback in (
                 (worker.finished, self._on_cloud_finished),
                 (worker.error, self._on_cloud_error),
             ):
                 try:
-                    signal.disconnect(callback)
+                    sig.disconnect(callback)
                 except TypeError:
                     pass
             worker.request_cancel()

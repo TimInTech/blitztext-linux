@@ -155,7 +155,7 @@ def _fake_save_self(config_dir, preset_key, ui_language="de"):
         _collect_custom_terms=lambda: [],
         check_autopaste=_Check(True),
         edit_notes_folder=_Edit(""),
-        spin_history_size=_Combo("50"),
+        combo_history_size=_Combo("50"),
         combo_ui_language=_Combo(
             text="English" if ui_language == "en" else "Deutsch",
             data=ui_language,
