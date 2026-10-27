@@ -449,10 +449,10 @@ class SettingsDialog(QDialog):
         form_general.addRow(t("settings.notes_folder.label"), self.edit_notes_folder)
         form_general.addRow(create_help_label(t("settings.notes_folder.help")))
 
-        self.spin_history_size = QComboBox()
-        self.spin_history_size.addItems(["10", "25", "50", "75", "100"])
-        self.spin_history_size.setCurrentText(str(self.config.history_size))
-        form_general.addRow(t("settings.history_size.label"), self.spin_history_size)
+        self.combo_history_size = QComboBox()
+        self.combo_history_size.addItems(["10", "25", "50", "75", "100"])
+        self.combo_history_size.setCurrentText(str(self.config.history_size))
+        form_general.addRow(t("settings.history_size.label"), self.combo_history_size)
         form_general.addRow(create_help_label(t("settings.history_size.help")))
 
         self.combo_ui_language = QComboBox()
@@ -674,7 +674,7 @@ class SettingsDialog(QDialog):
 
             self.config.autopaste = self.check_autopaste.isChecked()
             self.config.notes_folder = self.edit_notes_folder.text().strip()
-            self.config.history_size = int(self.spin_history_size.currentText())
+            self.config.history_size = int(self.combo_history_size.currentText())
             self.config.ui_language = self.combo_ui_language.currentData()
             self.config.compose_signature_text = self.edit_compose_signature.toPlainText()
             self.config.compose_signature_auto_append = self.check_compose_signature_auto_append.isChecked()

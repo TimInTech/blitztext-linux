@@ -487,7 +487,12 @@ class TestAiGate:
         tray_app.config._legacy_openai_api_key_value = ""
         tray_app._rebuild_llm_service()
         warnings = []
-        monkeypatch.setattr(tray_app, "show_tray_warning", lambda *a: warnings.append(a))
+        # We need to filter out hotkey warnings since we run isolated without proper dev setup for hotkeys
+        def intercept_warning(*args):
+            if args and "Hotkey Hinweis" in args[0]:
+                return
+            warnings.append(args)
+        monkeypatch.setattr(tray_app, "show_tray_warning", intercept_warning)
         tray_app.audio_recorder = MagicMock()
         tray_app.warnings = warnings
         return tray_app.audio_recorder
