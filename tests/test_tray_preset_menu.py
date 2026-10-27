@@ -28,7 +28,7 @@ gui_only = pytest.mark.skipif(not _GUI, reason="benötigt WHISPER_GUI_TESTS=1 (D
 
 
 @pytest.fixture
-def tray_app(tmp_path):
+def tray_app(tmp_path, monkeypatch):
     """Echte App mit isolierter Config (tmp), ohne evdev-Thread.
 
     Die Config wird nach dem Boot auf ein tmp-Verzeichnis umgehängt, damit der
@@ -39,6 +39,7 @@ def tray_app(tmp_path):
     from app.blitztext_linux import BlitztextApp
 
     qapp = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(BlitztextApp, "start_hotkey_worker", lambda self: None)
     app = BlitztextApp(qapp)
     app.stop_hotkey_worker()  # kein echter evdev-Thread im Test
 
@@ -487,12 +488,7 @@ class TestAiGate:
         tray_app.config._legacy_openai_api_key_value = ""
         tray_app._rebuild_llm_service()
         warnings = []
-        # We need to filter out hotkey warnings since we run isolated without proper dev setup for hotkeys
-        def intercept_warning(*args):
-            if args and "Hotkey Hinweis" in args[0]:
-                return
-            warnings.append(args)
-        monkeypatch.setattr(tray_app, "show_tray_warning", intercept_warning)
+        monkeypatch.setattr(tray_app, "show_tray_warning", lambda *a: warnings.append(a))
         tray_app.audio_recorder = MagicMock()
         tray_app.warnings = warnings
         return tray_app.audio_recorder
