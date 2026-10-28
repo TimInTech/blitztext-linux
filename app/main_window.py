@@ -253,6 +253,7 @@ class MainWindow(QWidget):
         self._state = "IDLE"
         self._rec_start: Optional[float] = None
         self._last_ai_workflow = WorkflowType.TEXT_IMPROVER
+        self._preferred_workflow = WorkflowType.LOCAL
         self.setWindowTitle(t("app.name"))
         # The panel draws its own title and window controls.
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -549,6 +550,7 @@ class MainWindow(QWidget):
 
     @pyqtSlot()
     def _on_workflow_changed(self) -> None:
+        self._preferred_workflow = self._selected_workflow()
         self._sync_mode_widgets()
 
     def _segment_button(self, text: str, side: str) -> QPushButton:
@@ -733,7 +735,9 @@ class MainWindow(QWidget):
             self._timer.stop()
             self._rec_start = None
             self._timer_label.setText("00:00")
-        if workflow is not None:
+        if state == "IDLE" and workflow is None:
+            self._select_workflow(self._preferred_workflow)
+        elif workflow is not None:
             self._select_workflow(workflow)
 
     def _select_workflow(self, workflow: WorkflowType) -> None:
@@ -742,7 +746,7 @@ class MainWindow(QWidget):
                 self._workflow_combo.blockSignals(True)
                 self._workflow_combo.setCurrentIndex(index)
                 self._workflow_combo.blockSignals(False)
-                self._on_workflow_changed()
+                self._sync_mode_widgets()
                 return
 
     def _set_status(self, text: str, color: str) -> None:

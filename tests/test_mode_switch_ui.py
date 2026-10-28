@@ -86,6 +86,21 @@ def test_switch_follows_the_workflow_set_by_a_hotkey(qapp):
 
 
 @gui_only
+def test_ai_selection_survives_a_local_hotkey_recording(qapp):
+    from app.workflows import WorkflowType
+
+    window = _window(qapp)
+    window._seg_ai.click()
+    selected = window._selected_workflow()
+    for _ in range(2):
+        window.update_state("RECORDING", WorkflowType.LOCAL, None)
+        window.update_state("TRANSCRIBING", WorkflowType.LOCAL, None)
+        window.update_state("IDLE", None, None)
+        assert window._seg_ai.isChecked()
+        assert window._selected_workflow() == selected
+
+
+@gui_only
 def test_switch_is_locked_while_busy(qapp):
     window = _window(qapp)
     window.update_state("RECORDING", None, None)
