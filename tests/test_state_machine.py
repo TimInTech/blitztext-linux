@@ -582,6 +582,29 @@ class TestStateMachine:
         assert gui_app.state == "IDLE"
         assert gui_app.current_workflow is None
 
+    def test_successful_retry_clears_prior_recorder_stop_error(self, gui_app, tmp_path):
+        from app.audio_recorder import AudioRecorderError
+
+        wav_path = tmp_path / "retry.wav"
+        pool = MagicMock()
+        gui_app.state = "RECORDING"
+        gui_app.current_workflow = WorkflowType.TRANSCRIPTION
+        with patch.object(
+            gui_app, "show_tray_error",
+            side_effect=lambda _title, message: setattr(gui_app, "_tray_error_message", message),
+        ), patch.object(gui_app.audio_recorder, "is_recording", return_value=True), \
+             patch.object(gui_app.audio_recorder, "stop", side_effect=[
+                 AudioRecorderError("transient stop failure"), wav_path,
+             ]), patch("app.blitztext_linux.QThreadPool.globalInstance", return_value=pool):
+            gui_app._stop_recording_and_process()
+            assert gui_app._tray_error_message is not None
+
+            gui_app._stop_recording_and_process()
+
+        assert gui_app._tray_error_message is None
+        assert gui_app.state == "TRANSCRIBING"
+        pool.start.assert_called_once()
+
     def test_orange_clears_after_result(self, gui_app):
         """Nach result darf der State nicht mehr auf einem Orange-Zustand stehen."""
         gui_app.state = "TRANSCRIBING"

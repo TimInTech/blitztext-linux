@@ -33,6 +33,7 @@ if PROJECT_DIR not in sys.path:
 from app.config import (
     Config,
     DEFAULTS,
+    DEFAULT_LLM_PROVIDER_MODELS,
     VALID_HOTKEY_KEYS,
     normalize_llm_api_key_env,
     validate_llm_provider_settings,
@@ -287,6 +288,12 @@ class SettingsDialog(QDialog):
             self._env_by_provider["openai"] = self.config.openai_provider_key_env
         if self._env_provider != "openrouter" and self.config.openrouter_provider_key_env:
             self._env_by_provider["openrouter"] = self.config.openrouter_provider_key_env
+        self._model_provider = self.config.llm_provider
+        self._model_by_provider = {self._model_provider: self.config.llm_model}
+        if self._model_provider != "openai" and self.config.openai_provider_model:
+            self._model_by_provider["openai"] = self.config.openai_provider_model
+        if self._model_provider != "openrouter" and self.config.openrouter_provider_model:
+            self._model_by_provider["openrouter"] = self.config.openrouter_provider_model
 
         self.lbl_api_key_status = QLabel()
         self.lbl_api_key_status.setWordWrap(True)
@@ -564,6 +571,17 @@ class SettingsDialog(QDialog):
 
     def _on_llm_provider_changed(self) -> None:
         provider = self.combo_llm_provider.currentData()
+        model_field = getattr(self, "edit_llm_model", None)
+        if model_field is not None:
+            remembered_models = getattr(self, "_model_by_provider", {})
+            previous_model_provider = getattr(self, "_model_provider", None)
+            if previous_model_provider in {"openai", "openrouter"}:
+                remembered_models[previous_model_provider] = model_field.text().strip()
+            self._model_provider = provider
+            if provider in {"openai", "openrouter"}:
+                model_field.setText(
+                    remembered_models.get(provider) or DEFAULT_LLM_PROVIDER_MODELS[provider]
+                )
         api_key_field = getattr(self, "edit_api_key_env", None)
         if api_key_field is not None:
             remembered = getattr(self, "_env_by_provider", {})
@@ -660,6 +678,13 @@ class SettingsDialog(QDialog):
             self.config.openai_provider_key_env = _parked_env(self.config, remembered, "openai", provider)
             self.config.openrouter_provider_key_env = _parked_env(
                 self.config, remembered, "openrouter", provider)
+            remembered_models = getattr(self, "_model_by_provider", {})
+            self.config.openai_provider_model = (
+                "" if provider == "openai" else remembered_models.get("openai", "")
+            )
+            self.config.openrouter_provider_model = (
+                "" if provider == "openrouter" else remembered_models.get("openrouter", "")
+            )
             self.config.openai_api_key_env = api_key_env
             self.config.llm_provider = provider
             self.config.llm_base_url = base_url
@@ -1130,11 +1155,14 @@ class BlitztextApp(QObject):
         previous = (
             cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env,
             cfg.openai_provider_key_env, cfg.openrouter_provider_key_env,
+            cfg.llm_model, cfg.openai_provider_model, cfg.openrouter_provider_model,
         )
         problem = None
         if provider == "custom" or cfg.llm_provider == "custom":
             problem = (t("settings.save_error.title"), t("mainwindow.provider.custom_in_settings.message"))
         else:
+            if cfg.llm_provider in {"openai", "openrouter"}:
+                setattr(cfg, f"{cfg.llm_provider}_provider_model", cfg.llm_model)
             if cfg.llm_provider == "openai":
                 # Park a personal OpenAI key variable (its name only) in the config so the
                 # way back restores it, also after a restart.
@@ -1154,6 +1182,9 @@ class BlitztextApp(QObject):
                     cfg.openai_provider_key_env or DEFAULTS["openai_api_key_env"]
                 )
                 cfg.openai_provider_key_env = ""
+            cfg.llm_model = (
+                getattr(cfg, f"{provider}_provider_model") or DEFAULT_LLM_PROVIDER_MODELS[provider]
+            )
             if not cfg.resolve_llm_api_key():
                 problem = (
                     t("mainwindow.provider.no_key.title"),
@@ -1170,7 +1201,8 @@ class BlitztextApp(QObject):
                 )
         if problem is not None:
             (cfg.llm_provider, cfg.llm_base_url, cfg.openai_api_key_env,
-             cfg.openai_provider_key_env, cfg.openrouter_provider_key_env) = previous
+             cfg.openai_provider_key_env, cfg.openrouter_provider_key_env,
+             cfg.llm_model, cfg.openai_provider_model, cfg.openrouter_provider_model) = previous
             if self._main_window is not None:
                 self._main_window.set_llm_provider(cfg.llm_provider)
             self.show_tray_warning(*problem)
@@ -1398,6 +1430,9 @@ class BlitztextApp(QObject):
             skip_llm = self._recording_routes_to_compose
             route_to_compose = skip_llm and self._compose_voice_routing_enabled()
             wav_path = self.audio_recorder.stop()
+            # A previous stop attempt may have failed while leaving the owned recorder
+            # alive for retry. Once stop() succeeds, that stale error no longer applies.
+            self._tray_error_message = None
             self._recording_routes_to_compose = False
             if not wav_path:
                 logger.warning("No audio was recorded")
