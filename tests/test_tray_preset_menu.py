@@ -838,6 +838,22 @@ class TestOpenRouterCustomKeyVariable:
         assert cfg.openai_provider_key_env == "WORK_OPENAI_KEY"
         assert cfg.openrouter_provider_key_env == ""
 
+    def test_quick_switch_remembers_provider_models_across_restart(self, tray_app, monkeypatch):
+        from app.config import BlitztextConfig
+
+        cfg = self._setup(tray_app, monkeypatch)
+        cfg.llm_model = "anthropic/claude-3.5-sonnet"
+        tray_app.main_window_provider_changed("openai")
+        assert cfg.llm_model == "gpt-4o-mini"
+        cfg.llm_model = "gpt-4.1"
+        cfg.save()
+
+        tray_app.config = BlitztextConfig(config_dir=cfg.config_dir)
+        tray_app.main_window_provider_changed("openrouter")
+        assert tray_app.config.llm_model == "anthropic/claude-3.5-sonnet"
+        tray_app.main_window_provider_changed("openai")
+        assert tray_app.config.llm_model == "gpt-4.1"
+
     def test_round_trip_survives_a_restart(self, tray_app, monkeypatch):
         from app.config import BlitztextConfig
 

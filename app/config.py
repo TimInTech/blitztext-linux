@@ -39,6 +39,9 @@ DEFAULTS: dict[str, Any] = {
     "openai_provider_key_env": "",
     # Same for a personal OpenRouter variable while OpenAI is active.
     "openrouter_provider_key_env": "",
+    # Last model used with each provider while another provider is active.
+    "openai_provider_model": "",
+    "openrouter_provider_model": "",
     "llm_provider": "openai",
     "llm_base_url": "",
     "llm_model": "gpt-4o-mini",
@@ -67,6 +70,10 @@ DEFAULTS: dict[str, Any] = {
     "compose_signature_text": "",
     "compose_signature_auto_append": False,
     "compose_custom_preset_text": "",
+}
+DEFAULT_LLM_PROVIDER_MODELS = {
+    "openai": DEFAULTS["llm_model"],
+    "openrouter": "openai/gpt-4o-mini",
 }
 
 VALID_MODELS = {"tiny", "base", "small", "medium", "large", "large-v2", "large-v3", "large-v3-turbo"}
@@ -222,6 +229,24 @@ class BlitztextConfig:
     @openrouter_provider_key_env.setter
     def openrouter_provider_key_env(self, value: str) -> None:
         self._data["openrouter_provider_key_env"] = _normalize_env_var_name(value, "")
+
+    @property
+    def openai_provider_model(self) -> str:
+        value = self._data.get("openai_provider_model", "")
+        return value.strip() if isinstance(value, str) else ""
+
+    @openai_provider_model.setter
+    def openai_provider_model(self, value: str) -> None:
+        self._data["openai_provider_model"] = value.strip() if isinstance(value, str) else ""
+
+    @property
+    def openrouter_provider_model(self) -> str:
+        value = self._data.get("openrouter_provider_model", "")
+        return value.strip() if isinstance(value, str) else ""
+
+    @openrouter_provider_model.setter
+    def openrouter_provider_model(self, value: str) -> None:
+        self._data["openrouter_provider_model"] = value.strip() if isinstance(value, str) else ""
 
     def resolve_openai_api_key(self) -> str:
         env_name = self.openai_api_key_env
@@ -632,6 +657,8 @@ class BlitztextConfig:
         )
         self._data["openai_provider_key_env"] = self.openai_provider_key_env
         self._data["openrouter_provider_key_env"] = self.openrouter_provider_key_env
+        self._data["openai_provider_model"] = self.openai_provider_model
+        self._data["openrouter_provider_model"] = self.openrouter_provider_model
         self._data.pop("openai_api_key", None)
 
         if self._data.get("llm_provider") not in VALID_LLM_PROVIDERS:
