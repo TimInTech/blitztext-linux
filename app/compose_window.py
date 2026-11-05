@@ -878,15 +878,16 @@ class ComposeWindow(QDialog):
         text = self.txtOutput.toPlainText()
         if not text.strip():
             return
-        try:
-            self._paste_service.paste(text, force_autopaste=True)
-        except PasteServiceError as exc:
-            self._show_status(t("compose.status.error").format(message=str(exc)), error=True)
-            return
-        except Exception as exc:  # pragma: no cover - defensive
-            self._show_status(t("compose.status.error").format(message=str(exc)), error=True)
-            return
         self.close()
+        try:
+            try:
+                self._paste_service.paste(text, force_autopaste=True, restore_clipboard=False)
+            except TypeError:
+                self._paste_service.paste(text, force_autopaste=True)
+        except (PasteServiceError, Exception) as exc:  # pragma: no cover - defensive
+            logger.error("Failed to paste from compose window: %s", exc)
+            self.show()
+            self._show_status(t("compose.status.error").format(message=str(exc)), error=True)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # A hidden modeless window must never remain an implicit routing target.

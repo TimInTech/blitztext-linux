@@ -120,12 +120,19 @@ class PasteService:
         self.key_delay_ms = max(0, int(key_delay_ms))
         self._ydotool_uses_legacy_keys: Optional[bool] = None
 
-    def paste(self, text: str, force_autopaste: Optional[bool] = None) -> None:
+    def paste(
+        self,
+        text: str,
+        force_autopaste: Optional[bool] = None,
+        restore_clipboard: bool = True,
+    ) -> None:
         """Text ins Clipboard schreiben und optional einfuegen.
 
         Args:
             text: Der einzufuegende Text.
             force_autopaste: Optionaler Override fuer den Auto-Paste-Schritt.
+            restore_clipboard: Ob nach erfolgreichem Auto-Paste der urspruengliche
+                Clipboard-Inhalt wiederhergestellt werden soll.
 
         Raises:
             PasteServiceError: Wenn wl-copy nicht gefunden oder hart fehlschlaegt.
@@ -140,14 +147,15 @@ class PasteService:
             do_autopaste = False
 
         logger.info("Paste request: %d chars, autopaste=%s", len(text), do_autopaste)
-        previous_clipboard = self._read_clipboard() if do_autopaste else None
+        previous_clipboard = self._read_clipboard() if (do_autopaste and restore_clipboard) else None
         self._copy_to_clipboard(text)
 
         if do_autopaste and self._ydotool_paste():
             # Pause, damit die Ziel-App den eingefuegten Text uebernehmen kann
-            time.sleep(_RESTORE_DELAY)
-            self._cleanup_copyq(text)
-            self._restore_clipboard(previous_clipboard)
+            if restore_clipboard:
+                time.sleep(_RESTORE_DELAY)
+                self._cleanup_copyq(text)
+                self._restore_clipboard(previous_clipboard)
 
     def clipboard_only(self, text: str) -> None:
         """Nur Clipboard, kein ydotool -- fuer Faelle wo Auto-Paste unterwuenscht."""
@@ -196,8 +204,14 @@ class PasteService:
         try:
             stdout, _ = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
+            try:
+                process.kill()
+            except OSError:
+                pass
+            try:
+                process.communicate(timeout=0.2)
+            except (subprocess.TimeoutExpired, OSError, ValueError):
+                pass
             return None
         if process.returncode != 0:
             return None
